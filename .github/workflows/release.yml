@@ -1,7 +1,7 @@
-# Builds the Windows installer and publishes it as a GitHub Release
-# whenever a version tag (v1.5.0, …) is pushed. Can also be started by hand:
-# Actions → Release → Run workflow → enter the version (e.g. v1.5.0); the tag
-# is then created on the newest commit of the chosen branch.
+# Builds the Windows installer on GitHub and publishes it as a Release.
+# Start by hand: Actions → Release → Run workflow → enter the version
+# (e.g. v1.6.0); the tag is created on the newest commit of the branch.
+# (Installers built elsewhere are published with publish-prebuilt.yml.)
 #
 # Google Drive sign-in: add the repository secrets
 #   STUDYNOTES_GOOGLE_CLIENT_ID and STUDYNOTES_GOOGLE_CLIENT_SECRET
@@ -10,8 +10,6 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:

@@ -1,0 +1,40 @@
+# Publishes an installer that was built elsewhere: push a branch
+# "upload/<version>" containing upload/RELEASE (the version, e.g. v1.5.0) and
+# the files split into parts < 100 MB (upload/<file>.part-aa, -ab, …).
+# The parts are joined, published as a GitHub Release, and the upload branch
+# is deleted again afterwards.
+name: Publish prebuilt release
+
+on:
+  push:
+    branches: ['upload/**']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Join the parts
+        run: |
+          set -e
+          mkdir out
+          for f in $(ls upload/*.part-* | sed 's/\.part-.*//' | sort -u); do
+            cat "$f".part-* > "out/$(basename "$f")"
+          done
+          if [ -f upload/SHA256SUMS ]; then (cd out && sha256sum -c ../upload/SHA256SUMS); fi
+          ls -la out
+          echo "TAG=$(tr -d ' \r\n' < upload/RELEASE)" >> "$GITHUB_ENV"
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: main
+          name: StudyNotes ${{ env.TAG }}
+          body_path: docs/release-notes.md
+          make_latest: true
+          files: out/*
+      - name: Remove the upload branch
+        run: git push origin --delete "${GITHUB_REF_NAME}"
