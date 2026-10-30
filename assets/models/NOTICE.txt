@@ -1,0 +1,15 @@
+isnet-general-use-int8.onnx
+===========================
+
+Model:    ISNet "isnet-general-use" (Highly Accurate Dichotomous Image Segmentation, DIS)
+          Xuebin Qin et al., https://github.com/xuebinqin/DIS
+          License: Apache License 2.0
+ONNX:     isnet-general-use.onnx from rembg (https://github.com/danielgatis/rembg, MIT),
+          release v0.0.0, sha256 60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a
+Modified: weights (Conv/ConvTranspose tensors >= 1024 values) re-encoded as symmetric
+          per-output-channel int8 + DequantizeLinear nodes to reduce file size
+          (178 MB -> 47 MB). Graph, input (1x3x1024x1024, (x/max - 0.5)/1.0) and
+          output (sigmoid mask, first output "output_image") are unchanged.
+          sha256 7c3eeb1f367da682a4498c1277740fb5e50459f93c3610657a282d7f9bdfd74c
+
+Runtime:  onnxruntime-node (MIT), https://github.com/microsoft/onnxruntime

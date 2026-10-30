@@ -1,0 +1,58 @@
+# Builds the Windows installer and publishes it as a GitHub Release
+# whenever a version tag (v1.5.0, …) is pushed. Can also be started by hand
+# (Actions → Release → Run workflow) for an existing tag.
+#
+# Google Drive sign-in: add the repository secrets
+#   STUDYNOTES_GOOGLE_CLIENT_ID and STUDYNOTES_GOOGLE_CLIENT_SECRET
+# (Settings → Secrets and variables → Actions). Without them the app still
+# builds; sync then needs your own client (Settings → Google Drive → Advanced).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v1.5.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Google client (from repository secrets)
+        shell: bash
+        env:
+          ID: ${{ secrets.STUDYNOTES_GOOGLE_CLIENT_ID }}
+          SECRET: ${{ secrets.STUDYNOTES_GOOGLE_CLIENT_SECRET }}
+        run: |
+          if [ -n "$ID" ]; then
+            printf "module.exports = { clientId: %s, clientSecret: %s };\n" "$(node -p 'JSON.stringify(process.env.ID)')" "$(node -p 'JSON.stringify(process.env.SECRET)')" > src/main/google-client.local.js
+          else
+            echo "No Google client secrets set – building without the built-in client."
+          fi
+      - run: npm test
+      - run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: StudyNotes ${{ github.event.inputs.tag || github.ref_name }}
+          body_path: docs/release-notes.md
+          files: |
+            release/StudyNotes-Setup-*.exe
+            release/StudyNotes-*-win-x64.zip

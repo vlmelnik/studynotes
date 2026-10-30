@@ -1,0 +1,99 @@
+{
+  "name": "studynotes",
+  "productName": "StudyNotes",
+  "version": "1.5.0",
+  "description": "Handwritten study notes and PDF annotation",
+  "main": "src/main/main.js",
+  "author": "vlmelnik",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/notices.js && node scripts/build.js",
+    "start": "npm run build && electron .",
+    "test": "node --test test/*.test.js",
+    "dist:win": "node scripts/build.js --minify && electron-builder --win",
+    "graph": "graphify update . && graphify cluster-only . --no-label"
+  },
+  "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "onnxruntime-node": "^1.30.0",
+    "pdf-lib": "^1.17.1",
+    "perfect-freehand": "^1.2.3",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "pdfjs-dist": "^6.4.299",
+    "playwright-core": "^1.64.1"
+  },
+  "build": {
+    "appId": "de.studynotes.app",
+    "productName": "StudyNotes",
+    "copyright": "vlmelnik",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "package.json",
+      "src/**/*",
+      "dist/**/*",
+      "!dist/**/*.map",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "StudyNotes-${version}-win-x64.${ext}",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v*/darwin/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/linux/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/win32/arm64/**"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "StudyNotes",
+      "artifactName": "StudyNotes-Setup-${version}.exe"
+    },
+    "publish": null,
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/bin/**",
+      "assets/models/**"
+    ],
+    "linux": {
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v*/darwin/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/win32/**",
+        "!node_modules/onnxruntime-node/bin/napi-v*/linux/arm64/**"
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF document",
+        "description": "PDF document",
+        "role": "Editor",
+        "icon": "assets/icon.ico"
+      }
+    ]
+  }
+}
