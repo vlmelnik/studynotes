@@ -284,3 +284,9 @@
 
 ## Verify
 - [ ] Unit + all e2e suites + new v15 e2e with screenshots; independent review; Windows build; packaged e2e
+
+## Review v1.5 (2026-10-30)
+- Done: Russian UI (DOM translation, user content excluded), Fill & sign (form fields, signatures, date/✓, flattened values), calmer live ink (last:true live, no live end taper, pressure smoothing), eraser keeps points / exact circle / text & pictures, pen button erases while held, Alt+wheel, size fields with higher maximums, About + licences, real covers in the library with fitted titles.
+- Review (8 findings) fixed: page rotation keeps eraser cuts; cuts stored as a list (no erased ink returns); near misses change nothing; cover/folder names never translated; form-fill errors shown; placing wins over panning; Alt+wheel never shrinks beyond the list; Russian clear-page text.
+- Tests: unit 90/90; e2e run 30/30, v11 24/24, v12 22/22, v13 32/32, v14 23/23, v15 17/17.
+- GitHub: source pushed to vlmelnik/studynotes (secret kept out), README with framed neutral screenshots, release workflow (needs repo secrets for the built-in Google client).
