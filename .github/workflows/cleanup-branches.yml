@@ -1,0 +1,22 @@
+# Deletes branches: push a branch "cleanup/<anything>" with the branch names
+# (one per line) in cleanup/BRANCHES; that branch is removed afterwards too.
+name: Clean up branches
+
+on:
+  push:
+    branches: ['cleanup/**']
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          while read -r b; do
+            case "$b" in ''|main) continue;; esac
+            git push origin --delete "$b" || true
+          done < cleanup/BRANCHES
+          git push origin --delete "${GITHUB_REF_NAME}"
