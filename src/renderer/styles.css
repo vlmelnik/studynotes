@@ -754,3 +754,10 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 }
 .cover-label { overflow-wrap: normal; word-break: keep-all; max-height: 42%; }
 .paper-first .cover-label { top: 12%; }
+.bar-btn.page-del:hover { color: #ff9b94; }
+
+.editor.painting .viewer, .editor.painting .textbox { cursor: copy; }
+
+/* ---------- PDF text selection ---------- */
+.pdf-sel { position: absolute; inset: 0; pointer-events: none; }
+.pdf-sel-rect { position: absolute; background: rgba(47, 95, 158, .28); border-radius: 2px; }

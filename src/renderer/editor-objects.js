@@ -65,11 +65,73 @@ export function safeHtml(html) {
   return out;
 }
 
-export function sanitizeHtml(html) {
+// external: HTML from another program (line breaks in its source are just
+// spaces). Our own text boxes use pre-wrap: a "\n" there is a real new line.
+// Character positions of a range inside a text box (text + <br> = 1 char),
+// and back – survives re-rendering the box's markup.
+function textOffset(root, node, off) {
+  let n = 0;
+  const walk = (x) => {
+    if (x === node) {
+      if (x.nodeType === 3) { n += off; return true; }
+      for (let i = 0; i < off && i < x.childNodes.length; i++) n += textLen(x.childNodes[i]);
+      return true;
+    }
+    if (x.nodeType === 3) { n += x.nodeValue.length; return false; }
+    if (x.nodeName === 'BR') { n += 1; return false; }
+    for (const c of x.childNodes) if (walk(c)) return true;
+    return false;
+  };
+  walk(root);
+  return n;
+}
+function textLen(x) {
+  if (x.nodeType === 3) return x.nodeValue.length;
+  if (x.nodeName === 'BR') return 1;
+  let n = 0;
+  for (const c of x.childNodes) n += textLen(c);
+  return n;
+}
+function rangeOffsets(root, range) {
+  if (!range || !root.contains(range.startContainer)) return null;
+  return [textOffset(root, range.startContainer, range.startOffset), textOffset(root, range.endContainer, range.endOffset)];
+}
+function rangeAt(root, start, end) {
+  const r = document.createRange();
+  let n = 0, set = 0;
+  const place = (x, which, at) => (which === 0 ? r.setStart(x, at) : r.setEnd(x, at));
+  const walk = (x) => {
+    if (set === 2) return;
+    if (x.nodeType === 3) {
+      const len = x.nodeValue.length;
+      if (set === 0 && start <= n + len) { place(x, 0, start - n); set = 1; }
+      if (set === 1 && end <= n + len) { place(x, 1, end - n); set = 2; return; }
+      n += len;
+      return;
+    }
+    if (x.nodeName === 'BR') {
+      const parent = x.parentNode, idx = [...parent.childNodes].indexOf(x);
+      if (set === 0 && start <= n) { r.setStart(parent, idx); set = 1; }
+      if (set === 1 && end <= n) { r.setEnd(parent, idx); set = 2; return; }
+      n += 1;
+      if (set === 0 && start === n) { r.setStart(parent, idx + 1); set = 1; }
+      return;
+    }
+    for (const c of x.childNodes) walk(c);
+  };
+  walk(root);
+  if (set === 1) r.setEnd(root, root.childNodes.length);
+  return set ? r : null;
+}
+
+export function sanitizeHtml(html, external = false) {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const out = [];
   const walk = (node) => {
-    if (node.nodeType === 3) { out.push(escapeHtml(node.nodeValue.replace(/[\r\n]+/g, ' '))); return; }
+    if (node.nodeType === 3) {
+      out.push(external ? escapeHtml(node.nodeValue.replace(/[\r\n]+/g, ' ')) : node.nodeValue.replace(/\r/g, '').split('\n').map(escapeHtml).join('<br>'));
+      return;
+    }
     if (node.nodeType !== 1) return;
     const tag = node.tagName.toLowerCase();
     if (SKIP.has(tag)) return;
@@ -202,6 +264,7 @@ export const objectsMixin = {
     }
     renderFormFields(this, view);
     this.measureTables(view);
+    this.measureTexts(view);
     if (this.tools && this.tools.sel && this.tools.sel.pageId === view.page.id) this.tools.refreshSelectionEls();
   },
   renderTexts(view) { this.renderObjects(view); },
@@ -262,16 +325,36 @@ export const objectsMixin = {
   },
 
   // Double-click with the select tool: edit an existing text box.
-  editText(pageId, id) {
+  // at: { x, y } of a double-click → that word is selected (not everything)
+  editText(pageId, id, at = null) {
     const v = this.viewer.viewById(pageId);
     const el = v && v.el.querySelector(`.textbox[data-id="${id}"]`);
     if (!el) return;
     this.textEdit = { pageId, id, before: this.pageData(pageId) };
     el.setAttribute('contenteditable', 'true');
     el.focus();
+    const s = window.getSelection();
+    const hit = at && document.caretRangeFromPoint && document.caretRangeFromPoint(at.x, at.y);
+    const node = hit && hit.startContainer;
+    if (node && node.nodeType === 3 && el.contains(node) && typeof Intl.Segmenter === 'function') {
+      // the word under the pointer (caret positions sit between letters, so a
+      // click on the left half of a letter lands before it: look at both sides)
+      const off = hit.startOffset;
+      const segs = [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(node.data)];
+      const at = (o) => segs.find((g) => g.index <= o && o < g.index + g.segment.length);
+      let w = at(off);
+      if (!(w && w.isWordLike) && off > 0) { const p = at(off - 1); if (p && p.isWordLike) w = p; }
+      if (w && w.isWordLike) {
+        const r = document.createRange();
+        r.setStart(node, w.index);
+        r.setEnd(node, w.index + w.segment.length);
+        s.removeAllRanges();
+        s.addRange(r);
+        return;
+      }
+    }
     const r = document.createRange();
     r.selectNodeContents(el);
-    const s = window.getSelection();
     s.removeAllRanges();
     s.addRange(r);
   },
@@ -301,8 +384,8 @@ export const objectsMixin = {
       e.stopPropagation();
       const html = e.clipboardData.getData('text/html');
       const text = e.clipboardData.getData('text/plain');
-      if (this.settings.pasteFormatting && html) document.execCommand('insertHTML', false, sanitizeHtml(html));
-      else document.execCommand('insertText', false, text);
+      if (this.settings.pasteFormatting && html) document.execCommand('insertHTML', false, sanitizeHtml(html, true));
+      else document.execCommand('insertText', false, text.replace(/\u00a0/g, ' '));
     });
     // Move / resize with the handles (text tool, or select tool on a selected box).
     const drag = (handle, mode) => handle.addEventListener('pointerdown', (e) => {
@@ -377,6 +460,9 @@ export const objectsMixin = {
       // into the text bar (size field…) and the box itself never lost focus.
       const wrap = el.closest('.textbox-wrap');
       if (wrap) wrap.classList.remove('editing');
+      // forget the text selection inside the box (it would catch later pastes)
+      const s = window.getSelection();
+      if (s && s.anchorNode && el.contains(s.anchorNode)) s.removeAllRanges();
     }
     const d = this.pageData(te.pageId);
     const t = d.texts.find((q) => q.id === te.id);
@@ -439,6 +525,7 @@ export const objectsMixin = {
 
   // Style only the selected characters.
   styleRange(el, change) {
+    const offsets = rangeOffsets(el, this.textRangeIn(el));
     document.execCommand('styleWithCSS', false, false);
     for (const k of ['b', 'i', 'u']) {
       if (change[k] === undefined) continue;
@@ -468,19 +555,14 @@ export const objectsMixin = {
       f.replaceWith(span);
     }
     flattenSpans(el);
-    // Re-render the markup cleanly, then select the newly styled words again.
+    // Re-render the markup cleanly, then select exactly the same characters
+    // again (by position – other words with the same style stay unselected).
     el.innerHTML = sanitizeHtml(el.innerHTML);
-    const fresh = [...el.querySelectorAll('span')].filter((sp) => Object.entries(props).every(([k, v]) => {
-      const want = k === 'fs' ? String(round2(v)) : String(v).toLowerCase();
-      return String(sp.dataset[k] || '').toLowerCase() === want;
-    }));
-    if (fresh.length) {
-      const r = document.createRange();
-      r.setStartBefore(fresh[0]);
-      r.setEndAfter(fresh[fresh.length - 1]);
+    if (offsets) {
+      const r = rangeAt(el, offsets[0], offsets[1]);
       const sel = window.getSelection();
       sel.removeAllRanges();
-      sel.addRange(r);
+      if (r) sel.addRange(r);
     }
   },
 
@@ -695,6 +777,31 @@ export const objectsMixin = {
 
   // Row heights depend on the text – measure them and store (needed for
   // selection boxes and the PDF export). Silent: not an undo step.
+  // The real height of text boxes (wrapped lines), so selection frames and
+  // handles cover the whole text – also for pasted text never edited by hand.
+  measureTexts(view) {
+    requestAnimationFrame(() => {
+      const pageId = view.page.id;
+      const d = this.pageData(pageId);
+      if (!d.texts.length || (this.textEdit && this.textEdit.pageId === pageId)) return;
+      let changed = false;
+      const texts = d.texts.map((t) => {
+        const el = view.el.querySelector(`.textbox[data-id="${t.id}"]`);
+        if (!el || !el.offsetHeight || t.h > 0) return t;
+        const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * LINE_H)));
+        if (lines === (t.lines || 1)) return t;
+        changed = true;
+        return { ...t, lines };
+      });
+      if (changed) {
+        // only a measurement: stored with the next real change, the page
+        // isn't marked as changed just by looking at it
+        this.doc.pages[pageId] = { ...d, texts };
+        if (this.tools.sel && this.tools.sel.pageId === pageId) this.tools.refreshSelectionEls();
+      }
+    });
+  },
+
   measureTables(view) {
     requestAnimationFrame(() => {
       const pageId = view.page.id;
@@ -955,7 +1062,7 @@ export const objectsMixin = {
     // 6. Text → new text box (plain by default; formatting if enabled).
     if (text.trim() || (html && this.settings.pasteFormatting)) {
       const ts = this.toolState.text;
-      const rich = this.settings.pasteFormatting && html ? sanitizeHtml(html) : '';
+      const rich = this.settings.pasteFormatting && html ? sanitizeHtml(html, true) : '';
       const plain = rich && hasFormatting(rich) ? richToPlain(rich) : text.replace(/\r/g, '').trim();
       const page = this.pages[point.index];
       const w = Math.min(420, page.kind === 'board' ? 420 : page.w - 60);

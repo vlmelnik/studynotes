@@ -5,6 +5,19 @@ import { icon } from './icons.js';
 // Newest first. Each item: [icon, title, one line].
 export const RELEASES = [
   {
+    version: '1.6',
+    tagline: 'Steadier ink, PDF text and scribble to erase',
+    items: [
+      ['pen', 'Steady handwriting', 'The line no longer shakes while you write; small loops and dots (i, ä, full stops) come out right. Optional: Settings → Smooth my handwriting.'],
+      ['eraser', 'Scribble to erase', 'Scribble back and forth over handwriting with the pen to erase it – like GoodNotes.'],
+      ['highlighter', 'Printed PDF text', 'Select text in a PDF with the select tool to copy, highlight or underline it. The highlighter snaps to text lines.'],
+      ['fillSign', 'PDF forms anywhere', 'Click into a form field of any PDF and type – no tool needed.'],
+      ['formatPaint', 'Format painter', 'Copy the style of one text to another with one click.'],
+      ['pageDelete', 'Delete a page fast', 'New button in the toolbar; Ctrl+Z brings the page back.'],
+      ['text', 'Text fixes', 'Paragraphs stay when you colour a word, the colour goes only where you selected, double-click selects one word, pasting works with every tool and lands on top.'],
+    ],
+  },
+  {
     version: '1.5',
     tagline: 'Fill & sign, calmer ink and a Russian interface',
     items: [

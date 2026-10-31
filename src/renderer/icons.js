@@ -53,6 +53,8 @@ const P = {
   front: '<rect x="4" y="4" width="10" height="10" rx="1.5"/><rect x="10" y="10" width="10" height="10" rx="1.5" fill="currentColor" fill-opacity=".25"/>',
   back: '<rect x="10" y="10" width="10" height="10" rx="1.5"/><rect x="4" y="4" width="10" height="10" rx="1.5" fill="currentColor" fill-opacity=".25"/>',
   image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5-8.5 8.5"/>',
+  pageDelete: '<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h4.5"/><path d="M14 3.5l4 4v3"/><path d="M14.5 15.5l5 5M19.5 15.5l-5 5"/>',
+  formatPaint: '<rect x="4" y="3.5" width="13" height="5" rx="1.2"/><path d="M17 6h2.5v5H11v3"/><path d="M10 14h2v6.5h-2z"/>',
   signature: '<path d="M3 17c2.5 0 3.5-9 6-9 1.6 0 .6 7 2.6 7 1.4 0 2-3 3.4-3 1 0 1 2 2.2 2H21"/><path d="M3 20.5h18"/>',
   fillSign: '<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h4"/><path d="M14 3.5l4 4V11"/><path d="M8 9h5M8 12.5h3"/><path d="M13 19.5c1.6 0 2.2-4.5 3.8-4.5 1 0 .4 3.5 1.7 3.5.9 0 1.2-1.5 2.1-1.5"/>',
   calendar: '<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',

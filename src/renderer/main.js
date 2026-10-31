@@ -11,7 +11,7 @@ import { setLang } from './i18n.js';
 class App {
   async init() {
     this.info = await window.api.info();
-    this.settings = { mouseDraws: true, shapeHold: true, sidebarHidden: false, pasteFormatting: false, favorites: [], recentPens: [], recentColors: [], theme: 'light', ...(this.info.settings || {}) };
+    this.settings = { mouseDraws: true, shapeHold: true, scribbleErase: true, sidebarHidden: false, pasteFormatting: false, favorites: [], recentPens: [], recentColors: [], theme: 'light', ...(this.info.settings || {}) };
     this.applyTheme();
     setLang(this.settings.lang || 'en');
     window.api.onCloudStatus((st) => this.onCloudStatus(st));
@@ -44,12 +44,16 @@ class App {
     window.addEventListener('blur', () => { if (this.active) { this.active.tools.spaceHeld = false; this.active.el.classList.remove('space-pan'); } });
     window.api.onBeforeClose(() => this.onWindowClose());
     // Paste anywhere in an open notebook (pictures, text, tables, files…).
+    // Decided by where the keyboard focus is (a text box being typed in, a
+    // field), not by the event target: Chromium sends the paste to an old
+    // text selection even after editing has ended – with any tool.
     window.addEventListener('paste', (e) => {
-      const t = e.target;
       if (!this.active || document.querySelector('.modal-backdrop')) return;
-      if (t && (t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      const f = document.activeElement;
+      if (f && (f.isContentEditable || f.tagName === 'INPUT' || f.tagName === 'TEXTAREA')) return;
+      if (e.target && e.target.isContentEditable && e.target === f) return;
       this.active.onPaste(e);
-    });
+    }, true);
     // Prevent the window from navigating to dropped files.
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('drop', (e) => e.preventDefault());
@@ -440,6 +444,8 @@ class App {
             onclick: (e) => { this.setTheme(v); e.currentTarget.parentElement.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === e.currentTarget)); },
           }, label)))),
         check('Mouse can draw', 'mouseDraws', 'Turn off to scroll with the mouse and draw only with the pen'),
+        check('Scribble to erase', 'scribbleErase', 'Scribble back and forth over handwriting with the pen to erase it (like GoodNotes)'),
+        check('Smooth my handwriting', 'smoothInk', 'Removes shaking and evens out curves of your letters while keeping your own handwriting'),
         check('Draw & hold to create shapes', 'shapeHold', 'Hold the pen still at the end of a stroke to snap it to a line, rectangle, triangle or ellipse'),
         check('Pasted text keeps formatting', 'pasteFormatting', 'Off: text is always pasted as plain text. On: bold, italic, underline and lists are kept'),
         h('div', { class: 'field' }, h('span', {}, 'Backup & moving to a new version or PC'),

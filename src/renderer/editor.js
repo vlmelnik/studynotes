@@ -112,6 +112,27 @@ export class Editor {
       this._selRaf = requestAnimationFrame(() => this.textBar.update());
     };
     document.addEventListener('selectionchange', this._onSelChange);
+    // Format painter: after picking it up, the next selected text (words in a
+    // box, or whole boxes) gets that style.
+    // It only arms with the next press outside the text bar, so the click that
+    // picked the style up can't paint it straight back onto its source.
+    this._onPaintDown = (e) => {
+      this._paintArmed = !!this.formatPainter && !(e.target.closest && e.target.closest('.text-bar'));
+    };
+    this._onPaintUp = () => setTimeout(() => {
+      const st = this.formatPainter;
+      if (!st || this.destroyed || !this._paintArmed) return;
+      const te = this.textEdit;
+      const el = te && this.viewer.viewById(te.pageId)?.el.querySelector(`.textbox[data-id="${te.id}"]`);
+      const ready = (el && this.textRangeIn(el)) || (this.tools.sel && this.tools.sel.textIds.size);
+      if (!ready) return;
+      this.formatPainter = null;
+      this.el.classList.remove('painting');
+      this.applyTextStyle(st);
+      this.textBar.update();
+    }, 0);
+    window.addEventListener('pointerdown', this._onPaintDown, true);
+    window.addEventListener('pointerup', this._onPaintUp, true);
     this.setTool(this.toolState.tool, true);
     if (this.settings.sidebarHidden || this.isBoard) this.el.classList.add('no-sidebar');
     this.installDrop();
@@ -429,6 +450,8 @@ export class Editor {
     this.tools.clearSelection(true);
     this.tools.laser.destroy();
     document.removeEventListener('selectionchange', this._onSelChange);
+    window.removeEventListener('pointerup', this._onPaintUp, true);
+    window.removeEventListener('pointerdown', this._onPaintDown, true);
     this.viewer.destroy();
     this.sidebar.destroy();
     this.el.remove();
@@ -472,6 +495,7 @@ export class Editor {
       this.isBoard ? null : h('div', { class: 'split-btn' },
         iconButton('addPage', 'Add a page after this one (same style)', () => this.addPageSameStyle(), 'bar-btn'),
         h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })),
+      this.isBoard ? null : iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'),
       iconButton('send', 'Send by e-mail or Telegram', (e) => this.sendMenu(e.currentTarget), 'bar-btn'),
       iconButton('export', 'Export PDF', (e) => this.exportMenu(e.currentTarget), 'bar-btn'),
       iconButton('more', 'More', (e) => this.moreMenu(e.currentTarget), 'bar-btn'));
@@ -551,7 +575,8 @@ export class Editor {
         bar.append(sizes(HL_SIZES, ts.hl.size, (sz) => { ts.hl.size = sz; }, 0.55, 'hl'),
           sep(), swatches(ts.hl.color, (c) => { ts.hl.color = c; }, HL_PALETTE),
           sep(), this.favoritesStrip('hl'),
-          ibtn('line', 'Straight lines', ts.hl.straight, () => { ts.hl.straight = !ts.hl.straight; save(); }));
+          ibtn('line', 'Straight lines', ts.hl.straight, () => { ts.hl.straight = !ts.hl.straight; save(); }),
+          h('button', { class: `opt-chip${ts.hl.snap !== false ? ' active' : ''}`, title: 'On printed PDF text the highlighter follows the text lines', onclick: () => { ts.hl.snap = ts.hl.snap === false; save(); } }, 'Snap to text'));
         break;
       case 'eraser':
         bar.append(
@@ -1077,7 +1102,12 @@ export class Editor {
     const before = this.pages;
     const after = before.filter((_, i) => i !== index);
     this.pushPagesUndo(before, after, Math.min(index, after.length - 1));
-    toast(`Page ${index + 1} deleted`, { action: { label: 'Undo', onClick: () => this.undo() } });
+    const entry = this.undoStack[this.undoStack.length - 1];
+    // "Undo" only brings this page back – never undoes something done since
+    toast(`Page ${index + 1} deleted`, { action: { label: 'Undo', onClick: () => {
+      if (this.undoStack[this.undoStack.length - 1] === entry) this.undo();
+      else toast('Something changed since – use Ctrl+Z to step back');
+    } } });
   }
 
   movePage(from, to) {

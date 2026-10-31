@@ -131,6 +131,11 @@ export class TextBar {
       btn('<u>U</u>', 'Underline (Ctrl+U)', () => apply({ u: !v.u }), v.u, 'fmt'),
       btn(ALIGN_ICON[v.al], `Alignment: ${v.al}`, () => apply({ al: ALIGN_NEXT[v.al] })),
       btn('list', 'Bullet list', () => apply({ list: !String(t.text || '').startsWith('• ') }), String(t.text || '').startsWith('• ')),
+      btn('formatPaint', 'Format painter: copy this style, then select other text', () => {
+        ed.formatPainter = { ff: v.ff, size: v.fs, color: v.c, b: !!v.b, i: !!v.i, u: !!v.u };
+        ed.el.classList.add('painting');
+        ed.toast('Now select the text that should get this style');
+      }, !!ed.formatPainter),
       h('button', { class: 'tb-btn tb-box' + (v.box ? ' active' : ''), title: 'Text box style', 'aria-label': 'Text box style', onclick: (e) => this.boxMenu(e.currentTarget, v.box, (box) => apply({ box })) }, swatch(v.box)),
       sep(),
       btn('cut', 'Cut', () => this.boxAction('cut')),

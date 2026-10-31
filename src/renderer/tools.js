@@ -6,7 +6,7 @@ import { icon } from './icons.js';
 import { drawLive, drawStrokes } from './inkrender.js';
 import { releaseCanvas } from './viewer.js';
 import {
-  strokeHit, eraseFromStroke, strokeInLasso, pointInPolygon, transformStroke, recognizeShape, mapCuts,
+  strokeHit, eraseFromStroke, strokeInLasso, pointInPolygon, transformStroke, recognizeShape, mapCuts, isScribble,
   shapeStrokes, snapAngle, strokeBBox, round2, distToStroke, rectsIntersect, LINE_SHAPES,
 } from '../shared/geometry.js';
 import { FONTS } from '../shared/fonts.js';
@@ -14,6 +14,8 @@ import { restack, stacked } from '../shared/stacking.js';
 import { Laser } from './laser.js';
 import { isClosedShape } from '../shared/ink.js';
 import { placeAt } from './fill-sign.js';
+import { TextSelection, peekLayout, charAt, spanBetween, highlightStrokes } from './pdf-text.js';
+import { PenFilter, smoothStroke } from '../shared/pen-filter.js';
 
 const HOLD_MS = 550;
 const LINE_H = 1.3;
@@ -107,6 +109,7 @@ export class Tools {
     this.lastPointer = null; // last pointer position over the pages (for paste placement)
     this.eraserCursor = h('div', { class: 'eraser-cursor' });
     this.laser = new Laser(this);
+    this.textSel = new TextSelection(this, uid);
     this.laser.attach(editor.viewerHost);
     const s = this.viewer.scroller;
     s.addEventListener('pointerdown', (e) => this.onDown(e));
@@ -124,6 +127,7 @@ export class Tools {
 
   // ---------- dispatch ----------
   onDown(e) {
+    this.notePen(e);
     if (this.cur) return;
     const target = e.target;
     // Interactive elements inside pages handle themselves.
@@ -141,7 +145,10 @@ export class Tools {
     const wantsPan = e.button === 1 || this.spaceHeld || this.tool === 'hand' || e.pointerType === 'touch' ||
       (e.pointerType === 'mouse' && e.button === 0 && !this.editor.settings.mouseDraws && drawTool);
     if (wantsPan) return this.startPan(e);
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // Some tablet drivers turn the pen's side button into a right mouse click:
+    // a right click right after pen use is the pen button → erase.
+    const penAsMouse = e.pointerType === 'mouse' && e.button === 2 && performance.now() - (this.lastPenAt || -1e9) < 1500;
+    if (e.pointerType === 'mouse' && e.button !== 0 && !penAsMouse) return;
     // Text tool while a box is being edited: the first tap elsewhere only
     // finishes editing (the frame disappears); the next one starts a new box.
     const wasEditingText = !!this.editor.textEdit;
@@ -155,9 +162,9 @@ export class Tools {
     }
 
     let tool = this.tool;
-    const barrel = isPen && penButton(e);
+    const barrel = (isPen && penButton(e)) || penAsMouse;
     // Pen button pressed while the pen hovers: erase once it touches (see onMove).
-    if (barrel && e.pressure === 0 && !(e.buttons & 1)) { this.penButtonHeld = e.pointerId; e.preventDefault(); return; }
+    if (barrel && e.pressure === 0 && !(e.buttons & 1) && this.penHasPressure) { this.penButtonHeld = e.pointerId; e.preventDefault(); return; }
     if (barrel) tool = 'eraser'; // eraser end / side button held: erase until released
 
     // Handles / dragging inside the current selection
@@ -168,6 +175,7 @@ export class Tools {
       if (this.selContains(e)) return this.startSelTransform(e, 'move');
     }
     if (this.sel) this.clearSelection();
+    this.textSel.clear();
     if (tool === 'laser') { e.preventDefault(); return this.laser.down(e); }
 
     const hit = this.viewer.hit(e.clientX, e.clientY);
@@ -193,10 +201,19 @@ export class Tools {
     }
   }
 
+  // remember what the pen can do (pressure? last use?) for the pen button
+  notePen(e) {
+    if (e.pointerType !== 'pen') return;
+    this.lastPenAt = performance.now();
+    if (e.pressure > 0 && e.pressure < 1 && e.pressure !== 0.5) this.penHasPressure = true;
+  }
+
   onMove(e) {
+    this.notePen(e);
     if (this.tool === 'laser') this.laser.move(e);
     const hit = this.viewer.hit(e.clientX, e.clientY);
     if (hit) this.lastPointer = { index: hit.index, x: hit.x, y: hit.y };
+    if (hit && !this.cur && (this.tool === 'select' || this.tool === 'hl')) peekLayout(this.editor, hit.page); // ready before the click
     if (this.tool === 'eraser' || (this.cur && this.cur.kind === 'erase') || (e.pointerType === 'pen' && penButton(e))) this.moveEraserCursor(e);
     else if (e.pointerType === 'pen' && this.eraserCursor.isConnected && this.tool !== 'eraser') this.eraserCursor.remove();
     if (e.pointerType === 'pen' && this.penButtonSwitch(e)) return;
@@ -218,6 +235,7 @@ export class Tools {
       case 'erase': for (const ev of events.length ? events : [e]) this.eraseTo(ev); break;
       case 'lasso': this.lassoTo(e); break;
       case 'band': this.bandTo(e); break;
+      case 'ptext': { const [x, y] = this.pagePoint(c, e); this.textSel.move(x, y); break; }
       case 'shape': this.shapeTo(e); break;
       case 'seltransform': this.selTransformTo(e); break;
     }
@@ -235,6 +253,7 @@ export class Tools {
       case 'erase': this.endErase(c); break;
       case 'lasso': this.endLasso(c); break;
       case 'band': this.endBand(c); break;
+      case 'ptext': if (!cancelled) this.textSel.end(e); else this.textSel.clear(); break;
       case 'shape': this.endShape(c, cancelled); break;
       case 'seltransform': this.endSelTransform(c, cancelled); break;
     }
@@ -244,7 +263,9 @@ export class Tools {
   // when pressed or released in the middle of a line; then back to the pen.
   penButtonSwitch(e) {
     const held = penButton(e);
-    const touching = e.pressure > 0 || !!(e.buttons & 1);
+    // Pens without pressure (no Windows Ink) report 0 even on the paper: then
+    // "button held" has to count as touching, otherwise erasing stops at once.
+    const touching = e.pressure > 0 || !!(e.buttons & 1) || (held && !this.penHasPressure);
     const c = this.cur;
     if (!held && this.penButtonHeld === e.pointerId && !c) this.penButtonHeld = null;
     if (!c && held && touching && this.penButtonHeld === e.pointerId) {
@@ -327,6 +348,12 @@ export class Tools {
       if (this.sel) this.startSelTransform(e, 'move');
       return;
     }
+    // On printed PDF text: select the text (copy / highlight / underline).
+    if (this.textSel.start(e, hit, view)) {
+      this.cur = { kind: 'ptext', pointerId: e.pointerId, rect: this.viewer.pageClientRect(hit.index) };
+      this.capture(e);
+      return;
+    }
     // Empty spot: rubber-band selection.
     const band = h('div', { class: 'band-rect' });
     view.overlay.append(band);
@@ -376,7 +403,7 @@ export class Tools {
     if (!obj) return;
     if (obj.kind === 'text') {
       this.clearSelection();
-      this.editor.editText(hit.page.id, obj.id);
+      this.editor.editText(hit.page.id, obj.id, { x: e.clientX, y: e.clientY });
     } else if (obj.kind === 'item' && cell) {
       this.clearSelection();
       this.editor.editCell(hit.page.id, obj.id, +cell.dataset.r, +cell.dataset.c);
@@ -386,7 +413,7 @@ export class Tools {
   // ---------- pen / highlighter ----------
   startStroke(e, hit, view, tool) {
     const opts = tool === 'hl' ? this.state.hl : this.state.pen;
-    const st = { id: uid(), t: tool === 'hl' ? 'hl' : 'pen', c: opts.color, s: opts.size, p: [] };
+    const st = { id: uid(), t: tool === 'hl' ? 'hl' : 'pen', c: opts.color, s: opts.size, p: [], pf: 1 };
     if (tool === 'pen' && opts.style && opts.style !== 'ball') st.ps = opts.style;
     const live = view.makeRegionCanvas('live-canvas');
     this.cur = {
@@ -394,6 +421,9 @@ export class Tools {
       rect: this.viewer.pageClientRect(hit.index), isPen: e.pointerType === 'pen',
       straight: tool === 'hl' && this.state.hl.straight, holdAnchor: [e.clientX, e.clientY], snapped: false,
       pressures: new Set(),
+      // pen jitter filter (a mouse doesn't shake; "Smooth my handwriting" filters it too)
+      filter: (tool === 'hl' && this.state.hl.straight) || (e.pointerType !== 'pen' && !this.editor.settings.smoothInk)
+        ? null : new PenFilter(this.editor.settings.smoothInk ? 1 : 0.5),
     };
     this.capture(e);
     this.addPoint(e);
@@ -404,7 +434,10 @@ export class Tools {
   addPoint(ev) {
     const c = this.cur;
     if (!c || c.snapped) return;
-    const [x, y] = this.pagePoint(c, ev);
+    // filtered pen position (removes jitter, keeps curls – see pen-filter.js)
+    const [fx, fy] = c.filter ? c.filter.push(ev.clientX, ev.clientY, ev.timeStamp) : [ev.clientX, ev.clientY];
+    if (c.filter) c.rawEnd = this.pagePoint(c, ev); // where the pen really is (added when it lifts)
+    const [x, y] = this.pagePoint(c, { clientX: fx, clientY: fy });
     let pr = c.isPen ? ev.pressure : 0.5;
     if (c.isPen && pr === 0) pr = 0.5; // some drivers send 0 on the first event
     pr = Math.max(0.05, Math.min(1, pr));
@@ -452,7 +485,8 @@ export class Tools {
       const c = this.cur;
       if (!c) return;
       if (c.kind === 'stroke') {
-        if (!c.isPen) c.st.np = 1;
+        // same pressure rule as the finished stroke, so nothing changes when the pen lifts
+        if (!c.isPen || c.pressures.size <= 1) c.st.np = 1; else delete c.st.np;
         drawLive(c.live.ctx, c.st, c.live.scale, c.live.rect);
       } else if (c.kind === 'shape') {
         c.live.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -467,11 +501,62 @@ export class Tools {
     releaseCanvas(c.live.canvas);
     if (cancelled && c.st.p.length < 9) return;
     const st = c.st;
+    // after a fast flick the filter lags behind: the line ends where the pen
+    // was lifted (small gaps are just jitter – those stay smoothed)
+    if (c.rawEnd && !c.snapped && !c.straight && st.p.length >= 3) {
+      const n = st.p.length, [x, y] = c.rawEnd;
+      if (Math.hypot(x - st.p[n - 3], y - st.p[n - 2]) > Math.max(1.5, st.s)) st.p.push(round2(x), round2(y), st.p[n - 1]);
+    }
     if (!c.isPen || c.pressures.size <= 1) st.np = 1;
     if (st.p.length === 3) st.p.push(st.p[0] + 0.01, st.p[1] + 0.01, st.p[2]); // a dot
+    // Settings → "Smooth my handwriting": even out the finished line a little more
+    else if (this.editor.settings.smoothInk && st.t === 'pen' && !st.sh) st.p = smoothStroke(st.p);
+    // Highlighter over printed PDF text: snap to the text lines (like GoodNotes)
+    if (st.t === 'hl' && this.state.hl.snap !== false) {
+      const page = this.viewer.pages[c.index];
+      const layout = peekLayout(this.editor, page);
+      const n = st.p.length;
+      const a = charAt(layout, st.p[0], st.p[1], true), b = charAt(layout, st.p[n - 3], st.p[n - 2], true);
+      // only a mark along the text: both ends on a text line, mostly horizontal
+      const along = Math.abs(st.p[n - 3] - st.p[0]) > 2 * Math.abs(st.p[n - 2] - st.p[1]);
+      if (a && b && along) {
+        const span = spanBetween(layout, a, b);
+        if (span.rects.length) {
+          const strokes = highlightStrokes(span.rects, st.c, uid);
+          const before = this.editor.pageData(c.pageId);
+          this.editor.commit(c.pageId, before, { ...before, strokes: before.strokes.concat(strokes) });
+          this.editor.rememberPen('hl');
+          return;
+        }
+      }
+    }
     if (c.straight && st.p.length === 6) {
       const [a, b] = snapAngle([st.p[0], st.p[1]], [st.p[3], st.p[4]]);
       st.p = [round2(a[0]), round2(a[1]), 0.5, round2(b[0]), round2(b[1]), 0.5];
+    }
+    // Scribble over ink to erase it (Settings → "Scribble to erase")
+    if (st.t === 'pen' && !st.sh && this.editor.settings.scribbleErase !== false && isScribble(st)) {
+      const data = this.editor.pageData(c.pageId);
+      const p = st.p, r = Math.max(st.s, 2) / 2;
+      // only ink the scribble really covers: touched, and its middle lies
+      // inside the scribbled area (a long line merely crossed stays)
+      const sb = strokeBBox(st), padX = (sb[2] - sb[0]) * 0.2, padY = (sb[3] - sb[1]) * 0.2;
+      const hit = new Set(data.strokes.filter((o) => {
+        const b = strokeBBox(o);
+        // most of that ink must lie inside the scribbled area (hatching inside a
+        // drawing, or shading next to it, doesn't delete the drawing)
+        const ix = Math.max(0, Math.min(b[2], sb[2] + padX) - Math.max(b[0], sb[0] - padX));
+        const iy = Math.max(0, Math.min(b[3], sb[3] + padY) - Math.max(b[1], sb[1] - padY));
+        const area = Math.max(1e-6, (b[2] - b[0]) * (b[3] - b[1]));
+        if ((ix * iy) / area < 0.7) return false;
+        for (let i = 0; i + 3 < p.length; i += 3) if (strokeHit(o, p[i], p[i + 1], p[i + 3], p[i + 4], r)) return true;
+        return false;
+      }).map((o) => o.id));
+      if (hit.size) {
+        this.editor.commit(c.pageId, data, { ...data, strokes: data.strokes.filter((o) => !hit.has(o.id)) });
+        this.editor.toast(`Erased by scribbling – Ctrl+Z brings it back`);
+        return;
+      }
     }
     this.editor.addStroke(c.pageId, { ...st, p: st.p.slice() });
     this.editor.rememberPen(st.t === 'hl' ? 'hl' : 'pen');
@@ -1142,6 +1227,13 @@ export class Tools {
     strokes = strokes.map(regroup); texts = texts.map(regroup); items = items.map(regroup);
     const page = this.viewer.pages[index];
     const before = this.editor.pageData(page.id);
+    // What was pasted / inserted last lies on top of everything (front layer).
+    // Text goes on top of everything; pictures / tables on top of the other
+    // pictures but still below the ink (so you can write on them).
+    const topOf = (layer) => stacked(before, layer).reduce((m, e) => Math.max(m, e.key), 0);
+    let zf = Math.max(0, Math.ceil(topOf('f'))) + 1, zb = Math.max(0, Math.ceil(topOf('b'))) + 1;
+    items = items.map((o) => ({ ...o, lay: 'b', z: zb++ }));
+    texts = texts.map((o) => ({ ...o, lay: 'f', z: zf++ }));
     const after = { ...before, strokes: before.strokes.concat(strokes), texts: before.texts.concat(texts), items: before.items.concat(items) };
     this.clearSelection(true);
     this.editor.commit(page.id, before, after);

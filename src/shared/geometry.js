@@ -153,6 +153,35 @@ function eraseFromStroke(st, ax, ay, bx, by, r, exact = false) {
   return out;
 }
 
+// Scribble to erase (like GoodNotes): a fast zig-zag back and forth. True
+// when the line turns around sharply several times within a small area.
+function isScribble(st) {
+  const p = st.p, n = p.length / 3;
+  if (n < 8) return false;
+  let len = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < p.length; i += 3) {
+    if (i) len += Math.hypot(p[i] - p[i - 3], p[i + 1] - p[i - 2]);
+    x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]);
+  }
+  const diag = Math.hypot(x1 - x0, y1 - y0);
+  if (diag < 4 || len < diag * 3) return false;
+  // direction reversals, measured on a coarse version of the line
+  const step = Math.max(1.5, diag / 25);
+  const q = [[p[0], p[1]]];
+  for (let i = 3; i < p.length; i += 3) {
+    const l = q[q.length - 1];
+    if (Math.hypot(p[i] - l[0], p[i + 1] - l[1]) >= step) q.push([p[i], p[i + 1]]);
+  }
+  let turns = 0;
+  for (let i = 1; i < q.length - 1; i++) {
+    const ux = q[i][0] - q[i - 1][0], uy = q[i][1] - q[i - 1][1];
+    const vx = q[i + 1][0] - q[i][0], vy = q[i + 1][1] - q[i][1];
+    const cos = (ux * vx + uy * vy) / (Math.hypot(ux, uy) * Math.hypot(vx, vy) || 1);
+    if (cos < -0.5) turns++; // turned back by more than 120°
+  }
+  return turns >= 5;
+}
+
 // Distance from a capsule's centre segment to a rectangle (0 if it crosses).
 function distSegRect([ax, ay, bx, by], [x0, y0, x1, y1]) {
   const inR = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
@@ -541,5 +570,5 @@ function rectsIntersect(a, b) {
 module.exports = {
   distToStroke, rectsIntersect, shapeStrokes, roundRectPts, BOX_SHAPES, LINE_SHAPES,
   distPointSeg, distSegSeg, strokeBBox, bboxesOverlap, strokeHit, eraseFromStroke, resample,
-  pointInPolygon, strokeInLasso, transformStroke, capsulePolygon, mapCuts, rdp, recognizeShape, shapePoints, snapAngle, round2,
+  pointInPolygon, strokeInLasso, transformStroke, capsulePolygon, mapCuts, isScribble, rdp, recognizeShape, shapePoints, snapAngle, round2,
 };

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.6
+
+**Ink**
+- The line no longer shakes or deforms while you write: pen input is filtered (one-euro filter) and drawn with the same settings as the finished line. Small loops and dots come out right (a tap with the brush now leaves a dot).
+- Settings → **Smooth my handwriting**: evens out tremor and curves, keeps your own letters.
+- **Scribble to erase**: scribble back and forth over handwriting to erase it (on/off in Settings).
+- Pen side button: works with pens without pressure and with drivers that send it as a right click.
+
+**PDF**
+- Select printed PDF text with the select tool → Copy, Highlight, Underline. The highlighter snaps to text lines (option "Snap to text").
+- Form fields of every PDF can be clicked and typed into directly.
+
+**Text**
+- Paragraphs are kept when a word gets another colour or size; the style goes exactly to the selected characters.
+- Double-click selects the word under the pointer.
+- Pasting works with every tool (also after editing a text box); pasted text lies on top, pictures on top of the other pictures (below the ink).
+- Long text boxes get their real height (frame and handles cover all the text).
+- **Format painter** in the text bar.
+
+**Pages & dialogs**
+- Toolbar button: delete the current page (Ctrl+Z restores).
+- Fixed: Cancel buttons (e.g. "Clear page") did nothing.
+- Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+C …) work with every keyboard layout: German QWERTZ uses the key labelled Z, Russian the key in the Z place.
+
 ## 1.5
 
 **Russian interface** – Settings → Language → Русский. Switches at once, no restart.

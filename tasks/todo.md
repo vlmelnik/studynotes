@@ -290,3 +290,29 @@
 - Review (8 findings) fixed: page rotation keeps eraser cuts; cuts stored as a list (no erased ink returns); near misses change nothing; cover/folder names never translated; form-fill errors shown; placing wins over panning; Alt+wheel never shrinks beyond the list; Russian clear-page text.
 - Tests: unit 90/90; e2e run 30/30, v11 24/24, v12 22/22, v13 32/32, v14 23/23, v15 17/17.
 - GitHub: source pushed to vlmelnik/studynotes (secret kept out), README with framed neutral screenshots, release workflow (needs repo secrets for the built-in Google client).
+
+# v1.6 – plan (2026-10-31)
+
+## Bugs
+- [ ] Ink: the line still wobbles / deforms as a whole while drawing; curls and dots (i, j, ä) sometimes render wrong
+- [ ] Pen side button erases only sometimes
+- [ ] "Clear page": Cancel does not cancel
+- [ ] Copy while a text box is being edited does nothing; pasted text box becomes very long and can't be narrowed with the blue side handle
+- [ ] Rich text: changing colour/size of one word removes all paragraph breaks
+- [ ] Rich text: colour applied to text that was not selected
+- [ ] Double-click selects a word/paragraph only sometimes (often everything)
+- [ ] Size field of the text bar doesn't fit long text boxes (size handle / box frame mismatch)
+
+## Features
+- [ ] Paste text and pictures with every tool (select, lasso, pen…), pasted object always on top
+- [ ] Quick page delete (trash on the thumbnail + Delete key in the page list)
+- [ ] Scribble to erase (zig-zag over ink/text with the pen deletes it, like GoodNotes; on/off in Settings)
+- [ ] Format painter for text
+- [ ] PDF form fields: click directly with any/no tool and type
+- [ ] Selectable PDF text: select, highlight, copy
+- [ ] Handwriting: optional auto-smoothing of letters (Settings)
+- [ ] Recognise handwriting → exported PDF gets an invisible text layer (searchable, copyable)
+- [ ] Recognise text in scans/photos (select area → text + font → editable, background cleaned)
+
+## Release
+- [ ] Tests, review, build, publish v1.6.0 on GitHub (prebuilt upload)

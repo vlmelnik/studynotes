@@ -27,9 +27,13 @@ export function iconButton(name, title, onClick, cls = '') {
   return h('button', { class: `icon-btn ${cls}`, title, 'aria-label': title, html: icon(name), onclick: onClick });
 }
 
-// Shortcut key independent of the keyboard layout: with a Russian (or any)
-// layout, the key in the "P" position still gives 'p'.
+// Shortcut key for any keyboard layout. A Latin letter counts as printed on
+// the key (German QWERTZ: Ctrl+Z is the key labelled Z, which sits where the
+// US Y is). Other letters (Russian: я, ч, …) use the key's position, so the
+// key in the "Z" place still gives 'z'.
 export function shortcutKey(e) {
+  const key = (e.key || '').toLowerCase();
+  if (/^[a-z]$/.test(key)) return key;
   if (/^Key[A-Z]$/.test(e.code || '')) return e.code.slice(3).toLowerCase();
   if (/^Digit\d$/.test(e.code || '')) return e.code.slice(5);
   return (e.key || '').toLowerCase();
@@ -100,9 +104,11 @@ export function modal({ title, body, actions, onClose, width }) {
   };
   for (const a of actions || []) {
     footer.append(h('button', { class: `btn ${a.primary ? 'btn-primary' : ''} ${a.danger ? 'btn-danger' : ''}`, onclick: () => {
-      const v = a.value ? a.value() : a.result;
-      if (v === false) return; // validation failed
-      close(v);
+      if (a.value) {
+        const v = a.value();
+        if (v === false) return; // validation failed: keep the dialog open
+        close(v);
+      } else close(a.result); // e.g. Cancel (result: false) closes
     } }, a.label));
   }
   const onKey = (e) => {

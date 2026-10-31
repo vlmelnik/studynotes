@@ -78,6 +78,8 @@ function check(name, ok, info = '') {
     await e.placeImages([{ bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png' }], { index: 0, x: 200, y: 260 });
   });
   await win.keyboard.press('Escape');
+  // since 1.6 new pictures start on top: put this one behind the ink (like older notes)
+  await ed(() => { const e = window.__app.active; const d = e.pageData(e.pages[0].id); e.setPageData(e.pages[0].id, { ...d, items: d.items.map((it) => ({ ...it, lay: 'b', z: -1 })) }); });
   const img = (await pageData()).items[0];
   // a pen stroke across the picture
   await win.keyboard.press('p');

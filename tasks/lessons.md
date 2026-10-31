@@ -22,3 +22,17 @@
 - In Playwright, don't `await` a page function that returns a promise resolved only by a dialog closing (e.g. newNotebook → picker) – it hangs the test.
 - UI translation by observing the DOM needs an explicit list of user-content containers, including attributes (a notebook card's title tooltip is user content).
 - Secrets: keep them in an uncommitted *.local.js before the repo goes public; grep the tree for them before every publish.
+
+## 2026-10-31 (v1.6)
+- modal(): `result: false` was treated as "validation failed" → every Cancel/"Close anyway" button did nothing. Distinguish value() results from plain results.
+- Chromium sends `paste` to an old text selection's element even after editing ended: decide by document.activeElement, and clear the selection when editing ends.
+- Never collapse "\n" when sanitizing our own pre-wrap DOM – only for external HTML.
+- Re-select by character offsets, not by "spans with the same style".
+- Input filters must be tested with realistic sampling (240 Hz timestamps); synthetic events with equal timestamps flatten zig-zags.
+
+### v1.6 review fixes
+- A flag name on strokes must not reuse an existing key (`f` = fill colour). Grep the data model before adding a one-letter key.
+- The canvas tools call preventDefault on pointerdown, so `mousedown` never fires over pages: listen to pointer events on window (capture) for app-wide gestures.
+- A toast "Undo" must undo its own action only: remember the undo entry and check it is still on top.
+- Measurements done while rendering (text lines) must not mark the page changed.
+- e2e tests should click like a person (real mouse on real elements); programmatic selection hid the format-painter bug.

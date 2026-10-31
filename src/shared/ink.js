@@ -49,6 +49,14 @@ function strokeOptions(st, last = true) {
     };
   }
   const hasPressure = !st.np;
+  const o = penOptions(st, size, hasPressure, last);
+  // Strokes from 1.6 on (st.pf) come from the filtered pen input: much less
+  // streamlining is needed, so small curls and loops keep their shape.
+  if (st.pf) { o.streamline = st.ps === 'brush' ? 0.25 : 0.15; o.smoothing = Math.min(o.smoothing, 0.5); }
+  return o;
+}
+
+function penOptions(st, size, hasPressure, last) {
   switch (st.ps) {
     case 'fountain':
       return { size, thinning: 0.65, smoothing: 0.6, streamline: 0.4, simulatePressure: !hasPressure, easing: (t) => t, last };
@@ -76,6 +84,7 @@ function getSizedOutline(st, factor) {
   let o = m.get(factor);
   if (!o) {
     if (st.sh) o = shapeOutline(st, st.s * factor);
+    else if (isDot(st)) o = dotOutline(st, factor);
     else {
       const pts = strokePoints(st);
       if (st.np) for (const q of pts) q[2] = 0.5;
@@ -180,9 +189,31 @@ const outlineCache = new WeakMap();
 
 // Outline polygon [[x,y], ...] in page units. Cached per stroke object;
 // strokes are immutable (edits create new stroke objects).
+// A tap (dot on an i, ä, full stop…): a round dot, also for tapered pens
+// (the brush would otherwise taper it away to nothing).
+function isDot(st) {
+  if (st.sh || st.t === 'hl') return false;
+  const p = st.p;
+  let len = 0;
+  for (let i = 3; i < p.length; i += 3) { len += Math.hypot(p[i] - p[i - 3], p[i + 1] - p[i - 2]); if (len > st.s * 0.6) return false; }
+  return true;
+}
+
+function dotOutline(st, factor = 1) {
+  const p = st.p, n = p.length / 3;
+  let x = 0, y = 0, pr = 0;
+  for (let i = 0; i < p.length; i += 3) { x += p[i]; y += p[i + 1]; pr += p[i + 2]; }
+  x /= n; y /= n; pr = st.np ? 0.5 : pr / n;
+  const r = Math.max(0.25, (st.s / 2) * (0.75 + 0.5 * pr) * factor);
+  const out = [];
+  for (let i = 0; i < 20; i++) { const a = (i / 20) * Math.PI * 2; out.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+  return out;
+}
+
 function getOutline(st) {
   let o = outlineCache.get(st);
   if (!o && st.sh) { o = shapeOutline(st); outlineCache.set(st, o); }
+  if (!o && isDot(st)) { o = dotOutline(st); outlineCache.set(st, o); }
   if (!o) {
     const pts = strokePoints(st);
     if (st.np && st.t !== 'hl') for (const q of pts) q[2] = 0.5;
@@ -197,6 +228,7 @@ function getOutline(st) {
 // is left out until then, so the tip doesn't "breathe" with every new point.
 function getLiveOutline(st) {
   if (st.sh) return shapeOutline(st);
+  if (isDot(st)) return dotOutline(st);
   const pts = strokePoints(st);
   if (st.np && st.t !== 'hl') for (const q of pts) q[2] = 0.5;
   const o = strokeOptions(st, true);
