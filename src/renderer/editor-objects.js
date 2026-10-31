@@ -270,6 +270,33 @@ export const objectsMixin = {
   renderTexts(view) { this.renderObjects(view); },
   renderItems(view) { this.renderObjects(view); },
 
+  // The frame around a text box (selection, hit-testing, export) uses the
+  // height the text really has on screen. It changes with the width, the
+  // font, pasted text … so every text box is watched; a new height is only a
+  // measurement (stored with the next real change, not marked as changed).
+  textResizeObserver() {
+    if (!this._textRO) {
+      this._textRO = new ResizeObserver((entries) => {
+        const touched = new Set();
+        for (const en of entries) {
+          const el = en.target, info = el._tb;
+          if (!info || !el.isConnected || !el.offsetHeight) continue;
+          const d = this.doc.pages[info.pageId];
+          const t = d && d.texts.find((q) => q.id === info.id);
+          if (!t) continue;
+          const hgt = round2(el.offsetHeight);
+          const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * LINE_H)));
+          if (Math.abs((t.h || 0) - hgt) < 0.5 && (t.lines || 1) === lines) continue;
+          this.doc.pages[info.pageId] = { ...d, texts: d.texts.map((q) => (q.id === t.id ? { ...q, h: hgt, lines } : q)) };
+          touched.add(info.pageId);
+        }
+        const sel = this.tools && this.tools.sel;
+        if (sel && touched.has(sel.pageId)) this.tools.refreshSelectionEls();
+      });
+    }
+    return this._textRO;
+  },
+
   textboxElement(view, t) {
     const el = h('div', {
       class: 'textbox', dataset: { id: t.id }, spellcheck: 'true',
@@ -286,6 +313,8 @@ export const objectsMixin = {
     const wrap = h('div', { class: 'textbox-wrap', dataset: { id: t.id }, style: { left: t.x + 'px', top: t.y + 'px', width: t.w + 'px' } }, el, grip, resizeL, resize);
     this.applyBoxLook(el, wrap, t, view.page);
     if (t.r) Object.assign(el.style, { transform: `rotate(${t.r}deg)`, transformOrigin: '50% 50%' });
+    el._tb = { pageId: view.page.id, id: t.id };
+    this.textResizeObserver().observe(el);
     this.setTextEditable(el);
     this.bindTextbox(view, t.id, el, grip, resize, wrap, resizeL);
     return wrap;

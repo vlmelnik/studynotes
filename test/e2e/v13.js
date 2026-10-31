@@ -176,7 +176,7 @@ const driveFile = (p) => { const [id] = Object.entries(driveIndex()).find(([, f]
     check('B: a new text box starts thin and grows while typing', w0 < 40 && w1 < 70 && w2 > w1 * 3, `${Math.round(w0)} → ${Math.round(w1)} → ${Math.round(w2)} px`);
     const frame = await ed(() => getComputedStyle(document.querySelector('.textbox-wrap.editing')).outlineStyle);
     const handles = await ed(() => [...document.querySelectorAll('.textbox-wrap.editing .tb-handle.resize')].map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
-    check('B: frame and small side handles only while editing', frame === 'solid' && handles.length === 2 && handles.every(([w, hh]) => w >= 3 && w <= 6 && hh >= 10 && hh <= 18), JSON.stringify(handles));
+    check('B: frame and small side handles only while editing', frame === 'solid' && handles.length === 2 && handles.every(([w, hh]) => w >= 10 && w <= 24 && hh >= 10) /* 1.6.1: grab zone = whole side */, JSON.stringify(handles));
     await win.screenshot({ path: path.join(out, 'v13-02-textbox-editing.png') });
     // tap elsewhere: only ends editing
     const [ox2, oy2] = await at(350, 600);

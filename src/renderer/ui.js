@@ -34,6 +34,9 @@ export function iconButton(name, title, onClick, cls = '') {
 export function shortcutKey(e) {
   const key = (e.key || '').toLowerCase();
   if (/^[a-z]$/.test(key)) return key;
+  // Windows' own key code (what Word & co. use): with a Russian layout the
+  // key in the Z place is still "Z" – also for keys sent by tablet drivers
+  if (e.keyCode >= 65 && e.keyCode <= 90) return String.fromCharCode(e.keyCode + 32);
   if (/^Key[A-Z]$/.test(e.code || '')) return e.code.slice(3).toLowerCase();
   if (/^Digit\d$/.test(e.code || '')) return e.code.slice(5);
   return (e.key || '').toLowerCase();
@@ -207,4 +210,24 @@ export function parseRange(v, max) {
     for (let k = Math.min(a, b); k <= Math.max(a, b); k++) if (k >= 1 && k <= max && !out.includes(k)) out.push(k);
   }
   return out;
+}
+
+// ---------- keys sent by a tablet's buttons ----------
+// A tablet driver may send "Ctrl+Z" as a key that the keyboard layout turns
+// into something else (German: Ctrl+Y). Settings → "Tablet buttons" learns
+// exactly what arrives and maps it to Undo / Redo.
+export function keySignature(e) {
+  return { key: e.key, code: e.code, keyCode: e.keyCode, ctrl: !!(e.ctrlKey || e.metaKey), shift: !!e.shiftKey, alt: !!e.altKey };
+}
+// Same button = same key position / Windows key code and modifiers; the
+// letter itself changes with the layout and Caps Lock, so it isn't compared.
+export function sameKey(e, k) {
+  if (!k || !!(e.ctrlKey || e.metaKey) !== k.ctrl || !!e.shiftKey !== k.shift || !!e.altKey !== k.alt) return false;
+  if (k.code || e.code) return e.code === k.code && (!k.keyCode || !e.keyCode || e.keyCode === k.keyCode);
+  return !!k.keyCode && e.keyCode === k.keyCode;
+}
+export function describeKey(k) {
+  if (!k) return 'not set';
+  const name = k.key && k.key.length === 1 ? k.key.toUpperCase() : (k.key || k.code);
+  return [k.ctrl && 'Ctrl', k.alt && 'Alt', k.shift && 'Shift', name].filter(Boolean).join('+');
 }

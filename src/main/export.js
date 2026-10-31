@@ -172,7 +172,7 @@ function fillRect(page, x0, y0, x1, y1, map, color) {
 
 // ---------- strokes ----------
 function fillOutline(page, outline, map, color, opacity, blend) {
-  if (outline.length < 2) return;
+  if (!outline.multi && outline.length < 2) return;
   const pathData = outlineToSvgPath(outline, (x, y) => {
     const [u, v] = map(x, y);
     return [u, -v]; // drawSvgPath flips y

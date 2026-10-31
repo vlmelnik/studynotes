@@ -5,6 +5,18 @@ import { icon } from './icons.js';
 // Newest first. Each item: [icon, title, one line].
 export const RELEASES = [
   {
+    version: '1.6.1',
+    tagline: 'A new line engine, tablet buttons and text box fixes',
+    items: [
+      ['pen', 'New line engine', 'Letters stay exactly as you write them – no wobble, no thin tails with a dot, no spikes in small curls. Pen pressure feels more even.'],
+      ['pen', 'Pencil', 'A fine, soft graphite grain instead of noisy pixels.'],
+      ['settings', 'Tablet buttons', 'Ctrl+Z works with every keyboard layout. If a tablet button still does something else: Settings → Graphics tablet → Set… and press it. "Pen check" shows what the pen sends.'],
+      ['eraser', 'Scribble erases text too', 'Optional: Settings → Scribbling also erases text.'],
+      ['notebook', 'Back where you left off', 'A notebook opens at the page and zoom you left it, also after closing the app.'],
+      ['text', 'Text boxes', 'The frame always fits the text; drag anywhere along the side to change the width; mouse wheel over a size field changes the size.'],
+    ],
+  },
+  {
     version: '1.6',
     tagline: 'Steadier ink, PDF text and scribble to erase',
     items: [
@@ -77,7 +89,7 @@ export function maybeShowWhatsNew(app) {
 }
 
 export function showWhatsNew(version, since = null) {
-  const fresh = RELEASES.filter((r) => !since || newer(r.version + '.0', since));
+  const fresh = RELEASES.filter((r) => !since || newer(r.version.split('.').length < 3 ? r.version + '.0' : r.version, since));
   const shown = fresh.length ? fresh : RELEASES.slice(0, 1);
   const [main, ...older] = shown;
   const card = ([ic, title, text], i) => h('div', { class: 'wn-card', style: { animationDelay: (60 + i * 45) + 'ms' } },

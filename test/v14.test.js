@@ -213,3 +213,28 @@ test('pen filter: removes tremor on slow lines, keeps small fast curls', () => {
   }
   assert.ok(rmin > 6.4 && rmax < 9, `loop radius ${rmin.toFixed(2)}–${rmax.toFixed(2)} (8 drawn)`);
 });
+
+// ---- 1.6.1: line engine ----
+test('1.6.1: a line never changes while it is drawn (pieces stay as they were)', () => {
+  const ink = require('../src/shared/ink');
+  const p = [];
+  for (let i = 0; i < 60; i++) { const t = i / 60; p.push(100 + 30 * Math.cos(t * 7) + t * 50, 100 + 25 * Math.sin(t * 7), 0.4 + 0.3 * Math.sin(t * 5)); }
+  for (const ps of ['ball', 'fountain', 'pencil', 'marker', 'neon']) {
+    const part = ink.getLiveOutline({ t: 'pen', ps, c: '#000', s: 3, p: p.slice(0, 30 * 3) });
+    const full = ink.getOutline({ t: 'pen', ps, c: '#000', s: 3, p: p.slice() });
+    const keep = part.filter((q) => !q.circle).length > 2 ? part.findIndex((q, i) => i > 0 && !q.circle && part.slice(i + 1).every((z) => z.circle) ) : 0; // all but the newest band (it still grows)
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(full.slice(0, keep))), JSON.parse(JSON.stringify(part.slice(0, keep))), ps);
+  }
+});
+
+test('1.6.1: the pen filter ignores uneven timing and removes small shaking', () => {
+  const { PenFilter } = require('../src/shared/pen-filter');
+  const a = new PenFilter(0.5), b = new PenFilter(0.5);
+  let t = 0;
+  for (let i = 0; i < 40; i++) {
+    const x = i * 3, y = (i % 2 ? 0.6 : -0.6); // 1.2 px zig-zag = digitiser jitter
+    const ra = a.push(x, y, i * 8), rb = b.push(x, y, (t += 1 + (i % 3) * 20));
+    assert.deepStrictEqual(ra, rb);
+    if (i > 2) assert.ok(Math.abs(ra[1]) < 0.35, `y ${ra[1]}`);
+  }
+});

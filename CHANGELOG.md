@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.6.1
+
+**Ink**
+- New line engine: a line is built from round pieces along the pen's path, so letters stay exactly as written (no wobble while writing, no change when the pen lifts), sharp turns and small curls stay clean (no triangles or spikes), and lines no longer end in a thin tail with a dot.
+- Pen input filter no longer depends on the tablet's timing (uneven timing used to bend lines); pressure feels more even, light touches give a usable line.
+- Pencil: fine, soft graphite grain (also while drawing).
+- Pen eraser / "Erase" side button: also works when the driver reports no pressure for the eraser or sends it as a new pointer.
+
+**Keys & tablet**
+- Ctrl+Z / Ctrl+Y also for keys sent by tablet drivers with a Russian layout.
+- Settings → Graphics tablet: learn which key a tablet button sends for Undo / Redo (for drivers whose Ctrl+Z arrives as something else).
+- Settings → Graphics tablet → Pen check: shows what the pen sends and copies a report.
+
+**Text**
+- The selection frame always fits the real text height (after changing the width, pasting, other fonts).
+- The side handles can be grabbed along the whole side of the box.
+- Mouse wheel over a size field changes the size.
+- Settings → "Scribbling also erases text" (off by default).
+
+**Notebooks**
+- A notebook in a background tab now keeps its page and zoom when the app closes.
+
 ## 1.6
 
 **Ink**

@@ -1,7 +1,7 @@
 {
   "name": "studynotes",
   "productName": "StudyNotes",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Handwritten study notes and PDF annotation",
   "main": "src/main/main.js",
   "author": "vlmelnik",

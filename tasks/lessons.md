@@ -36,3 +36,11 @@
 - A toast "Undo" must undo its own action only: remember the undo entry and check it is still on top.
 - Measurements done while rendering (text lines) must not mark the page changed.
 - e2e tests should click like a person (real mouse on real elements); programmatic selection hid the format-painter bug.
+- Never tar-copy a folder that has its own .git into the publishing clone: exclude .git (it overwrote HEAD and the remote).
+
+### v1.6.1
+- Time-based filters (One-Euro) bend lines when the tablet's event timing is uneven; use distance-based smoothing for ink.
+- Outline engines that recompute the whole stroke (perfect-freehand) make letters "breathe" while writing; build lines from local pieces so drawn parts never change.
+- Union-of-pieces outlines with non-zero fill: a band whose inner edge folds gets the opposite winding and cuts a hole; break bands where the bend is tighter than the width.
+- A background tab has no size: never record its scroll position (it saved page 0).
+- Measure UI sizes from the DOM (ResizeObserver) instead of storing derived heights that go stale.

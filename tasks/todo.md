@@ -315,4 +315,25 @@
 - [ ] Recognise text in scans/photos (select area → text + font → editable, background cleaned)
 
 ## Release
-- [ ] Tests, review, build, publish v1.6.0 on GitHub (prebuilt upload)
+- [x] Tests, review, build, publish v1.6.0 on GitHub (prebuilt upload)
+
+# v1.6.1 – plan (2026-10-31)
+Answers: German QWERTZ keyboard (undo = key labelled Z); Bamboo driver without
+"Windows Ink" option (works in Inkodo → Windows Ink pointer events); scribble
+setting "also text" (default off: ink only); pencil = fine graphite grain.
+- [x] New line engine (own, no perfect-freehand): union of round segments with
+      pressure radius → identical while drawing and after, no triangles at sharp
+      turns, no thin tail + dot at the end; Catmull-Rom between sparse points;
+      pressure curve + tail clamp; "Smooth my handwriting" = stronger live filter
+      only (no change after lifting)
+- [x] Pencil: fine, soft graphite grain (no pixel noise)
+- [x] Undo/redo: VK keyCode fallback (Russian tablet keys); Settings → "Tablet
+      buttons": learn the key the tablet sends for Undo / Redo
+- [x] Pen check in Settings: live pointer data + "Copy report" (erase button debug);
+      erase button: also new pointer id / pointerType 'eraser' cases
+- [x] Notebook reopens at the same page and zoom
+- [x] Setting "Scribble also erases text" (off by default)
+- [x] Text box: frame/selection always matches real text height (move, resize);
+      bigger side handles (whole height)
+- [x] Mouse wheel over a size field changes the value
+- [ ] Tests, review, build, publish v1.6.1

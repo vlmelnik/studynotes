@@ -15,7 +15,7 @@ import { Laser } from './laser.js';
 import { isClosedShape } from '../shared/ink.js';
 import { placeAt } from './fill-sign.js';
 import { TextSelection, peekLayout, charAt, spanBetween, highlightStrokes } from './pdf-text.js';
-import { PenFilter, smoothStroke } from '../shared/pen-filter.js';
+import { PenFilter } from '../shared/pen-filter.js';
 
 const HOLD_MS = 550;
 const LINE_H = 1.3;
@@ -128,7 +128,13 @@ export class Tools {
   // ---------- dispatch ----------
   onDown(e) {
     this.notePen(e);
-    if (this.cur) return;
+    if (this.cur) {
+      // some drivers report the eraser as a new pointer while the pen's line
+      // is still open: finish the line, then erase
+      const c = this.cur;
+      if (!(e.pointerType === 'pen' && penButton(e) && c.kind === 'stroke' && c.pointerId !== e.pointerId)) return;
+      this.onUp({ pointerId: c.pointerId });
+    }
     const target = e.target;
     // Interactive elements inside pages handle themselves.
     if (target.closest('.sel-toolbar, .tb-handle, .table-tools')) return;
@@ -164,7 +170,8 @@ export class Tools {
     let tool = this.tool;
     const barrel = (isPen && penButton(e)) || penAsMouse;
     // Pen button pressed while the pen hovers: erase once it touches (see onMove).
-    if (barrel && e.pressure === 0 && !(e.buttons & 1) && this.penHasPressure) { this.penButtonHeld = e.pointerId; e.preventDefault(); return; }
+    // (the eraser state – buttons 32 – is only reported while it touches)
+    if (barrel && e.pressure === 0 && !(e.buttons & 1) && !(e.buttons & 32) && this.penHasPressure) { this.penButtonHeld = e.pointerId; e.preventDefault(); return; }
     if (barrel) tool = 'eraser'; // eraser end / side button held: erase until released
 
     // Handles / dragging inside the current selection
@@ -265,7 +272,7 @@ export class Tools {
     const held = penButton(e);
     // Pens without pressure (no Windows Ink) report 0 even on the paper: then
     // "button held" has to count as touching, otherwise erasing stops at once.
-    const touching = e.pressure > 0 || !!(e.buttons & 1) || (held && !this.penHasPressure);
+    const touching = e.pressure > 0 || !!(e.buttons & 1) || !!(e.buttons & 32) || (held && !this.penHasPressure);
     const c = this.cur;
     if (!held && this.penButtonHeld === e.pointerId && !c) this.penButtonHeld = null;
     if (!c && held && touching && this.penButtonHeld === e.pointerId) {
@@ -436,7 +443,7 @@ export class Tools {
     if (!c || c.snapped) return;
     // filtered pen position (removes jitter, keeps curls – see pen-filter.js)
     const [fx, fy] = c.filter ? c.filter.push(ev.clientX, ev.clientY, ev.timeStamp) : [ev.clientX, ev.clientY];
-    if (c.filter) c.rawEnd = this.pagePoint(c, ev); // where the pen really is (added when it lifts)
+    if (c.filter) c.rawEnd = this.pagePoint(c, ev); // the string trails the pen a little: the line ends where the pen lifts
     const [x, y] = this.pagePoint(c, { clientX: fx, clientY: fy });
     let pr = c.isPen ? ev.pressure : 0.5;
     if (c.isPen && pr === 0) pr = 0.5; // some drivers send 0 on the first event
@@ -444,6 +451,10 @@ export class Tools {
     c.pressures.add(Math.round(pr * 100));
     // Tablet pressure is noisy: smooth it a little so the width doesn't flicker.
     if (c.isPen) pr = c.prSmooth = c.prSmooth == null ? pr : c.prSmooth + 0.4 * (pr - c.prSmooth);
+    // Lifting the pen: tablets report the pressure falling to nothing over the
+    // last few points – that made a thin tail. The width may only fall slowly.
+    if (c.isPen && c.prFloor != null) pr = Math.max(pr, c.prFloor);
+    if (c.isPen) c.prFloor = pr * 0.9;
     const p = c.st.p;
     if (c.straight && p.length >= 6) p.length = 3;
     const n = p.length;
@@ -478,6 +489,13 @@ export class Tools {
     }, HOLD_MS);
   }
 
+  // Does this line use pressure? Decided the same way while drawing and at
+  // the end, and as early as possible (a pen known to have pressure uses it
+  // from the first point), so the line never changes its width afterwards.
+  pressureRule(c) {
+    if (c.isPen && (this.penHasPressure || c.pressures.size > 1)) delete c.st.np; else c.st.np = 1;
+  }
+
   requestLive() {
     if (this._liveRaf) return;
     this._liveRaf = requestAnimationFrame(() => {
@@ -485,8 +503,7 @@ export class Tools {
       const c = this.cur;
       if (!c) return;
       if (c.kind === 'stroke') {
-        // same pressure rule as the finished stroke, so nothing changes when the pen lifts
-        if (!c.isPen || c.pressures.size <= 1) c.st.np = 1; else delete c.st.np;
+        this.pressureRule(c);
         drawLive(c.live.ctx, c.st, c.live.scale, c.live.rect);
       } else if (c.kind === 'shape') {
         c.live.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -501,16 +518,12 @@ export class Tools {
     releaseCanvas(c.live.canvas);
     if (cancelled && c.st.p.length < 9) return;
     const st = c.st;
-    // after a fast flick the filter lags behind: the line ends where the pen
-    // was lifted (small gaps are just jitter – those stay smoothed)
-    if (c.rawEnd && !c.snapped && !c.straight && st.p.length >= 3) {
+    if (c.rawEnd && st.t !== 'hl' && !c.snapped && !c.straight && st.p.length >= 3) {
       const n = st.p.length, [x, y] = c.rawEnd;
-      if (Math.hypot(x - st.p[n - 3], y - st.p[n - 2]) > Math.max(1.5, st.s)) st.p.push(round2(x), round2(y), st.p[n - 1]);
+      if (Math.hypot(x - st.p[n - 3], y - st.p[n - 2]) > 0.3 / this.viewer.zoom) st.p.push(round2(x), round2(y), st.p[n - 1]);
     }
-    if (!c.isPen || c.pressures.size <= 1) st.np = 1;
-    if (st.p.length === 3) st.p.push(st.p[0] + 0.01, st.p[1] + 0.01, st.p[2]); // a dot
-    // Settings → "Smooth my handwriting": even out the finished line a little more
-    else if (this.editor.settings.smoothInk && st.t === 'pen' && !st.sh) st.p = smoothStroke(st.p);
+    this.pressureRule(c);
+    if (st.p.length === 3) st.p.push(st.p[0] + 0.01, st.p[1] + (st.t === 'hl' ? 0 : 0.01), st.p[2]); // a dot
     // Highlighter over printed PDF text: snap to the text lines (like GoodNotes)
     if (st.t === 'hl' && this.state.hl.snap !== false) {
       const page = this.viewer.pages[c.index];
@@ -541,19 +554,27 @@ export class Tools {
       // only ink the scribble really covers: touched, and its middle lies
       // inside the scribbled area (a long line merely crossed stays)
       const sb = strokeBBox(st), padX = (sb[2] - sb[0]) * 0.2, padY = (sb[3] - sb[1]) * 0.2;
-      const hit = new Set(data.strokes.filter((o) => {
-        const b = strokeBBox(o);
-        // most of that ink must lie inside the scribbled area (hatching inside a
-        // drawing, or shading next to it, doesn't delete the drawing)
+      // most of it must lie inside the scribbled area (hatching inside a
+      // drawing, or shading next to it, doesn't delete the drawing)
+      const covered = (b) => {
         const ix = Math.max(0, Math.min(b[2], sb[2] + padX) - Math.max(b[0], sb[0] - padX));
         const iy = Math.max(0, Math.min(b[3], sb[3] + padY) - Math.max(b[1], sb[1] - padY));
-        const area = Math.max(1e-6, (b[2] - b[0]) * (b[3] - b[1]));
-        if ((ix * iy) / area < 0.7) return false;
+        return (ix * iy) / Math.max(1e-6, (b[2] - b[0]) * (b[3] - b[1])) >= 0.7;
+      };
+      const hit = new Set(data.strokes.filter((o) => {
+        if (!covered(strokeBBox(o))) return false;
         for (let i = 0; i + 3 < p.length; i += 3) if (strokeHit(o, p[i], p[i + 1], p[i + 3], p[i + 4], r)) return true;
         return false;
       }).map((o) => o.id));
-      if (hit.size) {
-        this.editor.commit(c.pageId, data, { ...data, strokes: data.strokes.filter((o) => !hit.has(o.id)) });
+      // Settings → "Scribbling also erases text": text boxes scribbled over
+      const textHit = new Set(!this.editor.settings.scribbleText ? [] : data.texts.filter((t) => {
+        const b = textBBox(t);
+        if (!covered(b)) return false;
+        for (let i = 0; i < p.length; i += 3) if (p[i] >= b[0] && p[i] <= b[2] && p[i + 1] >= b[1] && p[i + 1] <= b[3]) return true;
+        return false;
+      }).map((t) => t.id));
+      if (hit.size || textHit.size) {
+        this.editor.commit(c.pageId, data, { ...data, strokes: data.strokes.filter((o) => !hit.has(o.id)), texts: data.texts.filter((t) => !textHit.has(t.id)) });
         this.editor.toast(`Erased by scribbling – Ctrl+Z brings it back`);
         return;
       }

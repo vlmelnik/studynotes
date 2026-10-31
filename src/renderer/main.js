@@ -1,5 +1,5 @@
 // App shell: tabs (Library + open notebooks), notebook loading, settings.
-import { h, toast, modal, debounce, confirmDialog, shortcutKey } from './ui.js';
+import { h, toast, modal, debounce, confirmDialog, shortcutKey, keySignature, describeKey } from './ui.js';
 import { icon } from './icons.js';
 import { LibraryView } from './library-view.js';
 import { Editor, defaultToolState } from './editor.js';
@@ -152,7 +152,7 @@ class App {
 
   // ---------- tabs ----------
   showLibrary() {
-    if (this.active) { this.active.flush(); this.active.el.remove(); }
+    if (this.active) { this.active.recordView(); this.active.flush(); this.active.el.remove(); }
     this.active = null;
     this.updateTabs();
     this.main.replaceChildren(this.library.el);
@@ -445,9 +445,11 @@ class App {
           }, label)))),
         check('Mouse can draw', 'mouseDraws', 'Turn off to scroll with the mouse and draw only with the pen'),
         check('Scribble to erase', 'scribbleErase', 'Scribble back and forth over handwriting with the pen to erase it (like GoodNotes)'),
+        check('Scribbling also erases text', 'scribbleText', 'Scribbling over a text box deletes it too (off: scribbling erases only handwriting)'),
         check('Smooth my handwriting', 'smoothInk', 'Removes shaking and evens out curves of your letters while keeping your own handwriting'),
         check('Draw & hold to create shapes', 'shapeHold', 'Hold the pen still at the end of a stroke to snap it to a line, rectangle, triangle or ellipse'),
         check('Pasted text keeps formatting', 'pasteFormatting', 'Off: text is always pasted as plain text. On: bold, italic, underline and lists are kept'),
+        this.tabletSettings(),
         h('div', { class: 'field' }, h('span', {}, 'Backup & moving to a new version or PC'),
           h('div', { class: 'row wrap' },
             h('button', { class: 'btn', onclick: () => this.exportSettings() }, 'Export settings…'),
@@ -459,8 +461,85 @@ class App {
         this.driveSettings(),
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => showWhatsNew(this.info.version) }, "What's new"),
           h('button', { class: 'btn', onclick: () => this.showAbout() }, 'About StudyNotes')),
-        h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when "Windows Ink" is enabled in the tablet driver (Wacom: Wacom Tablet Properties → Mapping → Use Windows Ink).`)),
+        h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when the driver uses "Windows Ink" (newer Wacom drivers: Wacom Tablet Properties → Mapping → Use Windows Ink; older Bamboo drivers do it automatically).`)),
       actions: [{ label: 'Done', primary: true, result: true }],
+    });
+  }
+
+  // ---------- graphics tablet ----------
+  tabletSettings() {
+    const s = this.settings;
+    const row = (act, label) => {
+      const val = h('code', { class: 'tk-val' }, describeKey(s.tabletKeys && s.tabletKeys[act]));
+      const learn = h('button', { class: 'btn', onclick: () => {
+        val.textContent = 'press the tablet button now… (Esc = cancel)';
+        learn.disabled = true;
+        const onKey = (e) => {
+          // Settings closed meanwhile: stop listening, don't take the key
+          if (!val.isConnected) { window.removeEventListener('keydown', onKey, true); return; }
+          if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return; // wait for the real key
+          e.preventDefault(); e.stopImmediatePropagation();
+          window.removeEventListener('keydown', onKey, true);
+          learn.disabled = false;
+          if (e.key !== 'Escape') { s.tabletKeys = { ...(s.tabletKeys || {}), [act]: keySignature(e) }; this.saveSettings(); }
+          val.textContent = describeKey(s.tabletKeys && s.tabletKeys[act]);
+        };
+        window.addEventListener('keydown', onKey, true);
+      } }, 'Set…');
+      const clear = h('button', { class: 'btn ghost', onclick: () => {
+        if (s.tabletKeys) { delete s.tabletKeys[act]; this.saveSettings(); }
+        val.textContent = describeKey(null);
+      } }, 'Clear');
+      return h('div', { class: 'row' }, h('span', { class: 'tk-label' }, label), val, learn, clear);
+    };
+    return h('div', { class: 'field' }, h('span', {}, 'Graphics tablet'),
+      row('undo', 'Button for Undo'),
+      row('redo', 'Button for Redo'),
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => this.showPenCheck() }, 'Pen check…')),
+      h('small', { class: 'hint' }, 'If a tablet button set to Ctrl+Z does something else (e.g. with a German or Russian keyboard layout): click "Set…" and press that button (if it arrives as Ctrl+Y, Ctrl+Y on the keyboard then undoes too – redo stays on Ctrl+Shift+Z). "Pen check" shows what the pen sends – pressure, buttons, eraser – and can copy a report.'));
+  }
+
+  // Shows what the pen really sends (pressure, buttons, eraser) and lets the
+  // user copy a report – for tablet drivers that behave differently.
+  showPenCheck() {
+    const log = [];
+    const info = h('pre', { class: 'pen-info no-i18n' }, 'Draw here with the pen, then press its buttons while drawing and while hovering.');
+    const cv = h('canvas', { class: 'pen-pad', width: 520, height: 220 });
+    const ctx = cv.getContext('2d');
+    const fmt = (e) => `${e.type.replace('pointer', '').padEnd(6)} ${e.pointerType.padEnd(5)} id=${e.pointerId} pressure=${e.pressure.toFixed(3)} buttons=${e.buttons} button=${e.button} tilt=${e.tiltX},${e.tiltY}${e.width > 1 ? ` w=${e.width}` : ''}`;
+    let last = '';
+    const onPtr = (e) => {
+      e.preventDefault();
+      const line = fmt(e);
+      info.textContent = line + (e.buttons & 32 ? '\n→ eraser' : (e.buttons & 2) || e.button === 2 ? '\n→ side button' : '');
+      // keep changes, not every identical move
+      const sig = line.replace(/pressure=\S+ /, '').replace(/tilt=\S+/, '');
+      if (sig !== last || e.type !== 'pointermove') { log.push(`${Math.round(e.timeStamp)} ${line}`); last = sig; if (log.length > 400) log.shift(); }
+      if (e.buttons || e.pressure > 0) {
+        const r = cv.getBoundingClientRect();
+        ctx.fillStyle = e.buttons & 32 || e.buttons & 2 ? '#e5484d' : '#1d2b6b';
+        const rad = 1 + 5 * (e.pressure || 0.5);
+        ctx.beginPath(); ctx.arc((e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height), rad, 0, Math.PI * 2); ctx.fill();
+      }
+    };
+    for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'pointerover', 'pointerout']) cv.addEventListener(t, onPtr);
+    cv.addEventListener('contextmenu', (e) => e.preventDefault());
+    const onKey = (e) => { log.push(`${Math.round(e.timeStamp)} key key=${JSON.stringify(e.key)} code=${e.code} keyCode=${e.keyCode} ctrl=${e.ctrlKey} shift=${e.shiftKey} alt=${e.altKey}`); };
+    window.addEventListener('keydown', onKey, true);
+    modal({
+      title: 'Pen check',
+      onClose: () => window.removeEventListener('keydown', onKey, true),
+      width: 600,
+      body: h('div', { class: 'form' }, cv, info,
+        h('small', { class: 'hint' }, 'Blue = drawing, red = eraser / side button. Tablet buttons pressed now are recorded too.')),
+      actions: [
+        { label: 'Copy report', value: () => {
+          navigator.clipboard.writeText(`StudyNotes ${this.info.version} pen check\n${navigator.userAgent}\n${log.join('\n')}`).catch(() => {});
+          toast('Report copied – paste it into a message', { timeout: 1800 });
+          return false; // keep the window open
+        } },
+        { label: 'Close', primary: true, result: true },
+      ],
     });
   }
 

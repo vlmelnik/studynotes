@@ -1,7 +1,7 @@
 'use strict';
 // Pen input filtering.
 //
-// One-Euro filter (Casiez et al. 2012): an adaptive low-pass filter. When the
+// (kept for reference / tests) One-Euro filter (Casiez et al. 2012): an adaptive low-pass filter. When the
 // pen moves slowly it smooths strongly (removes hand tremor and digitiser
 // jitter, the "shaking"); when it moves fast it follows almost directly (so
 // small curls and loops of handwriting keep their shape). It is causal: a
@@ -32,20 +32,30 @@ class OneEuro {
   }
 }
 
-/** Filters (x, y) screen positions of one stroke. `strength` 0..1 (0 = off). */
+/**
+ * Filters (x, y) screen positions of one stroke: a "lazy string". The line
+ * follows the pen like a point pulled on a short string of length R: shaking
+ * smaller than R is removed completely, and because it depends only on where
+ * the pen is (not on when the tablet reports it), uneven timing of the tablet
+ * can't bend the line. It never moves points already drawn.
+ * `strength` 0..1: 0.5 = gentle (default), 1 = "Smooth my handwriting".
+ */
 class PenFilter {
   constructor(strength = 0.5) {
-    // strength 0.5 ≈ gentle (default), 1 ≈ "smooth my handwriting"
-    const minCutoff = 6 - 5 * strength; // 3.5 Hz … 1 Hz
-    const beta = 0.16 - 0.12 * strength; // fast movements (scribbles, curls) follow closely
     this.on = strength > 0;
-    this.fx = new OneEuro(minCutoff, beta);
-    this.fy = new OneEuro(minCutoff, beta);
+    this.r = 0.4 + 2.2 * strength; // screen pixels: 1.5 px default, 2.6 px smooth
+    this.x = null; this.y = null;
   }
 
-  push(x, y, tMs) {
+  push(x, y) {
     if (!this.on) return [x, y];
-    return [this.fx.filter(x, tMs), this.fy.filter(y, tMs)];
+    if (this.x === null) { this.x = x; this.y = y; return [x, y]; }
+    const dx = x - this.x, dy = y - this.y, d = Math.hypot(dx, dy);
+    if (d > this.r) {
+      const k = (d - this.r) / d;
+      this.x += dx * k; this.y += dy * k;
+    }
+    return [this.x, this.y];
   }
 }
 

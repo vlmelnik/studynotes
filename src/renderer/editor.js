@@ -1,7 +1,7 @@
 // Notebook editor: toolbar, options bar, page sidebar, viewer, tools,
 // undo/redo, autosave. Text boxes, pictures, tables, paste and insert live in
 // editor-objects.js; thumbnails and search in editor-panels.js.
-import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, debounce, parseRange, shortcutKey } from './ui.js';
+import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, debounce, parseRange, shortcutKey, sameKey } from './ui.js';
 import { icon } from './icons.js';
 import { Viewer, MIN_ZOOM, MAX_ZOOM } from './viewer.js';
 import { Tools, uid, textBBox, itemBBox } from './tools.js';
@@ -408,7 +408,8 @@ export class Editor {
   }
 
   recordView() {
-    if (!this.viewer.layout.length) return;
+    // a tab in the background has no size: keep the view it had when it was left
+    if (!this.viewer.layout.length || !this.el.isConnected || !this.viewer.scroller.clientHeight) return;
     if (this.isBoard) {
       const s = this.viewer.scroller, p = this.pages[0], z = this.viewer.zoom;
       this.doc.nb.view = {
@@ -452,6 +453,7 @@ export class Editor {
     document.removeEventListener('selectionchange', this._onSelChange);
     window.removeEventListener('pointerup', this._onPaintUp, true);
     window.removeEventListener('pointerdown', this._onPaintDown, true);
+    if (this._textRO) this._textRO.disconnect();
     this.viewer.destroy();
     this.sidebar.destroy();
     this.el.remove();
@@ -1144,6 +1146,9 @@ export class Editor {
     const k = shortcutKey(e);
     const ctrl = e.ctrlKey || e.metaKey;
     const sel = this.tools.sel;
+    const tk = this.settings.tabletKeys || {};
+    if (sameKey(e, tk.undo)) return this.undo(), true; // tablet buttons (Settings)
+    if (sameKey(e, tk.redo)) return this.redo(), true;
     if (ctrl && !e.shiftKey && k === 'z') return this.undo(), true;
     if (ctrl && (k === 'y' || (e.shiftKey && k === 'z'))) return this.redo(), true;
     if (ctrl && k === 'f') return this.searchPanel.open(), true;

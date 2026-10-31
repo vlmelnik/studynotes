@@ -29,6 +29,13 @@ function distSegSeg(ax, ay, bx, by, cx, cy, dx, dy) {
 }
 
 const bboxCache = new WeakMap();
+// Largest half-width a line can reach (pressure makes pens wider than s/2).
+const MAX_HALF = { ball: 0.65, fountain: 0.8, pencil: 0.63, marker: 0.5, brush: 0.8, neon: 0.5 };
+function inkHalfWidth(st) {
+  const s = st.s || 1;
+  if (st.t === 'hl' || st.sh || st.np) return s / 2;
+  return s * (MAX_HALF[st.ps || 'ball'] || 0.5);
+}
 // [minX, minY, maxX, maxY] of a stroke's centre line, padded by half its width.
 function strokeBBox(st) {
   let b = bboxCache.get(st);
@@ -40,7 +47,7 @@ function strokeBBox(st) {
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  const pad = (st.s || 1) / 2;
+  const pad = inkHalfWidth(st);
   b = [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
   bboxCache.set(st, b);
   return b;
@@ -56,7 +63,7 @@ function strokeHit(st, ax, ay, bx, by, r) {
   const eb = [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
   if (!bboxesOverlap(bb, eb, r)) return false;
   const p = st.p;
-  const lim = r + (st.s || 1) / 2;
+  const lim = r + inkHalfWidth(st);
   if (p.length === 3) return distPointSeg(p[0], p[1], ax, ay, bx, by) <= lim;
   for (let i = 0; i + 3 < p.length; i += 3) {
     if (distSegSeg(p[i], p[i + 1], p[i + 3], p[i + 4], ax, ay, bx, by) <= lim) return true;

@@ -229,7 +229,6 @@ select.input { padding-right: 4px; }
 .editor[data-tool="text"] .tb-handle { display: block; }
 .tb-handle.grip { left: -10px; top: 0; width: 8px; height: 12px; cursor: move; background: radial-gradient(circle, var(--accent) 1px, transparent 1.5px) 0 0 / 4px 4px; }
 .tb-handle.resize { right: -5px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-.tb-handle.resize:hover { background: rgba(47, 95, 158, .25); }
 .lasso-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .lasso-svg polygon { fill: rgba(47, 95, 158, .07); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
 .sel-box { position: absolute; border: 1.5px dashed var(--accent); border-radius: 4px; pointer-events: auto; cursor: move; }
@@ -458,10 +457,6 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .editor[data-tool="text"] .textbox-wrap:not(.editing):hover { outline: 1px dashed rgba(143, 153, 168, .7); outline-offset: 4px; }
 .textbox-wrap[data-bx="border"] .textbox { box-shadow: 0 0 0 1px #6f7785 !important; padding: 4px 6px; }
 .textbox-wrap[data-bx="fill"] .textbox { background: #fff6c8 !important; padding: 4px 6px; border-radius: 3px; }
-.tb-handle.resize { display: none; top: 50%; width: 7px; height: 26px; margin-top: -13px; border-radius: 4px; background: #2f7cf6; box-shadow: 0 0 0 1.5px #fff; cursor: ew-resize; pointer-events: auto; }
-.tb-handle.resize.left { left: -8px; right: auto; }
-.tb-handle.resize.right { right: -8px; left: auto; }
-.tb-handle.resize:hover { background: #1f66d8; }
 .tb-handle.grip { display: none; left: 0; right: 0; top: -12px; width: auto; height: 8px; background: none; cursor: move; pointer-events: auto; }
 .textbox-wrap.editing .tb-handle, .textbox-wrap.selected .tb-handle,
 .editor[data-tool="text"] .textbox-wrap:hover .tb-handle { display: block; }
@@ -562,10 +557,12 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .textbox-wrap.selected, .textbox-wrap.editing { outline: 1px solid #4a90e2; outline-offset: 3px; border-radius: 1px; }
 .textbox-wrap.boxed.selected, .textbox-wrap.boxed.editing { outline-offset: 2px; }
 .textbox-wrap.editing .tb-handle, .textbox-wrap.selected .tb-handle { display: block; }
-/* small blue side handles */
-.tb-handle.resize { width: 5px; height: 16px; margin-top: -8px; border-radius: 3px; background: #2f7cf6; box-shadow: 0 0 0 1px #fff; }
-.tb-handle.resize.left { left: -6px; }
-.tb-handle.resize.right { right: -6px; }
+/* side handles: the whole side can be grabbed, the blue pill shows where */
+.tb-handle.resize { top: 0; bottom: 0; height: auto; margin-top: 0; width: 14px; background: transparent; box-shadow: none; border-radius: 0; cursor: ew-resize; pointer-events: auto; }
+.tb-handle.resize::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 22px; max-height: 100%; transform: translate(-50%, -50%); border-radius: 3px; background: #2f7cf6; box-shadow: 0 0 0 1px #fff; }
+.tb-handle.resize:hover::after { background: #1f66d8; }
+.tb-handle.resize.left { left: -15px; right: auto; }
+.tb-handle.resize.right { right: -15px; left: auto; }
 .tb-handle.grip { top: -8px; height: 6px; }
 /* boxes that grow while typing */
 .textbox-wrap[data-aw] .textbox { min-width: 6px; }
@@ -635,9 +632,10 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .thumb-filter .bm-ic svg { width: 10px; height: 10px; fill: currentColor; }
 .thumb-empty { font-size: 12px; color: var(--muted); padding: 16px 10px; text-align: center; }
 /* constant on-screen size of text box handles and frame, whatever the zoom */
-.page-texts .tb-handle.resize { width: calc(5px * var(--iz, 1)); height: calc(16px * var(--iz, 1)); margin-top: calc(-8px * var(--iz, 1)); border-radius: calc(3px * var(--iz, 1)); box-shadow: 0 0 0 calc(1px * var(--iz, 1)) #fff; }
-.page-texts .tb-handle.resize.left { left: calc(-6px * var(--iz, 1)); }
-.page-texts .tb-handle.resize.right { right: calc(-6px * var(--iz, 1)); }
+.page-texts .tb-handle.resize { width: calc(14px * var(--iz, 1)); }
+.page-texts .tb-handle.resize::after { width: calc(6px * var(--iz, 1)); height: calc(22px * var(--iz, 1)); border-radius: calc(3px * var(--iz, 1)); box-shadow: 0 0 0 calc(1px * var(--iz, 1)) #fff; }
+.page-texts .tb-handle.resize.left { left: calc(-15px * var(--iz, 1)); }
+.page-texts .tb-handle.resize.right { right: calc(-15px * var(--iz, 1)); }
 .page-texts .textbox-wrap.selected, .page-texts .textbox-wrap.editing { outline-width: calc(1px * var(--iz, 1)); outline-offset: calc(3px * var(--iz, 1)); }
 
 /* ---------- v1.4: template picker ---------- */
@@ -761,3 +759,9 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 /* ---------- PDF text selection ---------- */
 .pdf-sel { position: absolute; inset: 0; pointer-events: none; }
 .pdf-sel-rect { position: absolute; background: rgba(47, 95, 158, .28); border-radius: 2px; }
+
+/* Settings → graphics tablet */
+.tk-label { min-width: 130px; }
+.tk-val { min-width: 120px; padding: 2px 6px; border-radius: 6px; background: var(--hover, rgba(0,0,0,.05)); }
+.pen-pad { width: 100%; height: 220px; border: 1px dashed var(--border, #ccc); border-radius: 10px; background: #fff; touch-action: none; cursor: crosshair; }
+.pen-info { margin: 0; font-size: 12px; white-space: pre-wrap; min-height: 2.6em; }

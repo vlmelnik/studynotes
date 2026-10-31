@@ -7,8 +7,6 @@
 //     np: 1 if input had no real pressure, sh: 1 for recognised shapes,
 //     p: [x, y, pressure, x, y, pressure, ...] }   (page units = PDF points)
 
-const { getStroke } = require('perfect-freehand');
-
 const HIGHLIGHTER_ALPHA = 0.35;
 
 function strokePoints(st) {
@@ -37,43 +35,190 @@ function strokeLook(st) {
   return { alpha: s.alpha ?? 1, texture: s.texture || null, glow: !!s.glow };
 }
 
-function strokeOptions(st, last = true) {
-  const size = st.s;
-  if (st.sh) {
-    return { size, thinning: 0, smoothing: 0, streamline: 0, simulatePressure: false, last };
-  }
-  if (st.t === 'hl') {
-    return {
-      size, thinning: 0, smoothing: 0.5, streamline: 0.5, simulatePressure: false, last,
-      start: { cap: false }, end: { cap: false },
-    };
-  }
-  const hasPressure = !st.np;
-  const o = penOptions(st, size, hasPressure, last);
-  // Strokes from 1.6 on (st.pf) come from the filtered pen input: much less
-  // streamlining is needed, so small curls and loops keep their shape.
-  if (st.pf) { o.streamline = st.ps === 'brush' ? 0.25 : 0.15; o.smoothing = Math.min(o.smoothing, 0.5); }
-  return o;
+// ---- the line engine ------------------------------------------------------
+// A line is the union of round "beads": a circle at every point (radius from
+// the pressure) and the tangent band between two neighbouring circles. Every
+// piece depends only on its own points, so a line never changes while it is
+// being drawn (no wobble), sharp turns stay clean (no triangles or spikes),
+// and the end looks exactly like the middle (no thin tail with a blob).
+// All pieces wind the same way and are filled together (non-zero rule).
+
+// How much the pressure changes the width (0 = not at all), per pen style.
+const THINNING = { ball: 0.3, fountain: 0.6, pencil: 0.25, marker: 0, brush: 0.75, neon: 0 };
+
+// Light touches already give a usable line (tablets report little pressure
+// for a light hand); full pressure stays the thickest.
+function pressureCurve(p) {
+  return Math.pow(Math.min(1, Math.max(0, p)), 0.65);
 }
 
-function penOptions(st, size, hasPressure, last) {
-  switch (st.ps) {
-    case 'fountain':
-      return { size, thinning: 0.65, smoothing: 0.6, streamline: 0.4, simulatePressure: !hasPressure, easing: (t) => t, last };
-    case 'pencil':
-      return { size, thinning: hasPressure ? 0.25 : 0.05, smoothing: 0.5, streamline: 0.35, simulatePressure: false, last };
-    case 'marker':
-      return { size, thinning: 0, smoothing: 0.6, streamline: 0.5, simulatePressure: false, last };
-    case 'brush':
-      return {
-        size, thinning: 0.8, smoothing: 0.7, streamline: 0.5, simulatePressure: !hasPressure,
-        easing: (t) => Math.sin((t * Math.PI) / 2), start: { taper: size * 1.5 }, end: { taper: size * 2 }, last,
-      };
-    case 'neon':
-      return { size, thinning: 0, smoothing: 0.65, streamline: 0.5, simulatePressure: false, last };
-    default:
-      return { size, thinning: hasPressure ? 0.3 : 0, smoothing: 0.6, streamline: 0.4, simulatePressure: false, easing: (t) => t, last };
+function strokeRadii(st, size) {
+  const p = st.p, n = p.length / 3;
+  const r = new Float64Array(n);
+  if (st.t === 'hl') { r.fill(size / 2); return r; }
+  const style = st.ps || 'ball';
+  const t = THINNING[style] ?? 0.3;
+  // without real pressure (mouse): the fountain pen and brush get thinner
+  // when the line goes fast, like ink running out
+  const simulate = st.np && (style === 'fountain' || style === 'brush');
+  let q = 0.5;
+  for (let i = 0; i < n; i++) {
+    let pr;
+    if (simulate) {
+      const d = i ? Math.hypot(p[i * 3] - p[i * 3 - 3], p[i * 3 + 1] - p[i * 3 - 2]) : 0;
+      const target = Math.max(0, 1 - d / (size * 1.6));
+      q = i ? q + (target - q) * 0.35 : 0.6;
+      pr = q;
+    } else pr = st.np ? 0.5 : pressureCurve(p[i * 3 + 2]);
+    let k = 0.5 - t * (0.5 - pr);
+    if (style === 'brush') k = 0.5 * Math.sin(Math.PI / 2 * Math.min(1, k * 2)) + 0.02;
+    r[i] = Math.max(size * 0.06, size * k);
   }
+  return r;
+}
+
+// Brush: thin start and end (the end only once the line is finished).
+function applyTapers(st, size, r, live) {
+  if (st.ps !== 'brush' || st.t === 'hl') return;
+  const p = st.p, n = r.length;
+  const len = new Float64Array(n);
+  for (let i = 1; i < n; i++) len[i] = len[i - 1] + Math.hypot(p[i * 3] - p[i * 3 - 3], p[i * 3 + 1] - p[i * 3 - 2]);
+  const total = len[n - 1], ts = size * 1.5, te = live ? 0 : size * 2;
+  for (let i = 0; i < n; i++) {
+    let f = 1;
+    if (ts > 0 && len[i] < ts) f = Math.min(f, 0.25 + 0.75 * (len[i] / ts));
+    if (te > 0 && total - len[i] < te) f = Math.min(f, 0.2 + 0.8 * ((total - len[i]) / te));
+    r[i] *= f;
+  }
+}
+
+// Centripetal Catmull-Rom between sparse points, so a quick small curl comes
+// out round instead of as a polygon. Returns [x, y, r] samples.
+function beadPath(st, r) {
+  const p = st.p, n = p.length / 3;
+  const P = (i) => { i = Math.max(0, Math.min(n - 1, i)); return [p[i * 3], p[i * 3 + 1], r[i]]; };
+  const out = [P(0)];
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    const L = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    // only where the line bends: how much the direction turns over this piece
+    const cx = p2[0] - p1[0], cy = p2[1] - p1[1];
+    const turn = Math.max(angleBetween(p1[0] - p0[0], p1[1] - p0[1], cx, cy), angleBetween(cx, cy, p3[0] - p2[0], p3[1] - p2[1]));
+    // enough in-between points that each one turns by less than ~3.5°
+    const step = Math.max(0.4, Math.min(p1[2], p2[2]) * 0.5);
+    const m = turn < 0.03 ? 0 : Math.min(16, Math.floor(L / step), Math.ceil(turn / 0.06));
+    for (let k = 1; k <= m; k++) {
+      const t = k / (m + 1);
+      out.push(catmull(p0, p1, p2, p3, t));
+    }
+    out.push(p2);
+  }
+  return out;
+}
+
+function angleBetween(ax, ay, bx, by) {
+  const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+  if (la < 1e-9 || lb < 1e-9) return 0; // at the ends: the neighbour decides
+  return Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb))));
+}
+
+function catmull(p0, p1, p2, p3, t) {
+  const d = (a, b) => Math.max(1e-4, Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])));
+  const t0 = 0, t1 = d(p0, p1), t2 = t1 + d(p1, p2), t3 = t2 + d(p2, p3);
+  const u = t1 + (t2 - t1) * t;
+  const lerp = (a, b, ta, tb) => { const w = tb - ta < 1e-9 ? 0 : (u - ta) / (tb - ta); return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w]; };
+  const A1 = lerp(p0, p1, t0, t1), A2 = lerp(p1, p2, t1, t2), A3 = lerp(p2, p3, t2, t3);
+  const B1 = lerp(A1, A2, t0, t2), B2 = lerp(A2, A3, t1, t3);
+  const C = lerp(B1, B2, t1, t2);
+  return [C[0], C[1], p1[2] + (p2[2] - p1[2]) * t];
+}
+
+// Circle as 4 cubic arcs (exact and compact, also in the PDF).
+function circlePiece(x, y, r) { return { circle: [x, y, r] }; }
+
+function bandPiece(a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy);
+  if (d <= Math.abs(a[2] - b[2]) + 1e-6) return null; // one circle inside the other
+  const ux = dx / d, uy = dy / d, nx = -uy, ny = ux;
+  const sn = (a[2] - b[2]) / d, k = Math.sqrt(Math.max(0, 1 - sn * sn));
+  const pt = (c, sgn) => [c[0] + c[2] * (-ux * sn + nx * k * sgn), c[1] + c[2] * (-uy * sn + ny * k * sgn)];
+  return ccw([pt(a, 1), pt(b, 1), pt(b, -1), pt(a, -1)]);
+}
+
+function beadOutline(st, factor = 1, live = false) {
+  const size = st.s * factor;
+  const r = strokeRadii(st, size);
+  applyTapers(st, size, r, live);
+  const raw = beadPath(st, r);
+  // samples closer together than a fraction of their width add nothing
+  const q = [raw[0]];
+  for (let i = 1; i < raw.length; i++) {
+    const a = q[q.length - 1], b = raw[i];
+    if (i < raw.length - 1 && Math.hypot(b[0] - a[0], b[1] - a[1]) < Math.max(0.12, Math.min(a[2], b[2]) * 0.2)) continue;
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-6) continue;
+    q.push(b);
+  }
+  const flatEnds = st.t === 'hl'; // highlighter: square ends like a chisel tip
+  const polys = [];
+  if (q.length === 1) { polys.push(circlePiece(q[0][0], q[0][1], q[0][2])); polys.multi = true; return polys; }
+  const n = q.length;
+  const dir = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = q[i + 1][0] - q[i][0], dy = q[i + 1][1] - q[i][1], L = Math.hypot(dx, dy);
+    dir.push([dx / L, dy / L]);
+  }
+  // Smooth stretches become one band each (left side forth, right side back);
+  // at corners, and every ~60° of turning, a band ends and a round joint
+  // (circle) connects it to the next – so the inside of a tight curve can
+  // never fold over and leave a notch.
+  // A stretch also ends where the line bends tighter than its own width or
+  // the width changes faster than the line moves (the band's inner edge
+  // would fold back there); such places are drawn as single beads.
+  const len = (i) => Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]);
+  const runs = [];
+  let start = 0, cum = 0;
+  for (let i = 1; i < n - 1; i++) {
+    const t = Math.acos(Math.max(-1, Math.min(1, dir[i - 1][0] * dir[i][0] + dir[i - 1][1] * dir[i][1])));
+    cum += t;
+    const L = Math.min(len(i - 1), len(i));
+    const tight = t * q[i][2] * 1.5 > L || Math.abs(q[i][2] - q[i - 1][2]) > 0.5 * len(i - 1) || Math.abs(q[i + 1][2] - q[i][2]) > 0.5 * len(i);
+    if (t > 0.3 || cum > 1 || tight) { runs.push([start, i]); start = i; cum = 0; }
+  }
+  runs.push([start, n - 1]);
+  const normal = (k, a, b) => {
+    let dx, dy;
+    if (k === a) [dx, dy] = dir[a];
+    else if (k === b) [dx, dy] = dir[b - 1];
+    else { dx = dir[k - 1][0] + dir[k][0]; dy = dir[k - 1][1] + dir[k][1]; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L; }
+    return [-dy, dx];
+  };
+  for (const [a, b] of runs) {
+    const left = [], right = [];
+    for (let k = a; k <= b; k++) {
+      const [nx, ny] = normal(k, a, b), rr = q[k][2];
+      left.push([q[k][0] + nx * rr, q[k][1] + ny * rr]);
+      right.push([q[k][0] - nx * rr, q[k][1] - ny * rr]);
+    }
+    polys.push(ccw(left.concat(right.reverse())));
+  }
+  // round joints and ends
+  const joints = new Set([0, n - 1, ...runs.map(([a]) => a)]);
+  for (const k of [...joints].sort((x, y) => x - y)) {
+    if (flatEnds && (k === 0 || k === n - 1)) continue;
+    polys.push(circlePiece(q[k][0], q[k][1], q[k][2]));
+  }
+  if (flatEnds) {
+    // square caps: extend the first and last stretch by half the width
+    // (direction from a point at least half a width back: a tiny wiggle when
+    // lifting must not turn the cap)
+    const back = (k, step) => { let j = k + step; while (j > 0 && j < n - 1 && Math.hypot(q[j][0] - q[k][0], q[j][1] - q[k][1]) < q[k][2]) j += step; return q[j]; };
+    const ext = (A, B) => { const dx = A[0] - B[0], dy = A[1] - B[1], L = Math.hypot(dx, dy) || 1; return [A[0] + (dx / L) * A[2] * 0.5, A[1] + (dy / L) * A[2] * 0.5, A[2]]; };
+    const b1 = bandPiece(ext(q[0], back(0, 1)), q[0]), b2 = bandPiece(q[n - 1], ext(q[n - 1], back(n - 1, -1)));
+    if (b1) polys.push(b1);
+    if (b2) polys.push(b2);
+  }
+  polys.multi = true;
+  return polys;
 }
 
 // Outline of the same stroke at a different size (neon core / halo).
@@ -85,11 +230,7 @@ function getSizedOutline(st, factor) {
   if (!o) {
     if (st.sh) o = shapeOutline(st, st.s * factor);
     else if (isDot(st)) o = dotOutline(st, factor);
-    else {
-      const pts = strokePoints(st);
-      if (st.np) for (const q of pts) q[2] = 0.5;
-      o = getStroke(pts, { ...strokeOptions(st, true), size: st.s * factor });
-    }
+    else o = beadOutline(st, factor);
     m.set(factor, o);
   }
   return o;
@@ -201,10 +342,16 @@ function isDot(st) {
 
 function dotOutline(st, factor = 1) {
   const p = st.p, n = p.length / 3;
-  let x = 0, y = 0, pr = 0;
-  for (let i = 0; i < p.length; i += 3) { x += p[i]; y += p[i + 1]; pr += p[i + 2]; }
-  x /= n; y /= n; pr = st.np ? 0.5 : pr / n;
-  const r = Math.max(0.25, (st.s / 2) * (0.75 + 0.5 * pr) * factor);
+  let x = 0, y = 0;
+  for (let i = 0; i < p.length; i += 3) { x += p[i]; y += p[i + 1]; }
+  x /= n; y /= n;
+  // the same width a line would have here (pen style, pressure curve); a
+  // brush tap is a small dab like the start of a brush line
+  const rs = strokeRadii(st, st.s * factor);
+  let r = 0;
+  for (const v of rs) r += v / rs.length;
+  if (st.ps === 'brush') r *= 0.6;
+  r = Math.max(0.25, r);
   const out = [];
   for (let i = 0; i < 20; i++) { const a = (i / 20) * Math.PI * 2; out.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
   return out;
@@ -212,28 +359,19 @@ function dotOutline(st, factor = 1) {
 
 function getOutline(st) {
   let o = outlineCache.get(st);
-  if (!o && st.sh) { o = shapeOutline(st); outlineCache.set(st, o); }
-  if (!o && isDot(st)) { o = dotOutline(st); outlineCache.set(st, o); }
   if (!o) {
-    const pts = strokePoints(st);
-    if (st.np && st.t !== 'hl') for (const q of pts) q[2] = 0.5;
-    o = getStroke(pts, strokeOptions(st, true));
+    o = st.sh ? shapeOutline(st) : isDot(st) ? dotOutline(st) : beadOutline(st);
     outlineCache.set(st, o);
   }
   return o;
 }
 
-// While drawing: the end follows the pen exactly (last: true – the same as
-// the finished stroke, so nothing jumps when the pen lifts) and the end taper
-// is left out until then, so the tip doesn't "breathe" with every new point.
+// While drawing: the same pieces as the finished line (only the brush's end
+// taper waits until the pen lifts).
 function getLiveOutline(st) {
   if (st.sh) return shapeOutline(st);
   if (isDot(st)) return dotOutline(st);
-  const pts = strokePoints(st);
-  if (st.np && st.t !== 'hl') for (const q of pts) q[2] = 0.5;
-  const o = strokeOptions(st, true);
-  if (o.end && o.end.taper) o.end = { ...o.end, taper: 0 };
-  return getStroke(pts, o);
+  return beadOutline(st, 1, true);
 }
 
 // Emit the outline as a smooth closed path (quadratic curves through
@@ -242,6 +380,7 @@ function getLiveOutline(st) {
 function traceOutline(outline, sink, map) {
   if (outline.multi) {
     for (const poly of outline) {
+      if (poly.circle) { traceCircle(poly.circle, sink, map); continue; }
       const P = map ? poly.map((q) => map(q[0], q[1])) : poly;
       sink.moveTo(P[0][0], P[0][1]);
       for (let i = 1; i < P.length; i++) sink.lineTo(P[i][0], P[i][1]);
@@ -269,6 +408,20 @@ function traceOutline(outline, sink, map) {
   sink.closePath();
 }
 
+// Circle (counter-clockwise like the other pieces) from 4 cubic arcs.
+function traceCircle([cx, cy, r], sink, map) {
+  const K = 0.5522847498 * r;
+  const pts = [
+    [cx + r, cy], [cx + r, cy + K], [cx + K, cy + r], [cx, cy + r],
+    [cx - K, cy + r], [cx - r, cy + K], [cx - r, cy],
+    [cx - r, cy - K], [cx - K, cy - r], [cx, cy - r],
+    [cx + K, cy - r], [cx + r, cy - K], [cx + r, cy],
+  ].map((q) => (map ? map(q[0], q[1]) : q));
+  sink.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i += 3) sink.bezierCurveTo(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], pts[i + 2][0], pts[i + 2][1]);
+  sink.closePath();
+}
+
 // SVG path string (used with pdf-lib drawSvgPath).
 function outlineToSvgPath(outline, map) {
   const parts = [];
@@ -277,9 +430,10 @@ function outlineToSvgPath(outline, map) {
     moveTo: (x, y) => parts.push(`M${f(x)} ${f(y)}`),
     lineTo: (x, y) => parts.push(`L${f(x)} ${f(y)}`),
     quadraticCurveTo: (cx, cy, x, y) => parts.push(`Q${f(cx)} ${f(cy)} ${f(x)} ${f(y)}`),
+    bezierCurveTo: (a, b, c, d, x, y) => parts.push(`C${f(a)} ${f(b)} ${f(c)} ${f(d)} ${f(x)} ${f(y)}`),
     closePath: () => parts.push('Z'),
   }, map);
   return parts.join(' ');
 }
 
-module.exports = { PEN_STYLES, strokeLook, getSizedOutline, lighten, strokePoints, strokeOptions, getOutline, getLiveOutline, traceOutline, outlineToSvgPath, HIGHLIGHTER_ALPHA, isClosedShape, shapeOutline };
+module.exports = { PEN_STYLES, strokeLook, getSizedOutline, lighten, strokePoints, pressureCurve, getOutline, getLiveOutline, traceOutline, outlineToSvgPath, HIGHLIGHTER_ALPHA, isClosedShape, shapeOutline };

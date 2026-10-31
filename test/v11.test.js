@@ -115,7 +115,7 @@ test('export: images, tables, rich text in all fonts, pen styles, board, two PDF
 
 test('contentBBox covers strokes, texts and items', () => {
   const b = contentBBox({ strokes: [{ s: 2, p: [0, 0, 0.5, 10, 10, 0.5] }], texts: [{ x: -50, y: 5, w: 20, fs: 10 }], items: [{ type: 'img', x: 0, y: 0, w: 5, h: 100 }] });
-  assert.deepStrictEqual(b, [-50, -1, 11, 100]);
+  assert.deepStrictEqual(b.map((v) => Math.round(v * 100) / 100), [-50, -1.3, 11.3, 100]); // 1.6.1: a ballpoint can get 0.65·s wide with pressure
 });
 
 test('backup round trip and zip-slip protection', async () => {

@@ -36,7 +36,24 @@ export function sizeControl(value, apply, cls = 'tb-size', { list = TEXT_SIZES, 
       m.classList.add('dark-menu', 'size-list');
       m.addEventListener('mousedown', keep);
     } });
-  return h('div', { class: 'size-ctl' }, input, drop, arrows);
+  const ctl = h('div', { class: 'size-ctl' }, input, drop, arrows);
+  // Mouse wheel over the size field: finer steps than the list
+  let acc = 0;
+  ctl.addEventListener('wheel', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    acc += e.deltaY;
+    if (Math.abs(acc) < 40 && Math.abs(e.deltaY) < 40) return; // touchpads send many small steps
+    const dir = acc < 0 ? 1 : -1;
+    acc = 0;
+    const cur = parseFloat(input.value) || value;
+    const inc = cur < 2 ? 0.1 : cur < 10 ? 0.5 : 1;
+    const next = round(Math.min(max, Math.max(min, Math.round((cur + dir * inc) / inc) * inc)));
+    if (Math.abs(next - cur) < 0.01) return;
+    input.value = String(next);
+    value = next;
+    apply(next);
+  }, { passive: false });
+  return ctl;
 }
 const ALIGN_NEXT = { left: 'center', center: 'right', right: 'left' };
 const ALIGN_ICON = { left: 'alignLeft', center: 'alignCenter', right: 'alignRight' };
