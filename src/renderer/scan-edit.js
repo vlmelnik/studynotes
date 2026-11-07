@@ -306,7 +306,7 @@ const HEAD_H = 28; // headings: big bold letters lose umlaut dots when larger //
  * (screenshots, zoomed scans) loses umlaut dots; very small text loses
  * detail. After a first pass the picture is rescaled for a second one.
  */
-async function recognizeSized(canvas, blob, langs = LANGS) {
+export async function recognizeSized(canvas, blob, langs = LANGS) {
   const scaled = async (src, f) => {
     const c2 = document.createElement('canvas');
     c2.width = Math.max(1, Math.round(src.width * f)); c2.height = Math.max(1, Math.round(src.height * f));

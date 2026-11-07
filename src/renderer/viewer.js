@@ -10,6 +10,7 @@
 import { h } from './ui.js';
 import { drawStrokes, drawPaperRegion } from './inkrender.js';
 import { isCancel } from './pdfdoc.js';
+import { peekLayout } from './pdf-text.js';
 import { pageBackground } from '../shared/paper.js';
 
 const GAP = 18;
@@ -18,6 +19,7 @@ const OVERSCROLL_MS = 500;  // keep scrolling (or pulling) this long to add a pa
 const MAX_CANVAS_PX = 16e6;      // per canvas
 const CACHE_BUDGET_PX = 28e6;    // ≈ 110 MB of cached PDF bitmaps
 const REGION_MARGIN = 0.5;       // extra area around the viewport (fraction of its size)
+const SHIFT_SCROLL = 6;          // Shift + wheel scrolls this many times faster
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 8;
 
@@ -81,12 +83,15 @@ class PageView {
     this.inkCanvas = h('canvas', { class: 'region-canvas page-ink' });
     this.textLayer = h('div', { class: 'page-texts' });
     this.overlay = h('div', { class: 'page-overlay' });
-    this.el.append(this.bgHost, this.itemsLayer, this.inkCanvas, this.textLayer, this.overlay);
+    this.hlCanvas = h('canvas', { class: 'region-canvas page-ink page-hl' });
+    this.el.append(this.bgHost, this.itemsLayer, this.hlCanvas, this.inkCanvas, this.textLayer, this.overlay);
     if (this.page.bm) {
       this.el.append(h('button', { class: 'page-bm', title: 'Bookmarked – click to remove', onclick: (e) => { e.stopPropagation(); viewer.editor.toggleBookmark(this.index); } }));
     }
     this.bgScale = 0;
     this.bgTask = null;
+    this.tile = null;     // { canvas, rect, scale }: the visible part in full resolution
+    this.tileTask = null;
     this.ink = { rect: null, scale: 0 };
     this.paper = { rect: null, scale: 0 };
     this.inkSkip = null;
@@ -101,7 +106,7 @@ class PageView {
   // Device pixels per page unit for full-page bitmaps (PDF), capped by memory.
   targetScale() {
     const p = this.page;
-    return Math.min(this.viewer.zoom * dpr(), Math.sqrt(MAX_CANVAS_PX / (p.w * p.h)));
+    return Math.min(this.viewer.devScale(p).s, Math.sqrt(MAX_CANVAS_PX / (p.w * p.h)));
   }
 
   // Device pixels per page unit for region canvases (never capped: regions are small).
@@ -122,7 +127,24 @@ class PageView {
     // Handles inside the scaled layer stay the same size on screen.
     this.textLayer.style.setProperty('--iz', String(1 / this.viewer.zoom));
     this.placeRegion(this.inkCanvas, this.ink.rect);
+    this.placeRegion(this.hlCanvas, this.ink.rect);
     this.placeRegion(this.paperCanvas, this.paper.rect);
+    if (this.tile) this.placeRegion(this.tile.canvas, this.tile.rect);
+    this.syncPixelRendering();
+  }
+
+  // A bitmap that fills its box 1:1 (to the screen pixel) must be shown as it
+  // is: left to itself the browser still resamples it a little on screens with
+  // a scaling of 125 % / 150 % / 200 %, and the text turns soft. While the
+  // bitmap is stretched (zooming), smooth scaling is what we want.
+  syncPixelRendering() {
+    const c = this.bgHost.firstChild;
+    if (!c || c.tagName !== 'CANVAS' || this.page.kind !== 'pdf') return;
+    const L = this.viewer.layout[this.index];
+    if (!L) return;
+    const d = dpr();
+    const exact = Math.abs(c.width - Math.round(L.w * d)) <= 1 && Math.abs(c.height - Math.round(L.h * d)) <= 1;
+    c.style.imageRendering = exact ? 'pixelated' : '';
   }
 
   // Position a region canvas in % of the page so it scales with zoom for free.
@@ -183,6 +205,7 @@ class PageView {
       if (old && old !== this.paperCanvas && !this.viewer.cache.has(old)) releaseCanvas(old);
     }
     this.bgScale = scale;
+    this.syncPixelRendering();
   }
 
   drawPaper(force = false) {
@@ -196,13 +219,17 @@ class PageView {
     const p = this.page;
     if (p.kind !== 'pdf') return this.drawPaper();
     const target = this.targetScale();
-    if (this.bgScale >= target * 0.97 && this.bgScale <= target * 1.5) return;
+    // The bitmap must match the screen size: one that is bigger gets shrunk by
+    // the browser (jagged, grey text), one that is smaller gets stretched (blurry).
+    if (this.bgScale >= target * 0.97 && this.bgScale <= target * 1.04) return;
     const pdf = this.viewer.editor.pdfFor(this.src);
     if (!pdf) return; // still loading; the editor schedules an update when ready
     const cached = this.viewer.cache.get(this.key);
     if (cached) {
-      if (cached.canvas.parentNode !== this.bgHost) this.setBg(cached.canvas, cached.scale);
-      if (cached.scale >= target * 0.97) { this.bgScale = cached.scale; return; }
+      const fits = cached.scale >= target * 0.97 && cached.scale <= target * 1.04;
+      // a bitmap of another size only stands in until the exact one is ready
+      if (cached.canvas.parentNode !== this.bgHost && (fits || !this.bgScale)) this.setBg(cached.canvas, cached.scale);
+      if (fits) { this.bgScale = cached.scale; return; }
     }
     // While flying through the document, paint a cheap preview (or keep the
     // current bitmap) and render sharply once scrolling slows down.
@@ -221,7 +248,7 @@ class PageView {
     job.promise.then((canvas) => {
       this.bgTask = null;
       const cur = this.viewer.cache.get(this.key);
-      if (!cur || cur.scale <= scale) this.viewer.cache.set(this.key, canvas, scale);
+      if (!cur || Math.abs(cur.scale - scale) > 1e-3 || cur.canvas !== canvas) this.viewer.cache.set(this.key, canvas, scale);
       if (this.el.isConnected) this.setBg(canvas, scale);
       if (scale < target && !this.viewer.fastScrolling) this.viewer.scheduleUpdate();
     }, (err) => {
@@ -232,12 +259,65 @@ class PageView {
 
   cancelBg() {
     if (this.bgTask) { this.bgTask.cancel(); this.bgTask = null; }
+    this.cancelTile();
+  }
+
+  cancelTile() {
+    if (this.tileTask) { this.tileTask.cancel(); this.tileTask = null; }
+  }
+
+  dropTile() {
+    this.cancelTile();
+    if (this.tile) { releaseCanvas(this.tile.canvas); this.tile = null; }
+  }
+
+  // The whole-page bitmap is limited to MAX_CANVAS_PX, so at high zoom (or a
+  // high-density screen) it would be stretched and blurry. Then the part you
+  // are looking at is rendered again at the real zoom, on top of it.
+  ensureTile(priority) {
+    const p = this.page;
+    if (p.kind !== 'pdf') return;
+    const wanted = this.viewer.zoom * dpr();
+    if (wanted <= this.targetScale() * 1.02) { this.dropTile(); return; } // the page bitmap is sharp enough
+    if (this.viewer.fastScrolling) return;
+    const pdf = this.viewer.editor.pdfFor(this.src);
+    const vis = this.viewer.visibleWorldRect(this.index);
+    if (!pdf || !vis) return;
+    const visible = intersect(vis, this.bounds());
+    if (!visible) { this.dropTile(); return; }
+    // a little more than what is on screen, so small scrolls need no new render
+    const mw = (visible[2] - visible[0]) * 0.2, mh = (visible[3] - visible[1]) * 0.2;
+    let rect = intersect([visible[0] - mw, visible[1] - mh, visible[2] + mw, visible[3] + mh], this.bounds());
+    let scale = wanted;
+    const area = (r) => (r[2] - r[0]) * (r[3] - r[1]);
+    if (area(rect) * scale * scale > MAX_CANVAS_PX) rect = visible;
+    if (area(rect) * scale * scale > MAX_CANVAS_PX) scale = Math.sqrt(MAX_CANVAS_PX / area(rect)); // huge screen: as sharp as memory allows
+    const t = this.tile;
+    if (t && contains(t.rect, visible) && t.scale >= scale * 0.97) return; // still good
+    if (this.tileTask && contains(this.tileTask.rect, visible) && Math.abs(this.tileTask.scale - scale) < 1e-3) { this.tileTask.setPriority(priority); return; }
+    this.cancelTile();
+    const job = pdf.render(p.pdfPage, scale, priority - 1, p.rot || 0, rect);
+    const task = { rect, scale, cancel: job.cancel, setPriority: job.setPriority };
+    this.tileTask = task;
+    job.promise.then((canvas) => {
+      if (this.tileTask === task) this.tileTask = null;
+      if (!this.el.isConnected || this.destroyedView) { releaseCanvas(canvas); return; }
+      canvas.className = 'region-canvas pdf-tile';
+      this.placeRegion(canvas, rect);
+      if (this.tile) this.tile.canvas.replaceWith(canvas); else this.bgHost.after(canvas);
+      if (this.tile) { this.tile.canvas.width = this.tile.canvas.height = 0; }
+      this.tile = { canvas, rect, scale };
+    }, (err) => {
+      if (this.tileTask === task) this.tileTask = null;
+      if (!isCancel(err)) console.error('tile render failed', err);
+    });
   }
 
   drawInk(force = false) {
     const data = this.viewer.editor.pageData(this.page.id);
     if (!data.strokes.length) {
       if (this.inkCanvas.width) { this.inkCanvas.width = 0; this.inkCanvas.height = 0; }
+      if (this.hlCanvas.width) { this.hlCanvas.width = 0; this.hlCanvas.height = 0; }
       this.ink.rect = null;
       return;
     }
@@ -245,16 +325,20 @@ class PageView {
     if (!realloc && !force) return;
     const r = this.ink.rect;
     if (!r) return;
-    drawStrokes(this.inkCanvas.getContext('2d'), data.strokes, this.ink.scale, {
-      ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, skip: this.inkSkip, clip: r,
-    });
+    // highlighters live on their own multiply-blended canvas so black text stays black
+    if (this.hlCanvas.width !== this.inkCanvas.width) this.hlCanvas.width = this.inkCanvas.width;
+    if (this.hlCanvas.height !== this.inkCanvas.height) this.hlCanvas.height = this.inkCanvas.height;
+    this.placeRegion(this.hlCanvas, r);
+    const o = { ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, skip: this.inkSkip, clip: r };
+    drawStrokes(this.inkCanvas.getContext('2d'), data.strokes, this.ink.scale, { ...o, only: 'pen' });
+    drawStrokes(this.hlCanvas.getContext('2d'), data.strokes, this.ink.scale, { ...o, only: 'hl' });
   }
 
   // Draw one new pen stroke without redrawing the page.
   addStroke(st) {
     if (!this.ink.rect || !this.inkCanvas.width || st.t === 'hl') return this.drawInk(true);
     const r = this.ink.rect;
-    drawStrokes(this.inkCanvas.getContext('2d'), [st], this.ink.scale, { ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, clear: false });
+    drawStrokes(this.inkCanvas.getContext('2d'), [st], this.ink.scale, { only: 'pen', ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, clear: false });
   }
 
   // A temporary canvas over the visible part of the page (live strokes, selections).
@@ -271,13 +355,16 @@ class PageView {
   }
 
   destroy() {
+    this.destroyedView = true;
     this.cancelBg();
+    this.dropTile();
     this.el.remove();
     const bg = this.bgHost.firstChild;
     this.bgHost.replaceChildren(); // detach so the cached bitmap can be reused elsewhere
     if (bg && bg !== this.paperCanvas && !this.viewer.cache.has(bg)) releaseCanvas(bg);
     releaseCanvas(this.paperCanvas);
     releaseCanvas(this.inkCanvas);
+    releaseCanvas(this.hlCanvas);
     this.overlay.querySelectorAll('canvas').forEach(releaseCanvas);
   }
 }
@@ -314,6 +401,9 @@ export class Viewer {
     this.scroller.addEventListener('scroll', () => this.onScroll(), { passive: true });
     this.scroller.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     this.resizeObs = new ResizeObserver(() => {
+      // A viewer that is not on screen (another tab, the library) has no
+      // size: leave its zoom, layout and position alone until it is back.
+      if (!this.onScreen()) return;
       if (this.fitMode) this.fitWidth(true); else { this.computeLayout(); this.scheduleUpdate(); }
     });
     this.resizeObs.observe(this.scroller);
@@ -360,17 +450,22 @@ export class Viewer {
       this.content.style.width = this.layout[0].w + 'px';
       this.content.style.height = this.layout[0].h + 'px';
     } else {
-      let y = GAP;
+      // Every page is a whole number of screen pixels wide and high, and sits on
+      // a screen pixel: its bitmap is then shown 1:1. (A page 684.6 px wide
+      // showing a 684 px bitmap is resampled by the browser, and the text turns grey.)
+      const d = dpr();
+      const gap = Math.round(GAP * d) / d;
+      let y = gap;
       let maxW = 0;
       this.layout = this.pages.map((p) => {
-        const w = p.w * this.zoom, ph = p.h * this.zoom;
+        const { w, h: ph } = this.devScale(p);
         maxW = Math.max(maxW, w);
         const L = { x: 0, y, w, h: ph };
-        y += ph + GAP;
+        y += ph + gap;
         return L;
       });
       const contentW = Math.max(vw, maxW + GAP * 2);
-      for (const L of this.layout) L.x = Math.round((contentW - L.w) / 2);
+      for (const L of this.layout) L.x = Math.round(((contentW - L.w) * d) / 2) / d;
       this.content.style.width = contentW + 'px';
       if (this.endZone) {
         // centred under the last page
@@ -409,6 +504,17 @@ export class Viewer {
       this.editor.onBoardResized && this.editor.onBoardResized();
     }
     return true;
+  }
+
+  // Size of a page in whole screen pixels at the current zoom: { s: bitmap
+  // pixels per page unit, w / h: CSS px }. Width and height come from the same
+  // scale, so a bitmap rendered at `s` fills the box exactly.
+  devScale(p) {
+    const d = dpr();
+    const W = Math.max(1, Math.round(p.w * this.zoom * d));
+    const s = W / p.w;
+    const H = Math.max(1, Math.round(p.h * s));
+    return { s, w: W / d, h: H / d };
   }
 
   // First page index whose bottom is below `y`.
@@ -451,7 +557,67 @@ export class Viewer {
     this._raf = requestAnimationFrame(() => { this._raf = 0; this.update(); });
   }
 
+  // False while the viewer is taken out of the page (a background tab): it
+  // has no size then, and everything measured from it would be wrong.
+  onScreen() {
+    const s = this.scroller;
+    return s.isConnected && s.clientWidth > 0 && s.clientHeight > 0;
+  }
+
+  // Where the reader is, as plain numbers; null while not on screen.
+  // The browser forgets the scrolling of an element that is taken out of the
+  // page, so the editor keeps this and hands it back to restorePosition().
+  position() {
+    const s = this.scroller;
+    if (!this.layout.length || !this.onScreen()) return null;
+    const z = this.zoom;
+    if (this.isBoard) {
+      const p = this.pages[0];
+      return { zoom: z, cx: (s.scrollLeft + s.clientWidth / 2) / z + (p.ox || 0), cy: (s.scrollTop + s.clientHeight / 2) / z + (p.oy || 0) };
+    }
+    const i = Math.min(this.currentIndex, this.layout.length - 1);
+    const L = this.layout[i];
+    return { page: i, y: L ? (s.scrollTop - L.y) / z : 0, x: s.scrollLeft / z, zoom: z, fit: !!this.fitMode };
+  }
+
+  // Puts the view back where position() found it.
+  restorePosition(pos) {
+    if (!pos || !this.layout.length) return;
+    this._zAnim = null;
+    const s = this.scroller;
+    if (this.isBoard) {
+      const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pos.zoom || 1));
+      if (Math.abs(z - this.zoom) > 1e-5) {
+        this.zoom = z;
+        this.invalidateAll();
+        this.onZoomChange && this.onZoomChange(z);
+      }
+      this.computeLayout();
+      if (pos.cx != null) this.centerOn(pos.cx, pos.cy);
+      return;
+    }
+    if (pos.fit || !pos.zoom) {
+      this.fitWidth(true); // follows the width the window has now
+    } else {
+      const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pos.zoom));
+      this.fitMode = false;
+      if (Math.abs(z - this.zoom) > 1e-5) {
+        this.zoom = z;
+        this.invalidateAll();
+        this.onZoomChange && this.onZoomChange(z);
+      }
+      this.computeLayout();
+    }
+    const L = this.layout[Math.max(0, Math.min(pos.page || 0, this.layout.length - 1))];
+    if (L) {
+      s.scrollTop = L.y + (pos.y || 0) * this.zoom;
+      s.scrollLeft = (pos.x || 0) * this.zoom;
+    }
+    this.scheduleUpdate();
+  }
+
   update() {
+    if (!this.onScreen()) return; // a background tab: nothing to draw, and currentIndex must stay as it was
     if (this.isBoard && !this._zAnim) this.growBoard();
     const [first, last] = this.visibleRange();
     if (last < first) return;
@@ -477,6 +643,7 @@ export class Viewer {
       const L = this.layout[i];
       const dist = Math.abs(L.y + L.h / 2 - mid);
       v.ensureBg(visible ? dist / 1e6 : 10 + dist / 1e6);
+      if (visible) { v.ensureTile(dist / 1e6); peekLayout(this.editor, v.page); } else v.dropTile(); // peekLayout: have the page's text ready before the first selection
       v.drawInk();
     }
     // Page indicator = page covering the middle of the viewport.
@@ -500,7 +667,7 @@ export class Viewer {
   }
 
   invalidateAll() {
-    for (const v of this.views.values()) { v.bgScale = 0; v.ink.rect = null; v.paper.rect = null; }
+    for (const v of this.views.values()) { v.bgScale = 0; v.ink.rect = null; v.paper.rect = null; v.dropTile(); }
     this.scheduleUpdate();
   }
 
@@ -536,6 +703,13 @@ export class Viewer {
   // ---------- zoom ----------
   onWheel(e) {
     if (e.altKey && this.onAltWheel) { e.preventDefault(); this.onAltWheel(e); return; }
+    // Shift + wheel: fast scrolling (the browser would scroll sideways).
+    if (e.shiftKey && !(e.ctrlKey || e.metaKey) && !this.isBoard) {
+      e.preventDefault();
+      const d = (e.deltaY || e.deltaX) * (e.deltaMode === 1 ? 40 : 1);
+      this.scroller.scrollTop += d * SHIFT_SCROLL;
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey)) { this.overscroll(e); return; }
     e.preventDefault();
     const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0025));

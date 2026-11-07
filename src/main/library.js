@@ -5,6 +5,7 @@
 //   <root>/<Folder>/.../<Notebook>/notebook.json
 //                                  source.pdf      (only for imported PDFs)
 //                                  text.json       (extracted PDF text, for search)
+//                                  ocr.json        (recognised text of scanned pages, with positions)
 //                                  cover.png
 //                                  pages/<pageId>.json   (ink + text boxes)
 //
@@ -393,6 +394,21 @@ class Library {
 
   async readText(rel, src = 'main') {
     return readJson(this.textFile(rel, src), null);
+  }
+
+  // OCR result of scanned pages: ocr.json / sources/<id>.ocr.json.
+  ocrFile(rel, src = 'main') {
+    if (src === 'main') return path.join(this.abs(rel), 'ocr.json');
+    if (!PAGE_ID.test(src)) throw new Error('Bad source id');
+    return path.join(this.abs(rel), 'sources', src + '.ocr.json');
+  }
+
+  async writeOcr(rel, data, src = 'main') {
+    await atomicWrite(this.ocrFile(rel, src), JSON.stringify(data));
+  }
+
+  async readOcr(rel, src = 'main') {
+    return readJson(this.ocrFile(rel, src), null);
   }
 
   // Copy a PDF into the notebook so its pages can be inserted. The renderer

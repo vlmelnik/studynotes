@@ -10,6 +10,8 @@ import { objectsMixin } from './editor-objects.js';
 import { TextBar, sizeControl, TEXT_SIZES } from './textbar.js';
 import { loadFormFields, signatureDialog, fillBar } from './fill-sign.js';
 import { PdfDoc, isCancel, Util } from './pdfdoc.js';
+import { recognizePage, ensureOcr } from './ocr.js';
+import { forgetLayouts } from './pdf-text.js';
 import { normalize, fold } from '../main/search.js';
 import { round2, BOX_SHAPES, LINE_SHAPES, mapCuts, strokeHit } from '../shared/geometry.js';
 import { PAPERS, PAGE_SIZES } from '../shared/paper.js';
@@ -51,7 +53,7 @@ export function defaultToolState() {
   return {
     tool: 'pen',
     pen: { color: PALETTE[0], size: 2, style: 'ball' },
-    hl: { color: HL_PALETTE[0], size: HL_SIZES[1], straight: true },
+    hl: { color: HL_PALETTE[0], size: HL_SIZES[1], straight: false, snap: false, round: false },
     eraser: { mode: 'partial', size: ERASER_SIZES[1], hlOnly: false, exact: false, objects: false },
     shape: { kind: 'rect' },
     text: { size: 14, ff: 'carlito', b: false, i: false, u: false },
@@ -229,12 +231,16 @@ export class Editor {
   activate() {
     this.viewer.computeLayout();
     // while the tab was hidden its scroll position was lost (detached
-    // elements forget it): go back to the view recorded when it was left
-    const vs = this.doc.nb.view;
-    if (vs && this.isBoard && vs.cx != null) this.viewer.centerOn(vs.cx, vs.cy);
-    else if (vs && !this.isBoard && vs.page != null) {
-      const L = this.viewer.layout[Math.min(vs.page, this.viewer.layout.length - 1)];
-      if (L) this.viewer.scroller.scrollTop = L.y + (vs.y ?? 0) * this.viewer.zoom;
+    // elements forget it): back to the exact place, scroll and zoom it was
+    // left on (else the view saved in the notebook)
+    if (this._pos) this.viewer.restorePosition(this._pos);
+    else {
+      const vs = this.doc.nb.view;
+      if (vs && this.isBoard && vs.cx != null) this.viewer.centerOn(vs.cx, vs.cy);
+      else if (vs && !this.isBoard && vs.page != null) {
+        const L = this.viewer.layout[Math.min(vs.page, this.viewer.layout.length - 1)];
+        if (L) this.viewer.scroller.scrollTop = L.y + (vs.y ?? 0) * this.viewer.zoom;
+      }
     }
     this.viewer.scheduleUpdate();
     this.viewer.scroller.focus({ preventScroll: true });
@@ -436,6 +442,9 @@ export class Editor {
   recordView() {
     // a tab in the background has no size: keep the view it had when it was left
     if (!this.viewer.layout.length || !this.el.isConnected || !this.viewer.scroller.clientHeight) return;
+    // Taking the viewer out of the page makes the browser forget its
+    // scrolling: keep the exact position for when the tab comes back.
+    this._pos = this.viewer.position();
     if (this.isBoard) {
       const s = this.viewer.scroller, p = this.pages[0], z = this.viewer.zoom;
       this.doc.nb.view = {
@@ -474,6 +483,7 @@ export class Editor {
   destroy() {
     this.destroyed = true;
     this.indexingStopped = true;
+    if (this._ocrRun) this._ocrRun.stop = true;
     this.tools.clearSelection(true);
     this.tools.laser.destroy();
     document.removeEventListener('selectionchange', this._onSelChange);
@@ -610,8 +620,9 @@ export class Editor {
         bar.append(sizes(HL_SIZES, ts.hl.size, (sz) => { ts.hl.size = sz; }, 0.55, 'hl'),
           sep(), swatches(ts.hl.color, (c) => { ts.hl.color = c; }, HL_PALETTE),
           sep(), this.favoritesStrip('hl'),
-          ibtn('line', 'Straight lines', ts.hl.straight, () => { ts.hl.straight = !ts.hl.straight; save(); }),
-          h('button', { class: `opt-chip${ts.hl.snap !== false ? ' active' : ''}`, title: 'On printed PDF text the highlighter follows the text lines', onclick: () => { ts.hl.snap = ts.hl.snap === false; save(); } }, 'Snap to text'));
+          ibtn('line', 'Always straight (hold Shift for a straight line)', ts.hl.straight, () => { ts.hl.straight = !ts.hl.straight; save(); }),
+          h('button', { class: `opt-chip${ts.hl.round ? ' active' : ''}`, title: 'Round highlighter tip instead of a flat one', onclick: () => { ts.hl.round = !ts.hl.round; save(); } }, 'Round tip'),
+          h('button', { class: `opt-chip${ts.hl.snap ? ' active' : ''}`, title: 'On printed PDF text a straight swipe along a line becomes a clean bar over the text', onclick: () => { ts.hl.snap = !ts.hl.snap; save(); } }, 'Snap to text'));
         break;
       case 'eraser':
         bar.append(
@@ -1362,6 +1373,65 @@ export class Editor {
       this.searchPanel.indexProgress(src, pdf.numPages, pdf.numPages);
     } else if (sinceSave) {
       await window.api.writeText(this.rel, idx, src).catch(() => {});
+    }
+  }
+
+  // ---------- OCR: recognise the text of scanned pages ----------
+  // Pages that already have printed text are skipped. Results are kept in
+  // ocr.json and also go into the search index, so search, text selection and
+  // the highlighter work on the scan afterwards. Calling it again stops it.
+  async runOcr(src = 'main') {
+    if (this._ocrRun) { this._ocrRun.stop = true; return; }
+    if (this.isBoard) return;
+    const pdf = this.doc.pdfs.get(src);
+    if (!pdf) { toast('The PDF is still loading – try again in a moment'); return; }
+    if (!(await ensureOcr())) return; // the add-on (offered for download once)
+    const run = { stop: false };
+    this._ocrRun = run;
+    this.doc.ocr = this.doc.ocr || {};
+    const ocr = this.doc.ocr[src] = this.doc.ocr[src] || { pages: {} };
+    this.doc.textIndexes = this.doc.textIndexes || {};
+    let idx = this.doc.textIndexes[src];
+    if (!idx || idx.count !== pdf.numPages) idx = this.doc.textIndexes[src] = { pages: {}, complete: false, count: pdf.numPages };
+    const used = [...new Set(this.pages.filter((p) => p.kind === 'pdf' && (p.src || 'main') === src).map((p) => p.pdfPage))];
+    const save = async () => {
+      await window.api.writeOcr(this.rel, ocr, src).catch(() => {});
+      await window.api.writeText(this.rel, idx, src).catch(() => {});
+    };
+    let done = 0, found = 0, failed = 0;
+    this.searchPanel.ocrProgress(0, used.length);
+    try {
+      for (const n of used) {
+        if (run.stop || this.destroyed) break;
+        done++;
+        if (ocr.pages[n]) continue;
+        let text = idx.pages[n];
+        if (text === undefined || !String(text).trim()) { try { text = await pdf.pageText(n); } catch { text = ''; } }
+        if (String(text).trim()) { idx.pages[n] = text; continue; } // has real text
+        this.searchPanel.ocrProgress(done, used.length);
+        try {
+          const r = await recognizePage(pdf, n);
+          ocr.pages[n] = { lines: r.lines };
+          idx.pages[n] = r.text;
+          found++;
+          forgetLayouts(this.pages.filter((p) => p.kind === 'pdf' && (p.src || 'main') === src && p.pdfPage === n));
+        } catch (err) {
+          if (isCancel(err)) break;
+          console.error('OCR failed on page', n, err);
+          if (++failed >= 3 && !found) { toast('Text recognition is not available: ' + (err.message || err), { error: true, timeout: 7000 }); break; }
+        }
+        if (found && found % 5 === 0) await save();
+      }
+    } finally {
+      this._ocrRun = null;
+      if (!this.destroyed) {
+        if (found) await save();
+        if (!run.stop && !failed) idx.complete = used.every((n) => idx.pages[n] !== undefined);
+        if (found) await window.api.writeText(this.rel, idx, src).catch(() => {});
+        this.searchPanel.ocrProgress(null);
+        if (found) toast(`Text recognised on ${found} page${found === 1 ? '' : 's'}${run.stop ? ' (stopped)' : ''}`, { timeout: 4000 });
+        else if (!failed) toast(run.stop ? 'Text recognition stopped' : 'Nothing to recognise – every page already has text', { timeout: 3000 });
+      }
     }
   }
 

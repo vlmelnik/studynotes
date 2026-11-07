@@ -179,9 +179,13 @@ export class SearchPanel {
     this.input = h('input', { class: 'input', type: 'search', placeholder: 'Search text in this notebook' });
     this.status = h('div', { class: 'search-status' });
     this.results = h('div', { class: 'search-results' });
+    // OCR for scanned PDFs: offered when the PDF has no text of its own
+    this.ocrBtn = h('button', { class: 'opt-chip ocr-btn', title: 'Recognise the text of scanned pages (German, English, Russian – on this computer) so you can search, select and highlight it; the pages stay as they are', onclick: () => this.editor.runOcr('main') }, 'Recognize text (OCR)');
+    this.ocrBtn.style.display = 'none';
+    this.ocrState = null;
     this.el = h('div', { class: 'search-panel' },
       h('div', { class: 'search-head' }, this.input, iconButton('close', 'Close', () => this.close())),
-      this.status, this.results);
+      this.status, this.ocrBtn, this.results);
     this.run = debounce(() => this.search(), 200);
     this.input.addEventListener('input', () => this.run());
     this.input.addEventListener('keydown', (e) => {
@@ -213,6 +217,12 @@ export class SearchPanel {
     if (this.editor.el.classList.contains('searching')) this.updateStatus(this.lastCount);
   }
 
+  // OCR progress: (done, total) while running, null when finished.
+  ocrProgress(done, total) {
+    this.ocrState = done === null ? null : [done, total];
+    this.updateStatus(this.lastCount);
+  }
+
   updateStatus(count) {
     this.lastCount = count;
     const parts = [];
@@ -223,6 +233,11 @@ export class SearchPanel {
     if (main && main.complete && !Object.values(main.pages).some((s) => s && s.trim())) {
       parts.push('this PDF has no text layer (scanned) – only typed notes are searchable');
     }
+    const scanned = !!(main && main.complete && !Object.values(main.pages).some((s) => s && s.trim()));
+    const partly = !!(this.editor.doc.ocr && this.editor.doc.ocr.main && Object.keys(this.editor.doc.ocr.main.pages).length);
+    if (this.ocrState) parts.push(`recognising text ${this.ocrState[0]}/${this.ocrState[1]}…`);
+    this.ocrBtn.style.display = scanned || partly || this.ocrState || (main && main.complete && Object.values(main.pages).some((s) => !s || !String(s).trim())) ? '' : 'none';
+    this.ocrBtn.textContent = this.ocrState ? 'Stop' : 'Recognize text (OCR)';
     this.status.textContent = parts.join(' · ');
   }
 

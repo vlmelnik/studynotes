@@ -173,7 +173,7 @@ function overlaps(b, clip) {
 // Draw strokes in page units onto ctx, scaled by `scale`, offset by (ox, oy)
 // device pixels. Highlighters go underneath pen ink. `clip` (page units)
 // skips strokes outside the area being drawn.
-export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, clear = true, clip = null } = {}) {
+export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, clear = true, clip = null, only = null } = {}) {
   if (clear) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -181,7 +181,7 @@ export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, 
   ctx.setTransform(scale, 0, 0, scale, ox, oy);
   for (const pass of [true, false]) {
     for (const st of strokes) {
-      if ((st.t === 'hl') !== pass || (skip && skip.has(st.id))) continue;
+      if ((st.t === 'hl') !== pass || (only && (only === 'hl') !== pass) || (skip && skip.has(st.id))) continue;
       const b = strokeBBox(st);
       const pad = st.ps === 'neon' ? st.s * 2 : 0;
       if (!overlaps([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad], clip)) continue;

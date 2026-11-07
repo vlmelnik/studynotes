@@ -12,7 +12,7 @@ import { setLang } from './i18n.js';
 class App {
   async init() {
     this.info = await window.api.info();
-    this.settings = { mouseDraws: true, shapeHold: true, scribbleErase: true, sidebarHidden: false, pasteFormatting: false, favorites: [], recentPens: [], recentColors: [], theme: 'light', ...(this.info.settings || {}) };
+    this.settings = { mouseDraws: true, pdfShapes: true, shapeHold: true, scribbleErase: true, sidebarHidden: false, pasteFormatting: false, favorites: [], recentPens: [], recentColors: [], theme: 'light', ...(this.info.settings || {}) };
     this.applyTheme();
     setLang(this.settings.lang || 'en');
     window.api.onCloudStatus((st) => this.onCloudStatus(st));
@@ -20,6 +20,8 @@ class App {
     window.api.onLibraryChanged(() => { if (!this.active) this.library.load(); });
     this.toolState = { ...defaultToolState(), ...(this.settings.toolState || {}) };
     for (const k of ['pen', 'hl', 'eraser', 'shape', 'text', 'laser']) this.toolState[k] = { ...defaultToolState()[k], ...(this.toolState[k] || {}) };
+    // 1.7: the highlighter is a free marker now (straight lines with Shift); settings saved by older versions asked for straight bars
+    if (!this.toolState.hl.free) this.toolState.hl = { ...this.toolState.hl, straight: false, snap: false, free: true };
     if (this.toolState.tool === 'hand') this.toolState.tool = 'pen';
     this.saveSettings = debounce(() => window.api.setSettings({ ...this.settings, toolState: this.toolState }), 400);
     this.saveToolState = this.saveSettings;
@@ -307,6 +309,7 @@ class App {
     const pages = await window.api.readPages(rel);
     const pdfs = new Map();
     const textIndexes = {};
+    const ocr = {};
     if (nb.hasPdf) {
       setText('Loading PDF…');
       const pdf = await PdfDoc.open(rel, (nb.sources && nb.sources.main && nb.sources.main.file) || 'source.pdf');
@@ -328,10 +331,14 @@ class App {
         }).catch((e) => console.warn('cover', e));
       }
     }
-    for (const src of Object.keys(nb.sources || {})) textIndexes[src] = await window.api.readText(rel, src).catch(() => null);
+    for (const src of Object.keys(nb.sources || {})) {
+      textIndexes[src] = await window.api.readText(rel, src).catch(() => null);
+      const o = await window.api.readOcr(rel, src).catch(() => null);
+      if (o && o.pages) ocr[src] = o;
+    }
     if (!nb.pages.length) nb.pages.push({ id: uid(), kind: 'paper', paper: nb.paperDefault || 'lined', w: 595.28, h: 841.89 });
     window.api.cleanupPages(rel).catch(() => {});
-    return { rel, nb, pdfs, pages, textIndexes };
+    return { rel, nb, pdfs, pages, textIndexes, ocr };
   }
 
   // Page list + cover for a freshly imported PDF without opening it.
@@ -444,6 +451,7 @@ class App {
             class: `chip${(s.theme || 'light') === v ? ' active' : ''}`,
             onclick: (e) => { this.setTheme(v); e.currentTarget.parentElement.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === e.currentTarget)); },
           }, label)))),
+        check('Round PDF letters', 'pdfShapes', 'Draws the letters of PDFs as smooth shapes (like other PDF readers) instead of through Windows text rendering, which makes small print angular. Applies to notebooks opened afterwards'),
         check('Mouse can draw', 'mouseDraws', 'Turn off to scroll with the mouse and draw only with the pen'),
         check('Scribble to erase', 'scribbleErase', 'Scribble back and forth over handwriting with the pen to erase it (like GoodNotes)'),
         check('Scribbling also erases text', 'scribbleText', 'Scribbling over a text box deletes it too (off: scribbling erases only handwriting)'),
@@ -735,7 +743,7 @@ class App {
 
   showShortcuts() {
     const rows = [
-      ['V', 'Select & move'], ['P / H / E', 'Pen / Highlighter / Eraser'], ['L / S / T', 'Lasso / Shapes / Text'], ['Space + drag', 'Pan (any tool)'],
+      ['V', 'Select & move'], ['P / H / E', 'Pen / Highlighter / Eraser'], ['L / S / T', 'Lasso / Shapes / Text'], ['Space + drag', 'Pan (any tool)'], ['Shift + wheel', 'Scroll fast'], ['Shift + drag (highlighter)', 'Straight line'],
       ['Middle mouse drag', 'Pan'], ['Ctrl + wheel', 'Zoom'], ['Ctrl + 0', 'Fit width'], ['Ctrl + Z / Ctrl + Y', 'Undo / Redo'],
       ['Ctrl + C / X / D', 'Copy / Cut / Duplicate selection'], ['Ctrl + V', 'Paste pictures, text, tables, files'], ['Ctrl + A', 'Select everything on the page'],
       ['Del', 'Delete selection'], ['Ctrl + B / I / U', 'Bold / italic / underline'], ['Ctrl + F', 'Search in notebook'],

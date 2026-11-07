@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld('api', {
   cleanupPages: invoke('lib:cleanupPages'),
   readText: invoke('lib:readText'),
   writeText: invoke('lib:writeText'),
+  readOcr: invoke('lib:readOcr'),
+  writeOcr: invoke('lib:writeOcr'),
   writeCover: invoke('lib:writeCover'),
   removeBackground: invoke('image:removeBackground'),
   rename: invoke('lib:rename'),

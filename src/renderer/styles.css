@@ -332,6 +332,8 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .item.selected { outline: 1px dashed var(--accent); }
 .band-rect { position: absolute; border: 1.2px solid var(--accent); background: rgba(47, 95, 158, .07); border-radius: 2px; }
 .editor[data-tool="select"] .viewer { cursor: default; }
+.editor[data-tool="select"] .viewer.over-text, .editor[data-tool="select"] .viewer.over-text * { cursor: text; }
+.page-hl { mix-blend-mode: multiply; }
 .textbox[contenteditable] { cursor: text; }
 .textbox.fx { filter: blur(var(--fx)); }
 .textbox.fx:focus { filter: none; }

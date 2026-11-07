@@ -158,7 +158,7 @@ function beadOutline(st, factor = 1, live = false) {
     if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-6) continue;
     q.push(b);
   }
-  const flatEnds = st.t === 'hl'; // highlighter: square ends like a chisel tip
+  const flatEnds = st.t === 'hl' && !st.rd; // highlighter: square ends like a chisel tip (st.rd = round tip)
   const polys = [];
   if (q.length === 1) { polys.push(circlePiece(q[0][0], q[0][1], q[0][2])); polys.multi = true; return polys; }
   const n = q.length;
