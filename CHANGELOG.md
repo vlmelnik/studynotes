@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+**PDF**
+- Highlighter: new **Round tip** option (toolbar chip) for a round instead of a flat tip. The highlighter now blends like a real marker (multiply): black text and black ink stay dark on top of the colour. The mouse cursor becomes the text (I-beam) cursor over PDF text with the Select tool.
+- Settings → **Round PDF letters** (on by default): letters are drawn as smooth shapes, like other PDF readers, instead of through Windows text rendering (which fits letters to the pixel grid: uneven spacing and angular curves in small print). Applies to notebooks opened afterwards.
+- Pages sit on whole screen pixels and are shown 1:1 (also with Windows scaling of 125 % / 150 % / 200 %): text no longer turns soft because the browser resamples the page.
+- The page is redrawn at exactly the screen size after every zoom change (before, zooming out left a bigger bitmap that the browser shrank – jagged, grey text).
+- Text selection keeps columns apart: dragging in one column of a two-column page (e.g. a test with two questions side by side) no longer selects the other column. The page's text is also loaded in advance, so the first drag on a page works.
+- Sharp at every zoom: when the whole-page bitmap would be too big for memory (high zoom or a high-density screen), the part you are looking at is rendered again at the real zoom on top of it.
+- **OCR for scanned PDFs** (Portuguese + English, offline): search panel → "Recognize text (OCR)". The recognised text works in search, text selection and the highlighter. Needs `npm install` (tesseract.js + language data are bundled by `npm run build`).
+
+**Notebooks**
+- A notebook keeps its page, scroll position and zoom when you switch to another notebook or the library and come back.
+
+**Scrolling & highlighter**
+- Hold **Shift** while scrolling the wheel to scroll fast.
+- The highlighter is a free marker now (follows your hand). Hold **Shift** for a straight line; "Always straight" and "Snap to text" are options (off by default).
+
 ## 1.6.1
 
 **Ink**

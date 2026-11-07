@@ -241,6 +241,8 @@ handle('lib:cleanupPages', (rel) => {
 });
 handle('lib:readText', (rel, src) => library.readText(rel, src));
 handle('lib:writeText', (rel, data, src) => library.writeText(rel, data, src));
+handle('lib:readOcr', (rel, src) => library.readOcr(rel, src));
+handle('lib:writeOcr', (rel, data, src) => library.writeOcr(rel, data, src));
 handle('lib:writeAsset', (rel, bytes, ext) => library.writeAsset(rel, Buffer.from(bytes), ext));
 const noExternal = (rel) => { if (external.isExternal(rel)) throw new Error('A PDF opened from your computer can\'t take more PDFs. Import it into the library to combine PDFs.'); };
 handle('lib:addSourceDialog', async (rel) => {

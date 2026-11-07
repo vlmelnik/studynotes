@@ -221,6 +221,12 @@ export class Tools {
     const hit = this.viewer.hit(e.clientX, e.clientY);
     if (hit) this.lastPointer = { index: hit.index, x: hit.x, y: hit.y };
     if (hit && !this.cur && (this.tool === 'select' || this.tool === 'hl')) peekLayout(this.editor, hit.page); // ready before the click
+    if (!this.cur && (this.tool === 'select' || this.tool === 'hl')) {
+      // I-beam cursor over selectable PDF text
+      let over = false;
+      if (hit && this.tool === 'select') { const lay = peekLayout(this.editor, hit.page); over = !!(lay && charAt(lay, hit.x, hit.y)); }
+      this.viewer.scroller.classList.toggle('over-text', over);
+    }
     if (this.tool === 'eraser' || (this.cur && this.cur.kind === 'erase') || (e.pointerType === 'pen' && penButton(e))) this.moveEraserCursor(e);
     else if (e.pointerType === 'pen' && this.eraserCursor.isConnected && this.tool !== 'eraser') this.eraserCursor.remove();
     if (e.pointerType === 'pen' && this.penButtonSwitch(e)) return;
@@ -422,15 +428,17 @@ export class Tools {
     const opts = tool === 'hl' ? this.state.hl : this.state.pen;
     const st = { id: uid(), t: tool === 'hl' ? 'hl' : 'pen', c: opts.color, s: opts.size, p: [], pf: 1 };
     if (tool === 'pen' && opts.style && opts.style !== 'ball') st.ps = opts.style;
+    if (tool === 'hl' && opts.round) st.rd = 1;
     const live = view.makeRegionCanvas('live-canvas');
+    if (tool === 'hl') live.canvas.style.mixBlendMode = 'multiply';
     this.cur = {
       kind: 'stroke', pointerId: e.pointerId, view, index: hit.index, pageId: hit.page.id, st, live,
       rect: this.viewer.pageClientRect(hit.index), isPen: e.pointerType === 'pen',
-      straight: tool === 'hl' && this.state.hl.straight, holdAnchor: [e.clientX, e.clientY], snapped: false,
+      straight: tool === 'hl' && (this.state.hl.straight || e.shiftKey), holdAnchor: [e.clientX, e.clientY], snapped: false,
       pressures: new Set(),
       // pen jitter filter (a mouse doesn't shake; "Smooth my handwriting" filters it too)
-      filter: (tool === 'hl' && this.state.hl.straight) || (e.pointerType !== 'pen' && !this.editor.settings.smoothInk)
-        ? null : new PenFilter(this.editor.settings.smoothInk ? 1 : 0.5),
+      filter: (tool === 'hl' && (this.state.hl.straight || e.shiftKey)) || (tool !== 'hl' && e.pointerType !== 'pen' && !this.editor.settings.smoothInk)
+        ? null : new PenFilter(tool === 'hl' || this.editor.settings.smoothInk ? 1 : 0.5),
     };
     this.capture(e);
     this.addPoint(e);
@@ -525,7 +533,7 @@ export class Tools {
     this.pressureRule(c);
     if (st.p.length === 3) st.p.push(st.p[0] + 0.01, st.p[1] + (st.t === 'hl' ? 0 : 0.01), st.p[2]); // a dot
     // Highlighter over printed PDF text: snap to the text lines (like GoodNotes)
-    if (st.t === 'hl' && this.state.hl.snap !== false) {
+    if (st.t === 'hl' && this.state.hl.snap) {
       const page = this.viewer.pages[c.index];
       const layout = peekLayout(this.editor, page);
       const n = st.p.length;

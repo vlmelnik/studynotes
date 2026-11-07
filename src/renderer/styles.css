@@ -327,6 +327,8 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .item.selected { outline: 1px dashed var(--accent); }
 .band-rect { position: absolute; border: 1.2px solid var(--accent); background: rgba(47, 95, 158, .07); border-radius: 2px; }
 .editor[data-tool="select"] .viewer { cursor: default; }
+.editor[data-tool="select"] .viewer.over-text, .editor[data-tool="select"] .viewer.over-text * { cursor: text; }
+.page-hl { mix-blend-mode: multiply; }
 .textbox[contenteditable] { cursor: text; }
 .editor[data-tool="select"] .textbox[contenteditable] { box-shadow: 0 0 0 1px var(--accent); background: rgba(255, 255, 255, .7); }
 .editor[data-tool="select"] .textbox-wrap:has(.textbox[contenteditable]) { pointer-events: auto; }

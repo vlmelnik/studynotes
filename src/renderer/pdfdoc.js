@@ -59,6 +59,9 @@ export class PdfDoc {
       wasmUrl: 'sn://app/wasm/',
       iccUrl: 'sn://app/iccs/',
       isEvalSupported: false,
+      // Letters drawn as vector shapes (like other PDF readers) instead of through the system's
+      // text engine, which fits every letter to the pixel grid: uneven spacing and angular curves in small print.
+      disableFontFace: !(window.__app && window.__app.settings && window.__app.settings.pdfShapes === false),
       enableXfa: false,
     });
     if (onProgress) task.onProgress = onProgress;
@@ -117,15 +120,21 @@ export class PdfDoc {
    * Render page n at `scale` into a new canvas. Lower priority runs first.
    * Returns { promise, cancel }.
    */
-  render(n, scale, priority = 0, rotate = 0) {
+  // `region` [x0, y0, x1, y1] (page units, as the user sees the page) renders
+  // only that part, at the full scale: the way to stay sharp at a zoom where
+  // the whole page would not fit into memory.
+  render(n, scale, priority = 0, rotate = 0, region = null) {
     const { promise, task } = enqueue(priority, async () => {
       if (this.destroyed) throw new CancelError();
       const page = await this.getPage(n);
       if (task.cancelled) throw new CancelError();
-      const vp = page.getViewport({ scale, rotation: (page.rotate + rotate) % 360 });
+      const rotation = (page.rotate + rotate) % 360;
+      const vp = region
+        ? page.getViewport({ scale, rotation, offsetX: -region[0] * scale, offsetY: -region[1] * scale })
+        : page.getViewport({ scale, rotation });
       const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.floor(vp.width));
-      canvas.height = Math.max(1, Math.floor(vp.height));
+      canvas.width = Math.max(1, region ? Math.round((region[2] - region[0]) * scale) : Math.round(vp.width));
+      canvas.height = Math.max(1, region ? Math.round((region[3] - region[1]) * scale) : Math.round(vp.height));
       const ctx = canvas.getContext('2d', { alpha: false });
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);

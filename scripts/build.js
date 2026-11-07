@@ -32,4 +32,34 @@ for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
   const src = path.join(pdfjs, dir);
   if (fs.existsSync(src)) fs.cpSync(src, path.join(dist, dir), { recursive: true });
 }
+// OCR (scanned PDFs): engine, WebAssembly core and Portuguese / English data,
+// all inside the app so it works offline.
+{
+  const ocr = path.join(dist, 'ocr');
+  fs.mkdirSync(path.join(ocr, 'core'), { recursive: true });
+  fs.mkdirSync(path.join(ocr, 'lang'), { recursive: true });
+  const nm = path.join(root, 'node_modules');
+  const worker = path.join(nm, 'tesseract.js', 'dist', 'worker.min.js');
+  const coreDir = path.join(nm, 'tesseract.js-core');
+  if (fs.existsSync(worker) && fs.existsSync(coreDir)) {
+    fs.copyFileSync(worker, path.join(ocr, 'worker.min.js'));
+    for (const f of fs.readdirSync(coreDir)) if (/^tesseract-core.*\.(js|wasm)$/.test(f)) fs.copyFileSync(path.join(coreDir, f), path.join(ocr, 'core', f));
+    // <lang>.traineddata.gz lives in a version folder inside @tesseract.js-data/<lang>
+    const find = (dir, name) => {
+      if (!fs.existsSync(dir)) return null;
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) { const r = find(full, name); if (r) return r; } else if (e.name === name) return full;
+      }
+      return null;
+    };
+    for (const lang of ['por', 'eng']) {
+      const f = find(path.join(nm, '@tesseract.js-data', lang), `${lang}.traineddata.gz`);
+      if (f) fs.copyFileSync(f, path.join(ocr, 'lang', `${lang}.traineddata.gz`));
+      else console.warn(`OCR: no ${lang}.traineddata.gz found (npm install @tesseract.js-data/${lang})`);
+    }
+  } else {
+    console.warn('OCR: tesseract.js is not installed (npm install) - text recognition will not work');
+  }
+}
 console.log('built dist/');

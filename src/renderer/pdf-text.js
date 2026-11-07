@@ -2,6 +2,7 @@
 // select tool, and let the highlighter snap to text lines (like GoodNotes).
 import { h, showMenu, toast } from './ui.js';
 import { Util } from './pdfdoc.js';
+import { layoutFromOcr } from './ocr.js';
 
 const layouts = new WeakMap(); // page object → Promise<layout>
 const ready = new WeakMap(); // page object → layout (once loaded)
@@ -14,6 +15,11 @@ export function peekLayout(editor, page) {
   return null;
 }
 let measureCtx = null;
+
+/** Forget the text of a page (after OCR gave it one). */
+export function forgetLayouts(pages) {
+  for (const p of pages) { layouts.delete(p); ready.delete(p); }
+}
 
 /**
  * Characters of a PDF page with their boxes (page units), in reading order.
@@ -33,6 +39,12 @@ async function build(editor, page) {
   const pdf = editor.doc.pdfs.get(page.src || 'main');
   if (!pdf) return null;
   const [tc, vp] = await Promise.all([pdf.textContent(page.pdfPage), pdf.viewport(page.pdfPage, 1, page.rot || 0)]);
+  // a scan: the words found by OCR (only for pages that are not turned)
+  if (!tc.items.some((it) => it.str && it.str.trim()) && !page.rot) {
+    const o = editor.doc.ocr && editor.doc.ocr[page.src || 'main'];
+    const l = layoutFromOcr(o && o.pages && o.pages[page.pdfPage]);
+    if (l) return l;
+  }
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
   const runs = [];
   for (const it of tc.items) {
@@ -56,14 +68,19 @@ async function build(editor, page) {
     });
     runs.push({ base: tx[5], y0: tx[5] - fh * 0.88, y1: tx[5] + fh * 0.22, chars, eol: !!it.hasEOL });
   }
-  // runs → lines (same baseline), top to bottom, left to right
+  // Columns: a vertical strip that (almost) no line crosses, with text on both
+  // sides. Text of different columns never joins into one line, and is read
+  // one column after the other.
+  const cuts = columnCuts(runs);
+  const colOf = (r) => { const m = (r.chars[0].x0 + r.chars[r.chars.length - 1].x1) / 2; let c = 0; while (c < cuts.length && m > cuts[c]) c++; return c; };
   runs.sort((a, b) => a.base - b.base || a.chars[0].x0 - b.chars[0].x0);
   const lines = [];
   for (const r of runs) {
+    const col = colOf(r);
     const tol = (r.y1 - r.y0) * 0.45, gap = (r.y1 - r.y0) * 2.5;
-    // same baseline and close by (a wide gap = another column)
-    let line = lines.find((l) => Math.abs(l.base - r.base) < tol && r.chars[0].x0 - l.chars[l.chars.length - 1].x1 < gap && r.chars[0].x0 > l.chars[0].x0 - gap);
-    if (!line) { line = { base: r.base, y0: r.y0, y1: r.y1, chars: [] }; lines.push(line); }
+    // same column, same baseline and close by
+    let line = lines.find((l) => l.col === col && Math.abs(l.base - r.base) < tol && r.chars[0].x0 - l.chars[l.chars.length - 1].x1 < gap && r.chars[0].x0 > l.chars[0].x0 - gap);
+    if (!line) { line = { col, base: r.base, y0: r.y0, y1: r.y1, chars: [] }; lines.push(line); }
     line.y0 = Math.min(line.y0, r.y0); line.y1 = Math.max(line.y1, r.y1);
     // a space between runs that don't touch
     const last = line.chars[line.chars.length - 1];
@@ -71,12 +88,39 @@ async function build(editor, page) {
     line.chars.push(...r.chars);
   }
   for (const l of lines) l.chars.sort((a, b) => a.x0 - b.x0);
-  // reading order: columns left to right, inside a column top to bottom
-  const colOf = (l) => Math.round(l.chars[0].x0 / 40);
-  const cols = [...new Set(lines.map(colOf))];
-  const twoCols = cols.length > 1 && lines.filter((l) => colOf(l) !== colOf(lines[0])).length > lines.length * 0.25;
-  lines.sort((a, b) => (twoCols ? a.chars[0].x0 > (b.chars[b.chars.length - 1].x1) ? 1 : b.chars[0].x0 > a.chars[a.chars.length - 1].x1 ? -1 : 0 : 0) || a.base - b.base);
+  // reading order: column by column, top to bottom inside a column
+  lines.sort((a, b) => a.col - b.col || a.base - b.base);
   return { lines };
+}
+
+/**
+ * x positions that separate the columns of a page: gaps of at least ~6 units
+ * that at most a few lines cross, with a good share of the text on each side.
+ */
+function columnCuts(runs) {
+  if (runs.length < 12) return [];
+  let min = Infinity, max = -Infinity;
+  for (const r of runs) { min = Math.min(min, r.chars[0].x0); max = Math.max(max, r.chars[r.chars.length - 1].x1); }
+  const W = Math.ceil(max - min);
+  if (W < 200) return [];
+  const cross = new Int32Array(W + 2);
+  for (const r of runs) {
+    const a = Math.max(0, Math.floor(r.chars[0].x0 - min)), b = Math.min(W, Math.ceil(r.chars[r.chars.length - 1].x1 - min));
+    for (let x = a; x <= b; x++) cross[x]++;
+  }
+  const limit = Math.max(2, Math.round(runs.length * 0.04));
+  const cuts = [];
+  for (let x = Math.round(W * 0.12); x < W * 0.88;) {
+    if (cross[x] > limit) { x++; continue; }
+    let e = x;
+    while (e < W * 0.88 && cross[e + 1] <= limit) e++;
+    const mid = min + (x + e) / 2;
+    let left = 0, right = 0;
+    for (const r of runs) { const m = (r.chars[0].x0 + r.chars[r.chars.length - 1].x1) / 2; if (m < mid) left++; else right++; }
+    if (e - x >= 6 && left >= runs.length * 0.15 && right >= runs.length * 0.15) cuts.push(mid);
+    x = e + 1;
+  }
+  return cuts;
 }
 
 /** Position {line, ch} of the character under (x, y), or null. */
