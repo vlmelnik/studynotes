@@ -1,6 +1,7 @@
 # Publishes an installer that was built elsewhere: push a branch
 # "upload/<version>" containing upload/RELEASE (the version, e.g. v1.5.0) and
 # the files split into parts < 100 MB (upload/<file>.part-aa, -ab, …).
+# upload/REPLACE: an existing release with that tag is deleted first (re-publish).
 # The parts are joined, published as a GitHub Release, and the upload branch
 # is deleted again afterwards.
 name: Publish prebuilt release
@@ -31,6 +32,11 @@ jobs:
           if [ -f upload/NAME ]; then echo "NAME=$(head -n1 upload/NAME)" >> "$GITHUB_ENV"; else echo "NAME=StudyNotes $(tr -d ' \r\n' < upload/RELEASE)" >> "$GITHUB_ENV"; fi
           if [ -f upload/NOTES.md ]; then echo "BODY=upload/NOTES.md" >> "$GITHUB_ENV"; else echo "BODY=docs/release-notes.md" >> "$GITHUB_ENV"; fi
           if [ -f upload/NOT_LATEST ]; then echo "LATEST=false" >> "$GITHUB_ENV"; else echo "LATEST=true" >> "$GITHUB_ENV"; fi
+      - name: Replace an existing release (upload/REPLACE)
+        if: hashFiles('upload/REPLACE') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "$TAG" --cleanup-tag -y || true
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
