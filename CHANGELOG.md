@@ -3,9 +3,9 @@
 ## 1.7.0
 
 **Scans and PDFs: make printed text editable**
-- Lasso a part of a scan, photo or PDF page and choose "Make text editable", or use the new page button in the toolbar (also in the page menu) for the whole page.
-- Text is recognised offline (Tesseract, English / German / Russian); the language data (7 MB) is downloaded once from the StudyNotes GitHub release (Settings → Add-ons, checked with SHA-256).
-- The font is matched by drawing candidates (Calibri / Arial / Times / Courier styles, regular, bold, italic) and comparing them with the scan; size and colour are taken from the scan.
+- Lasso tool → option "Text area": draw a rectangle around printed text on a scan, photo or PDF page; or use the new page button in the toolbar (also in the page menu) for the whole page. The normal lasso stays as it was.
+- Text is recognised offline (Tesseract, German first so umlauts are right, English, Russian; very large or small text is rescaled for a second pass); the language data (7 MB) is downloaded once from the StudyNotes GitHub release (Settings → Add-ons, checked with SHA-256).
+- One typeface for the whole text, matched by drawing candidates (Calibri / Arial / Times / Courier styles) and comparing them with the scan; bold only where strokes are clearly thicker; size and colour from the scan.
 - The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
 
 **Handwriting → text**
@@ -13,7 +13,7 @@
 - Settings → "Export handwriting as text": the exported PDF contains the recognised handwriting as invisible, searchable and copyable text.
 
 **Eyedropper**
-- New tool (key I): click anywhere on the page to take that colour for the pen, highlighter, shapes or text, then you are back in your tool. Hold Alt and click to pick without switching tools. On ink it takes the ink's exact colour.
+- Eyedropper button next to the colours (tool options, selection bar, "More colours"): click anywhere on the page to take that colour. Shortcut: I, then click; or hold Alt and click. On ink it takes the ink's exact colour. No separate tool.
 
 **Fixes**
 - Library → notebook (and switching tabs) keeps the page and zoom instead of jumping to the cover.

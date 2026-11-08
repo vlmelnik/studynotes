@@ -155,9 +155,11 @@ export class Tools {
     }
     // Eyedropper (tool, or Alt + click with a drawing tool)
     const pickTools = ['pen', 'hl', 'text', 'select', 'lasso']; // (shapes: Alt = free angles)
-    if (e.button === 0 && (this.tool === 'picker' || (e.altKey && pickTools.includes(this.tool)))) {
+    const picking = this.editor.picking;
+    if (e.button === 0 && (picking || (e.altKey && pickTools.includes(this.tool)))) {
       e.preventDefault();
-      this.editor.pickColorAt(e.clientX, e.clientY, this.tool === 'picker' ? this.editor.pickerFor : this.tool);
+      this.editor.stopPicking();
+      this.editor.pickColorAt(e.clientX, e.clientY, picking ? picking.forTool : this.tool, picking ? picking.apply : null);
       return;
     }
     const target = e.target;
@@ -733,13 +735,22 @@ export class Tools {
     this.cur = {
       kind: 'lasso', pointerId: e.pointerId, view, index: hit.index, pageId: hit.page.id,
       rect: this.viewer.pageClientRect(hit.index), pts: [[hit.x, hit.y]], svg, poly,
+      // lasso option "Text area": a rectangle around printed text to make it editable
+      textArea: (this.state.lasso && this.state.lasso.mode) === 'text',
     };
+    if (this.cur.textArea) svg.classList.add('text-area');
     this.capture(e);
   }
 
   lassoTo(e) {
     const c = this.cur;
     const p = this.pagePoint(c, e);
+    if (c.textArea) {
+      const [x0, y0] = c.pts[0];
+      c.end = p;
+      c.poly.setAttribute('points', [[x0, y0], [p[0], y0], p, [x0, p[1]]].map((q) => q.join(',')).join(' '));
+      return;
+    }
     const last = c.pts[c.pts.length - 1];
     if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 1.5 / this.viewer.zoom) return;
     c.pts.push(p);
@@ -748,25 +759,21 @@ export class Tools {
 
   endLasso(c) {
     c.svg.remove();
+    if (c.textArea) {
+      if (!c.end) return;
+      const [x0, y0] = c.pts[0], [x1, y1] = c.end;
+      if (Math.abs(x1 - x0) < 4 || Math.abs(y1 - y0) < 4) return;
+      const r = [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)];
+      this.editor.makePageEditable(c.index, { poly: [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]] });
+      return;
+    }
     if (c.pts.length < 3) return;
     const data = this.editor.pageData(c.pageId);
     const centerIn = (b) => pointInPolygon((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, c.pts);
     const strokeIds = new Set(data.strokes.filter((st) => strokeInLasso(st, c.pts)).map((st) => st.id));
     const textIds = new Set(data.texts.filter((t) => centerIn(textBBox(t))).map((t) => t.id));
     const itemIds = new Set(data.items.filter((it) => centerIn(itemBBox(it))).map((it) => it.id));
-    const page = this.viewer.pages[c.index];
-    // nothing caught on a PDF page: offer to make its printed text editable
-    // (pictures are selected as before – their toolbar has the same button)
-    if (!strokeIds.size && !textIds.size && !itemIds.size && page.kind === 'pdf') {
-      const last = c.pts[c.pts.length - 1], z = this.viewer.zoom;
-      const lasso = c.pts.slice();
-      showMenu([{ label: 'Make text editable', icon: 'scanText', onClick: () => this.editor.makePageEditable(c.index, { poly: lasso }) }],
-        c.rect.left + last[0] * z + 6, c.rect.top + last[1] * z + 6);
-      return;
-    }
     this.select(c.index, c.pageId, strokeIds, textIds, itemIds);
-    // "Make text editable" on lassoed pictures uses the lasso, not the whole picture
-    if (this.sel) this.sel.lassoPoly = c.pts.slice();
   }
 
   // ---------- selection ----------
@@ -846,7 +853,8 @@ export class Tools {
           class: 'swatch sm', title: 'Colour', style: { background: c }, onclick: (e) => { e.stopPropagation(); this.restyle({ color: c }); },
         })),
         h('label', { class: 'swatch sm custom', title: 'Other colour' },
-          h('input', { type: 'color', onchange: (e) => this.restyle({ color: e.target.value }) })));
+          h('input', { type: 'color', onchange: (e) => this.restyle({ color: e.target.value }) })),
+        btn('eyedropper', 'Take a colour from the page (I)', () => this.editor.startPicking({ forTool: 'select' })));
     }
     if (strokes.length && !texts.length && !items.length) {
       parts.push(h('span', { class: 'sep' }), btn('minus', 'Thinner', () => this.restyle({ width: 0.8 })), btn('plus', 'Thicker', () => this.restyle({ width: 1.25 })));
@@ -856,13 +864,6 @@ export class Tools {
       parts.push(h('span', { class: 'sep' }),
         tbtn('Copy as text', 'Recognise the handwriting and copy it as text', () => this.editor.handwritingToText('copy')),
         tbtn('To text', 'Replace the handwriting by a text box', () => this.editor.handwritingToText('convert')));
-    }
-    const scans = items.filter((it) => it.type === 'img');
-    if (scans.length && !strokes.length && !texts.length) {
-      parts.push(h('span', { class: 'sep' }), tbtn('Make text editable', 'Recognise the printed text of this picture and make it editable', () => {
-        const b = this.sel.bbox, idx = this.sel.index;
-        this.editor.makePageEditable(idx, { poly: this.sel.lassoPoly || [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]] });
-      }));
     }
     const closed = strokes.filter((st) => isClosedShape(st));
     if (closed.length) {

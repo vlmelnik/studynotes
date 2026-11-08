@@ -120,9 +120,9 @@
     "semantic_hash": "22098463b541e72141727ea6a7ba97c2"
   },
   "src/renderer/editor.js": {
-    "mtime": 1794146075.645276,
-    "seen": 1794146516.9407568,
-    "ast_hash": "caf4e48567d7536b0f0caf06125cf4d0",
+    "mtime": 1794148432.160052,
+    "seen": 1794148739.229853,
+    "ast_hash": "2bb3e67a1f80333264e1a7c20a21e657",
     "semantic_hash": ""
   },
   "src/renderer/icons.js": {
@@ -168,15 +168,15 @@
     "semantic_hash": ""
   },
   "src/renderer/textbar.js": {
-    "mtime": 1793460049.8019683,
-    "seen": 1793461649.114202,
-    "ast_hash": "a3cfa80d78deb215f5811edfa44fec9f",
+    "mtime": 1794148410.9301138,
+    "seen": 1794148739.2298746,
+    "ast_hash": "0ba5ef56699f624c8d8c61c2f6f2beb6",
     "semantic_hash": ""
   },
   "src/renderer/tools.js": {
-    "mtime": 1794146268.6510432,
-    "seen": 1794146516.9407728,
-    "ast_hash": "450b96e5eb3da754795ca92d52c2fc08",
+    "mtime": 1794148432.159194,
+    "seen": 1794148739.2298763,
+    "ast_hash": "81e6338a4d0b61dfc652b0ed94437fa3",
     "semantic_hash": ""
   },
   "src/renderer/ui.js": {
@@ -192,9 +192,9 @@
     "semantic_hash": ""
   },
   "src/renderer/whats-new.js": {
-    "mtime": 1794145570.2366455,
-    "seen": 1794146516.940777,
-    "ast_hash": "f18e528f50540c61f6af81cdf93ad2c5",
+    "mtime": 1794148533.1061525,
+    "seen": 1794148739.229881,
+    "ast_hash": "5f948254bc4d4e8dc9e9f27a1e3317ff",
     "semantic_hash": ""
   },
   "src/shared/fonts.js": {
@@ -426,9 +426,9 @@
     "semantic_hash": ""
   },
   "src/shared/i18n-ru.js": {
-    "mtime": 1794145570.2373857,
-    "seen": 1794146516.9407825,
-    "ast_hash": "3179c5b06c8c014946756e31d6a5817b",
+    "mtime": 1794148533.1068745,
+    "seen": 1794148739.2298875,
+    "ast_hash": "cb9d22e7e2a9c61bfb371d301f98a061",
     "semantic_hash": ""
   },
   "src/shared/pen-filter.js": {
@@ -450,9 +450,9 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1794145570.2391572,
-    "seen": 1794146516.9408221,
-    "ast_hash": "20c653f94d49bb7268554b8e405807ee",
+    "mtime": 1794148533.1074157,
+    "seen": 1794148739.2299268,
+    "ast_hash": "e0ef7f7843a4dcffb4ad9ef9ebea37ec",
     "semantic_hash": ""
   },
   "docs/USER-GUIDE.md": {
@@ -552,9 +552,9 @@
     "semantic_hash": ""
   },
   "src/renderer/scan-edit.js": {
-    "mtime": 1794146161.3904984,
-    "seen": 1794146516.940769,
-    "ast_hash": "a9ae482ba167516f62352147c5ff8abd",
+    "mtime": 1794148490.722458,
+    "seen": 1794148739.2298708,
+    "ast_hash": "146e1701c2e38062388e153629c583b4",
     "semantic_hash": ""
   },
   "src/shared/scan-clean.js": {
@@ -564,9 +564,9 @@
     "semantic_hash": ""
   },
   "test/e2e/v17.js": {
-    "mtime": 1794146303.9456809,
-    "seen": 1794146516.9408073,
-    "ast_hash": "1a8263a98c8c9fed64587164716afe1c",
+    "mtime": 1794148506.706401,
+    "seen": 1794148739.229913,
+    "ast_hash": "9d3fd45e7aea78a2824c0c812920003e",
     "semantic_hash": ""
   },
   "test/v17.test.js": {

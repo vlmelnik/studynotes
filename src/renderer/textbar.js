@@ -200,7 +200,9 @@ export class TextBar {
     const grid = h('div', { class: 'color-grid' },
       ...colors.map((c) => h('button', { class: 'swatch', style: { background: c }, title: c, onclick: () => { closeMenu(); ed.rememberColor(c); pick(c); } })),
       h('label', { class: 'swatch custom', title: 'Any colour' },
-        h('input', { type: 'color', onchange: (e) => { closeMenu(); ed.rememberColor(e.target.value); pick(e.target.value); } })));
+        h('input', { type: 'color', onchange: (e) => { closeMenu(); ed.rememberColor(e.target.value); pick(e.target.value); } })),
+      h('button', { class: 'swatch pick', title: 'Take a colour from the page (I)', html: icon('eyedropper', 16),
+        onclick: () => { closeMenu(); ed.startPicking({ apply: pick }); } }));
     m.append(grid);
   }
 

@@ -104,10 +104,11 @@ for (const ff of ['carlito', 'sans', 'serif', 'mono']) for (const [b, i] of [[fa
 const cssFont = (c, px) => `${c.i ? 'italic ' : ''}${c.b ? 700 : 400} ${px}px "${FONTS[c.ff].css}"`;
 
 /**
- * The font that looks most like the line: every candidate is drawn at the
- * size that matches the line's width and compared with the real ink.
+ * How well each candidate font matches the line: every candidate is drawn at
+ * the size that gives the line's width and compared with the real ink.
+ * Returns [{ ff, b, i, px, score, left, asc, desc, baseY }] (one per candidate).
  */
-async function matchFont(li, line) {
+async function fontScores(li, line) {
   const text = line.text.trim();
   const w = li.w, h = li.h;
   const cv = document.createElement('canvas');
@@ -115,7 +116,7 @@ async function matchFont(li, line) {
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   const inkW = line.bbox.x1 - line.bbox.x0;
   const baseY = ((line.baseline.y0 + line.baseline.y1) / 2) - li.box.y0;
-  let best = null;
+  const out = [];
   for (const c of CANDIDATES) {
     await document.fonts.load(cssFont(c, 40), text).catch(() => {});
     ctx.font = cssFont(c, 100);
@@ -135,10 +136,78 @@ async function matchFont(li, line) {
       const p = a[k * 4 + 3] > 110 ? 1 : 0, q = li.ink[k];
       nA += p; nB += q; if (p && q) both++;
     }
-    const score = nA + nB ? (2 * both) / (nA + nB) : 0;
-    if (!best || score > best.score) best = { ...c, px, score, left: mm.actualBoundingBoxLeft, asc: mm.fontBoundingBoxAscent, desc: mm.fontBoundingBoxDescent, baseY: baseY + li.box.y0 };
+    out.push({ ...c, px, score: nA + nB ? (2 * both) / (nA + nB) : 0, left: mm.actualBoundingBoxLeft, asc: mm.fontBoundingBoxAscent, desc: mm.fontBoundingBoxDescent, baseY: baseY + li.box.y0 });
   }
-  return best;
+  return out;
+}
+
+/** Typical thickness of the strokes in pixels (median horizontal ink run). */
+function strokeWeight(li) {
+  const runs = [];
+  for (let y = 0; y < li.h; y++) {
+    let run = 0;
+    for (let x = 0; x <= li.w; x++) {
+      const v = x < li.w ? li.ink[y * li.w + x] : 0;
+      if (v) run++; else if (run) { runs.push(run); run = 0; }
+    }
+  }
+  if (!runs.length) return 0;
+  runs.sort((a, b) => a - b);
+  return runs[runs.length >> 1];
+}
+
+/**
+ * One font for the whole text (documents use one typeface; a line may only
+ * differ when it clearly fits another one better), bold / italic per line.
+ * Bold only when the strokes are clearly thicker than in the other lines.
+ */
+function chooseFonts(all, weights) {
+  const fams = ['carlito', 'sans', 'serif', 'mono'];
+  const bestOf = (sc, ff, pred = () => true) => sc.filter((c) => c.ff === ff && pred(c)).sort((x, y) => y.score - x.score)[0];
+  const total = (ff) => all.reduce((sum, sc) => sum + ((bestOf(sc, ff) || { score: 0 }).score), 0);
+  const main = fams.slice().sort((x, y) => total(y) - total(x))[0];
+  // stroke thickness relative to the letter size (bold ≈ 1.5× regular)
+  const rel = all.map((sc, k) => { const r = bestOf(sc, main, (c) => !c.b && !c.i); return r && r.px ? weights[k] / r.px : 0; });
+  const sorted = rel.filter((v) => v > 0).sort((x, y) => x - y);
+  const medW = sorted.length ? sorted[sorted.length >> 1] : 0;
+  return all.map((sc, k) => {
+    let ff = main;
+    const own = sc.slice().sort((x, y) => y.score - x.score)[0];
+    const inMain = bestOf(sc, main);
+    if (own && inMain && own.ff !== main && own.score - inMain.score > 0.12) ff = own.ff;
+    // bold: from the stroke thickness when there are lines to compare with
+    const bold = all.length >= 3 && medW ? rel[k] > medW * 1.3
+      : (() => { const r = bestOf(sc, ff, (c) => !c.b && !c.i), b = bestOf(sc, ff, (c) => c.b); return !!(r && b && b.score - r.score > 0.04); })();
+    const r = bestOf(sc, ff, (c) => c.b === bold && !c.i), it = bestOf(sc, ff, (c) => c.i && !bold);
+    return it && r && it.score - r.score > 0.05 ? it : (r || bestOf(sc, ff) || own);
+  });
+}
+
+// ---------- recognition ----------
+const LANGS = ['deu', 'eng', 'rus']; // German first: umlauts (ü, ä, ß) are read right, English and Russian too
+
+/**
+ * Tesseract reads best when letters are about 25–40 px high. Very large text
+ * (screenshots, zoomed scans) loses umlaut dots; very small text loses
+ * detail. After a first pass the picture is rescaled for a second one.
+ */
+async function recognizeSized(canvas, blob) {
+  let lines = await window.api.ocrRecognize(new Uint8Array(await blob.arrayBuffer()), LANGS);
+  const hs = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((a, b) => a - b);
+  const med = hs.length ? hs[hs.length >> 1] : 0;
+  if (!med || (med >= 22 && med <= 48)) return lines;
+  const f = Math.max(0.2, Math.min(3, 34 / med));
+  const c2 = document.createElement('canvas');
+  c2.width = Math.max(1, Math.round(canvas.width * f)); c2.height = Math.max(1, Math.round(canvas.height * f));
+  const g = c2.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(canvas, 0, 0, c2.width, c2.height);
+  const b2 = await new Promise((res) => c2.toBlob(res, 'image/png'));
+  c2.width = c2.height = 0;
+  const again = await window.api.ocrRecognize(new Uint8Array(await b2.arrayBuffer()), LANGS);
+  const sc = (b) => ({ x0: b.x0 / f, y0: b.y0 / f, x1: b.x1 / f, y1: b.y1 / f });
+  lines = again.map((l) => ({ ...l, bbox: sc(l.bbox), baseline: sc(l.baseline), words: l.words.map((w) => ({ ...w, bbox: sc(w.bbox) })) }));
+  return lines;
 }
 
 // ---------- main ----------
@@ -162,7 +231,7 @@ export async function makeTextEditable(editor, index, area = null) {
   try {
     const { canvas, ctx } = await rasterize(editor, index, r, S);
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-    let lines = await window.api.ocrRecognize(new Uint8Array(await blob.arrayBuffer()), ['eng', 'deu', 'rus']);
+    let lines = await recognizeSized(canvas, blob);
     if (editor.destroyed) { busy.remove(); return; }
     const toPage = (x, y) => [r.x0 + x / S, r.y0 + y / S];
     lines = lines.filter((l) => l.conf >= 45 && l.text.trim().length && l.bbox.y1 - l.bbox.y0 >= 6);
@@ -171,15 +240,17 @@ export async function makeTextEditable(editor, index, area = null) {
 
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
     // font first (it needs the original ink), then clean the paper
-    const fonts = [];
+    const scores = [], weights = [];
     for (const l of lines) {
       const hgt = l.bbox.y1 - l.bbox.y0, pad = Math.max(2, Math.round(hgt * 0.15));
       const li = lineInk(img, { x0: l.bbox.x0 - pad, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + pad, y1: l.bbox.y1 + pad });
-      fonts.push(li.w > 0 && li.h > 0 ? await matchFont(li, l) : null);
+      scores.push(li.w > 0 && li.h > 0 ? await fontScores(li, l) : []);
+      weights.push(li.w > 0 && li.h > 0 ? strokeWeight(li) : 0);
     }
     // lines no font could be measured for are left as they are
-    lines = lines.filter((_, k) => fonts[k]);
-    for (let k = fonts.length - 1; k >= 0; k--) if (!fonts[k]) fonts.splice(k, 1);
+    const keep = scores.map((sc) => sc.length > 0);
+    lines = lines.filter((_, k) => keep[k]);
+    const fonts = chooseFonts(scores.filter((_, k) => keep[k]), weights.filter((_, k) => keep[k]));
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
     const looks = cleanLines(img, lines);
     ctx.putImageData(img, 0, 0);

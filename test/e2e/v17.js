@@ -45,7 +45,7 @@ async function launch() {
 
 
 (async () => {
-  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G').split(',');
+  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H').split(',');
   let { app, win, ed } = await launch();
   const rel = await ed(async () => { const r = await window.api.createNotebook('', { title: 'v17', paper: 'blank', pageCount: 4 }); await window.__app.openNotebook(r); return r; });
   await win.waitForTimeout(600);
@@ -135,7 +135,7 @@ async function launch() {
     await ed(() => { window.__app.toolState.pen.color = '#000000'; window.__app.active.setTool('pen'); });
     await win.mouse.move(5, 5);
     await win.keyboard.press('i');
-    const tool1 = await ed(() => window.__app.toolState.tool);
+    const tool1 = await ed(() => (window.__app.active.picking ? 'picking' : window.__app.toolState.tool));
     let [x, y] = await at(200, 150);
     await win.mouse.click(x, y);
     await win.waitForTimeout(400);
@@ -149,6 +149,14 @@ async function launch() {
     await win.keyboard.up('Alt');
     await win.waitForTimeout(400);
     const b = await ed(() => ({ c: window.__app.toolState.hl.color, tool: window.__app.toolState.tool, n: window.__app.active.pageData(window.__app.active.pages[0].id).strokes.length }));
+    // the eyedropper button next to the colours (tool options)
+    await ed(() => { window.__app.toolState.pen.color = '#000000'; window.__app.active.setTool('pen'); });
+    await win.locator('.opt-swatch.pick').first().click();
+    [x, y] = await at(200, 150);
+    await win.mouse.click(x, y);
+    await win.waitForTimeout(400);
+    const viaBtn = await ed(() => window.__app.toolState.pen.color);
+    check('C: eyedropper button in the colour options', viaBtn === '#d62828', viaBtn);
     // empty paper: the pixel on screen
     await ed(() => window.__app.active.setTool('pen'));
     await win.keyboard.press('i');
@@ -158,7 +166,7 @@ async function launch() {
     const paper = await ed(() => window.__app.toolState.pen.color);
     check('C: eyedropper on empty paper takes the screen colour', /^#[0-9a-f]{6}$/.test(paper) && paper !== '#d62828' && parseInt(paper.slice(1, 3), 16) > 200, paper);
     check('C: eyedropper: I + click picks for the pen and goes back to it; Alt + click picks for the highlighter',
-      tool1 === 'picker' && a.c === '#d62828' && a.tool === 'pen' && altCursor && b.c === '#1a4fd6' && b.tool === 'hl' && b.n === 2, JSON.stringify({ tool1, a, altCursor, b }));
+      tool1 === 'picking' && a.c === '#d62828' && a.tool === 'pen' && altCursor && b.c === '#1a4fd6' && b.tool === 'hl' && b.n === 2, JSON.stringify({ tool1, a, altCursor, b }));
   }
 
   // ===================================================================== D. scan → editable text
@@ -261,18 +269,15 @@ async function launch() {
       e.setTool('lasso');
     });
     await win.waitForTimeout(400);
-    // lasso around the second line only (page units: y 120+55 … 120+90)
-    const pts = [[55, 170], [470, 170], [470, 215], [55, 215], [55, 172]];
-    await draw(pts, { steps: 6 });
-    await win.waitForTimeout(300);
-    // the picture is selected (as before); its toolbar offers "Make text editable" for the lassoed part
-    const offered = await win.locator('.chip', { hasText: 'Make text editable' }).count();
-    await win.locator('.chip', { hasText: 'Make text editable' }).first().click();
+    // lasso option "Text area", rectangle around the second line only (page y 120+55 … 120+90)
+    await win.locator('.opt-chip', { hasText: 'Text area' }).click();
+    const offered = await ed(() => window.__app.toolState.lasso.mode === 'text' ? 1 : 0);
+    await draw([[55, 170], [470, 215]], { steps: 6 });
     await win.waitForTimeout(400);
     if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await win.waitForFunction(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.length > 0, null, { timeout: 60000 }).catch(() => {});
     const d = await pageData();
-    check('F: lasso on a scan offers "Make text editable" and converts only the lassoed line', offered > 0 && d.texts.length === 1 && d.texts[0].text === 'Second line becomes text',
+    check('F: lasso option "Text area": rectangle on a scan converts only that line', offered > 0 && d.texts.length === 1 && d.texts[0].text === 'Second line becomes text',
       JSON.stringify({ offered, t: d.texts.map((q) => q.text) }));
   }
 
@@ -288,20 +293,75 @@ async function launch() {
     fs.writeFileSync(pdfFile, await doc.save());
     await ed(async (f) => { const [r] = await window.api.importFiles('', [f]); await window.__app.openNotebook(r); }, pdfFile);
     await win.waitForTimeout(1200);
-    await ed(() => { const e = window.__app.active; e.viewer.fitWidth(); e.viewer.scrollToPage(0); e.setTool('lasso'); });
+    await ed(() => { const e = window.__app.active; e.viewer.fitWidth(); e.viewer.scrollToPage(0); window.__app.toolState.lasso = { mode: 'text' }; e.setTool('lasso'); });
     await win.waitForTimeout(500);
     // around the first line only (PDF y 760 → page y ≈ 842-760-18)
-    await draw([[50, 55], [330, 55], [330, 90], [50, 90], [50, 57]], { steps: 6 });
-    await win.waitForTimeout(300);
-    const offered = await win.locator('.menu .menu-item', { hasText: 'Make text editable' }).count();
-    if (offered) await win.locator('.menu .menu-item', { hasText: 'Make text editable' }).first().click();
+    await draw([[50, 55], [330, 90]], { steps: 6 });
+    const offered = 1;
     await win.waitForTimeout(300);
     if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await win.waitForFunction(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.length > 0, null, { timeout: 60000 }).catch(() => {});
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
-    check('G: PDF page: lasso offers "Make text editable"; that line becomes a serif text box at its place',
+    check('G: PDF page: text-area rectangle → that line becomes a serif text box at its place',
       offered > 0 && d.texts.length === 1 && d.texts[0].text === 'Invoice number 4711' && d.texts[0].ff === 'serif' && Math.abs(d.texts[0].fs - 18) < 1.5 && Math.abs(d.texts[0].x - 60) < 3,
       JSON.stringify({ offered, t: d.texts.map((q) => [q.text, q.ff, q.fs, q.x, q.y]) }));
+  }
+
+  // ===================================================================== H. screenshot-like text: big letters, umlauts, one typeface
+  if (sections.includes('H')) {
+    await ed(async () => {
+      const e = window.__app.active;
+      const S = 5, W = 520, H = 120;
+      const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      await document.fonts.load('700 30px "SN Sans"'); await document.fonts.load('400 30px "SN Sans"');
+      ctx.fillStyle = '#111'; ctx.font = `700 ${16 * S}px "SN Sans"`; ctx.fillText('Grundlagen pn-Übergang', 10 * S, 25 * S);
+      ctx.font = `400 ${11 * S}px "SN Sans"`;
+      ctx.fillText('(a) Zeichen Sie für einen pn-Übergang die Raumladung', 18 * S, 55 * S);
+      ctx.fillText('und den Feldstärkeverlauf bei thermischem Gleichgewicht.', 18 * S, 75 * S);
+      ctx.fillText('Wo lässt sich an den Diagrammen die Spannung ablesen?', 18 * S, 95 * S);
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+      const src = await window.api.writeAsset(e.rel, new Uint8Array(await blob.arrayBuffer()), 'png');
+      const id = e.pages.find((p) => p.kind !== 'pdf') ? e.pages.find((p) => p.kind !== 'pdf').id : e.pages[0].id;
+      e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'shot', type: 'img', x: 30, y: 60, w: W, h: H, src }] });
+      void id;
+    });
+    await win.waitForTimeout(400);
+    await ed(() => { window.__mk = window.__app.active.makePageEditable(0, { poly: [[25, 55], [560, 55], [560, 185], [25, 185]] }); });
+    await win.waitForTimeout(300);
+    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
+    await ed(() => window.__mk);
+    const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
+    const t = d.texts.slice().sort((a, b) => a.y - b.y);
+    const want = ['Grundlagen pn-Übergang', '(a) Zeichen Sie für einen pn-Übergang die Raumladung', 'und den Feldstärkeverlauf bei thermischem Gleichgewicht.', 'Wo lässt sich an den Diagrammen die Spannung ablesen?'];
+    check('H: big screenshot text with umlauts is read exactly', want.every((w, k) => t[k] && t[k].text === w), JSON.stringify(t.map((q) => q.text)));
+    check('H: one typeface for all lines, only the heading bold', t.length === 4 && t.every((q) => q.ff === t[0].ff) && t[0].ff === 'sans' && !!t[0].b && t.slice(1).every((q) => !q.b && !q.i),
+      JSON.stringify(t.map((q) => [q.ff, !!q.b, !!q.i, q.fs])));
+  }
+
+  // ===================================================================== Z. (local only) a real screenshot
+  if (sections.includes('Z') && process.env.SN_IMG) {
+    const bytes = [...fs.readFileSync(process.env.SN_IMG)];
+    await ed(async (b) => {
+      const e = window.__app.active;
+      const src = await window.api.writeAsset(e.rel, new Uint8Array(b), 'png');
+      const bmp = await createImageBitmap(await (await fetch(e.assetUrl(src))).blob());
+      const w = 520, h = w * bmp.height / bmp.width;
+      e.viewer.fitWidth(); e.viewer.scrollToPage(0);
+      e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'real', type: 'img', x: 30, y: 60, w, h, src }] });
+    }, bytes);
+    await win.waitForTimeout(400);
+    await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
+    await win.waitForTimeout(300);
+    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
+    await ed(() => window.__mk);
+    const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
+    console.log(JSON.stringify(d.texts.map((q) => [q.text, q.ff, !!q.b, q.fs, q.c])));
+    await win.waitForTimeout(500);
+    const r = await ed(() => window.__app.active.viewer.pageClientRect(0));
+    const z = await ed(() => window.__app.active.viewer.zoom);
+    await win.screenshot({ path: path.join(out, 'v17-real.png'), clip: { x: r.left + 20 * z, y: r.top + 50 * z, width: 545 * z, height: 120 * z } });
   }
 
   await app.close();

@@ -39,6 +39,7 @@ jobs:
           name: ${{ env.NAME }}
           body_path: ${{ env.BODY }}
           make_latest: ${{ env.LATEST }}
+          overwrite_files: true  # re-publishing a version replaces its files
           files: out/*
       - name: Remove the upload branch
         run: git push origin --delete "${GITHUB_REF_NAME}"

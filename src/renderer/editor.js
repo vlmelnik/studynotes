@@ -510,7 +510,6 @@ export class Editor {
       toolBtn('eraser', 'eraser', 'Eraser (E)'),
       toolBtn('text', 'text', 'Text (T)'),
       toolBtn('shape', 'shapes', 'Shapes (S)'),
-      toolBtn('picker', 'eyedropper', 'Eyedropper: pick a colour from the page (I, or hold Alt and click)'),
       toolBtn('laser', 'laser', 'Laser pointer (K)'),
       toolBtn('hand', 'hand', 'Hand / pan (Space)'),
     ];
@@ -543,12 +542,9 @@ export class Editor {
   }
 
   setTool(tool, initial = false) {
-    // the eyedropper works for the tool used before it (and goes back to it)
-    if (tool === 'picker') {
-      if (this.toolState.tool !== 'picker') this.pickerFor = this.toolState.tool;
-      if (initial) tool = this.pickerFor || 'pen';
-    }
-    if (!initial && tool !== 'lasso' && tool !== 'select' && tool !== 'picker') this.tools.clearSelection();
+    if (tool === 'picker') tool = 'pen'; // (1.7 beta had it as a tool)
+    this.stopPicking();
+    if (!initial && tool !== 'lasso' && tool !== 'select') this.tools.clearSelection();
     if (tool !== 'text') this.finishEditing(true);
     this.toolState.tool = tool;
     for (const b of this.toolButtons) b.classList.toggle('active', b.dataset.tool === tool);
@@ -592,6 +588,9 @@ export class Editor {
       })), h('button', {
         class: 'opt-swatch add', title: 'More colours', html: icon('plus', 16),
         onclick: (e) => this.textBar.colorMenu(e.currentTarget, (c) => { onPick(c); save(); }),
+      }), h('button', {
+        class: 'opt-swatch add pick', title: 'Take a colour from the page (I)', html: icon('eyedropper', 16),
+        onclick: () => this.startPicking({ apply: (c) => { onPick(c); save(); } }),
       }));
     };
 
@@ -656,7 +655,15 @@ export class Editor {
         h('button', { class: `opt-chip${ts.laser.mode === 'dot' ? ' active' : ''}`, onclick: () => { ts.laser.mode = 'dot'; save(); } }, 'Dot'),
         h('button', { class: `opt-chip${ts.laser.mode !== 'dot' ? ' active' : ''}`, onclick: () => { ts.laser.mode = 'trail'; save(); } }, 'Trail'));
         break;
-      default: break; // select, lasso, hand: no options → strip hidden
+      case 'lasso': {
+        const mode = (ts.lasso && ts.lasso.mode) || 'free';
+        const setMode = (m) => { ts.lasso = { ...(ts.lasso || {}), mode: m }; save(); };
+        bar.append(group(
+          h('button', { class: `opt-chip${mode === 'free' ? ' active' : ''}`, title: 'Select handwriting, text boxes and pictures', onclick: () => setMode('free') }, 'Lasso'),
+          h('button', { class: `opt-chip${mode === 'text' ? ' active' : ''}`, title: 'Draw a rectangle around printed text (scan, photo, PDF) to make it editable', onclick: () => setMode('text') }, h('span', { html: icon('scanText', 16) }), ' Text area')));
+        break;
+      }
+      default: break; // select, hand: no options → strip hidden
     }
     bar.classList.toggle('empty', !bar.childElementCount);
   }
@@ -755,8 +762,22 @@ export class Editor {
     this.tools.select(sel.index, sel.pageId, new Set(), new Set([text.id]));
   }
 
+  // Eyedropper: the next click on the page takes a colour. Without `apply`
+  // it goes to the current tool (or the selection); a colour menu passes its
+  // own `apply` (e.g. a shape fill).
+  startPicking({ apply = null, forTool = null } = {}) {
+    this.picking = { apply, forTool: forTool || (this.tools.sel ? 'select' : this.toolState.tool) };
+    this.el.classList.add('picking');
+    toast('Click on the page to take a colour (Esc = cancel)', { timeout: 1600 });
+  }
+
+  stopPicking() {
+    this.picking = null;
+    if (this.el) this.el.classList.remove('picking');
+  }
+
   // Eyedropper: take the colour under the pointer for `forTool`.
-  async pickColorAt(clientX, clientY, forTool) {
+  async pickColorAt(clientX, clientY, forTool, apply = null) {
     // ink under the pointer: its exact colour (see-through pens would mix with
     // the paper on screen); otherwise the colour of the pixel on screen
     let hex = null;
@@ -772,13 +793,13 @@ export class Editor {
     if (!hex || this.destroyed) return;
     const ts = this.toolState;
     const sel = this.tools.sel;
-    if (forTool === 'hl') ts.hl.color = hex;
+    if (apply) apply(hex);
+    else if (forTool === 'hl') ts.hl.color = hex;
     else if ((forTool === 'select' || forTool === 'lasso') && sel) this.tools.restyle({ color: hex });
     else if (forTool === 'text' && this.textEdit) this.applyTextStyle({ color: hex });
     else ts.pen.color = hex; // pen, shapes and text share the colour
     this.rememberColor(hex);
-    if (this.toolState.tool === 'picker') this.setTool(this.pickerFor && this.pickerFor !== 'picker' ? this.pickerFor : 'pen');
-    else { this.renderOptions(); this.app.saveToolState(); }
+    this.renderOptions(); this.app.saveToolState();
     toast(h('span', { class: 'picked' }, h('span', { class: 'picked-swatch', style: { background: hex } }), `Colour picked: ${hex}`), { timeout: 1200 });
   }
 
@@ -1285,8 +1306,10 @@ export class Editor {
     if (ctrl && k === '0') return this.viewer.fitWidth(), true;
     if (ctrl) return false; // Ctrl+V is handled by the paste event
     if ((k === 'delete' || k === 'backspace') && sel) return this.tools.deleteSelection(), true;
+    if (k === 'escape' && this.picking) return this.stopPicking(), true;
     if (k === 'escape') { this.tools.clearSelection(); this.searchPanel.close(); this.textBar.update(); return true; }
-    const map = { v: 'select', p: 'pen', h: 'hl', e: 'eraser', l: 'lasso', s: 'shape', t: 'text', k: 'laser', i: 'picker' };
+    if (!ctrl && !e.altKey && k === 'i') return this.startPicking(), true; // eyedropper (next click)
+    const map = { v: 'select', p: 'pen', h: 'hl', e: 'eraser', l: 'lasso', s: 'shape', t: 'text', k: 'laser' };
     if (map[k]) return this.setTool(map[k]), true;
     if (this.isBoard) return false;
     if (k === 'pagedown' || (k === 'arrowright' && !e.shiftKey)) return this.viewer.scrollToPage(this.viewer.currentIndex + 1), true;
