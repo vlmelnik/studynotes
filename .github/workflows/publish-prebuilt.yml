@@ -27,14 +27,18 @@ jobs:
           if [ -f upload/SHA256SUMS ]; then (cd out && sha256sum -c ../upload/SHA256SUMS); fi
           ls -la out
           echo "TAG=$(tr -d ' \r\n' < upload/RELEASE)" >> "$GITHUB_ENV"
+          # optional: upload/NAME (title), upload/NOTES.md (text), upload/NOT_LATEST (e.g. add-on data)
+          if [ -f upload/NAME ]; then echo "NAME=$(head -n1 upload/NAME)" >> "$GITHUB_ENV"; else echo "NAME=StudyNotes $(tr -d ' \r\n' < upload/RELEASE)" >> "$GITHUB_ENV"; fi
+          if [ -f upload/NOTES.md ]; then echo "BODY=upload/NOTES.md" >> "$GITHUB_ENV"; else echo "BODY=docs/release-notes.md" >> "$GITHUB_ENV"; fi
+          if [ -f upload/NOT_LATEST ]; then echo "LATEST=false" >> "$GITHUB_ENV"; else echo "LATEST=true" >> "$GITHUB_ENV"; fi
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           target_commitish: main
-          name: StudyNotes ${{ env.TAG }}
-          body_path: docs/release-notes.md
-          make_latest: true
+          name: ${{ env.NAME }}
+          body_path: ${{ env.BODY }}
+          make_latest: ${{ env.LATEST }}
           files: out/*
       - name: Remove the upload branch
         run: git push origin --delete "${GITHUB_REF_NAME}"
