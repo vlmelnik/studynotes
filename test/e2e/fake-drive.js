@@ -11,6 +11,8 @@ class FakeRemote {
   idx() { try { return JSON.parse(fs.readFileSync(path.join(this.dir, 'index.json'), 'utf8')); } catch { return {}; } }
   save(i) { fs.writeFileSync(path.join(this.dir, 'index.json'), JSON.stringify(i, null, 1)); }
   async init() {}
+  // stands in for Google's text recognition: the picture's size as text
+  async ocrImage(bytes) { return `Google line ${bytes.length > 0 ? 'ok' : 'empty'}`; }
   async list() {
     return Object.entries(this.idx()).filter(([, f]) => (f.role || 'sync') === 'sync').map(([id, f]) => ({ id, path: f.path, md5: f.md5, size: f.size, modifiedTime: f.modifiedTime }));
   }

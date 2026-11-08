@@ -9,6 +9,7 @@ const fontkit = require('@pdf-lib/fontkit');
 const NO_LIGATURES = { liga: false, clig: false, calt: false, rlig: false, dlig: false };
 const { getOutline, getSizedOutline, outlineToSvgPath, strokeLook, lighten, isClosedShape } = require('../shared/ink');
 const { paperGeometry, pageBackground } = require('../shared/paper');
+const { boxWarp, applyH, colourAt, validStops } = require('../shared/warp');
 const { boxStyle, roundedRect, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } = require('../shared/textbox');
 const { stacked } = require('../shared/stacking');
 const { parseRich, plainToHtml, layoutRich } = require('../shared/richtext');
@@ -96,7 +97,7 @@ function splitByGlyphs(text, fk) {
 // Rich text: per-run bold/italic/underline plus optional size, font and colour
 // (<span data-fs data-ff data-c>). Lines are as tall as their largest run, like
 // in the browser. `al` = left | center | right.
-async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, dry = false, turn = 0, soft = 0 }, map, rot, k = 1) {
+async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, dry = false, turn = 0, soft = 0, look = {} }, map, rot, k = 1) {
   const paras = parseRich(html || plainToHtml(text || ''), { b, i, u });
   // layoutRich needs a synchronous measure: pre-load every font variant used.
   const variants = new Map();
@@ -145,7 +146,7 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
         if (f.synthItalic) opts.ySkew = degrees(12); // shear x by y: slanted letters
         if (acc) {
           const fk = part.ok ? f.fk : fb.fk;
-          for (const sb of f.synthBold ? [0, rfs * 0.035] : [0]) softWord(acc, page.doc.context, fk, part.t, rfs, cx + sb, by, map, f.synthItalic, rcol);
+          for (const sb of f.synthBold ? [0, rfs * 0.035] : [0]) softWord(acc, page.doc.context, fk, part.t, rfs, cx + sb, by, map, f.synthItalic, rcol, run.c ? { warp: look.warp } : look);
           page.drawText(part.t, { ...opts, opacity: 0 });
           cx += pw;
           continue;
@@ -163,7 +164,7 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
           const t2 = Math.max(0.5 / k, rfs * 0.06) / 2, x0 = x + dx + run.x, x1 = x0 + run.w;
           const c = hexToRgb(rcol);
           acc.ops += `${c.red.toFixed(3)} ${c.green.toFixed(3)} ${c.blue.toFixed(3)} rg\n` + [[x0, uy - t2], [x1, uy - t2], [x1, uy + t2], [x0, uy + t2]]
-            .map(([px, py], n) => { const [u, v] = map(px, py); return `${u.toFixed(2)} ${v.toFixed(2)} ${n ? 'l' : 'm'}\n`; }).join('') + 'h f\n';
+            .map(([px, py], n) => { const [u, v] = map(...(look.warp ? look.warp(px, py) : [px, py])); return `${u.toFixed(2)} ${v.toFixed(2)} ${n ? 'l' : 'm'}\n`; }).join('') + 'h f\n';
         } else drawPolyline(page, [[x + dx + run.x, uy], [x + dx + run.x + run.w, uy]], map, rcol, Math.max(0.5, rfs * 0.06) * k);
       }
     }
@@ -234,26 +235,44 @@ let fontCount = 0;
 const fontNo = (fk) => { if (!fontNos.has(fk)) fontNos.set(fk, ++fontCount); return fontNos.get(fk); };
 
 /** Adds the letters of `text` (filled in `color`, PDF space) to acc { ops, xobj }. */
-function softWord(acc, ctx, fk, text, size, x, baseY, map, italic, color) {
+function softWord(acc, ctx, fk, text, size, x, baseY, map, italic, color, look = {}) {
   let run;
   try { run = fk.layout(text, NO_LIGATURES); } catch { return; }
   const s = size / fk.unitsPerEm, sk = italic ? Math.tan((12 * Math.PI) / 180) : 0;
   // page → PDF is affine: its two axes
   const [ou, ov] = map(0, 0), [xu, xv] = map(1, 0), [yu, yv] = map(0, 1);
   const ax = [xu - ou, xv - ov], ay = [yu - ou, yv - ov];
-  // letter (font units, y up) → page: x + (pen + gx)·s + gy·s·sk, baseY − gy·s
-  const m = [s * ax[0], s * ax[1], s * sk * ax[0] - s * ay[0], s * sk * ax[1] - s * ay[1]].map((v) => v.toFixed(4)).join(' ');
-  const col = hexToRgb(color);
-  acc.ops += `${col.red.toFixed(3)} ${col.green.toFixed(3)} ${col.blue.toFixed(3)} rg\n`;
+  const { warp, colourOf } = look;
+  let lastCol = '';
+  const setCol = (c) => {
+    if (c === lastCol) return;
+    const col = hexToRgb(c);
+    acc.ops += `${col.red.toFixed(3)} ${col.green.toFixed(3)} ${col.blue.toFixed(3)} rg\n`;
+    lastCol = c;
+  };
+  setCol(color);
   let pen = 0;
   run.glyphs.forEach((g, k) => {
     const pos = run.positions[k];
     const ref = glyphForm(ctx, fk, g);
     if (ref) {
-      const [e, f] = map(x + (pen + pos.xOffset) * s, baseY - pos.yOffset * s);
+      const gx = x + (pen + pos.xOffset) * s, gy = baseY - pos.yOffset * s;
+      // letter (font units, y up) → page: gx + (lx)·s + ly·s·sk, gy − ly·s;
+      // in a perspective the page axes are the warp's local ones (per letter)
+      let o = [gx, gy], ex = [1, 0], ey = [0, 1];
+      if (warp) {
+        const d = Math.max(0.25, size * 0.05);
+        o = warp(gx, gy);
+        const px = warp(gx + d, gy), py = warp(gx, gy + d);
+        ex = [(px[0] - o[0]) / d, (px[1] - o[1]) / d]; ey = [(py[0] - o[0]) / d, (py[1] - o[1]) / d];
+      }
+      const lin = (v) => [ax[0] * v[0] + ay[0] * v[1], ax[1] * v[0] + ay[1] * v[1]]; // page vector → PDF
+      const cx = lin([s * ex[0], s * ex[1]]), cy = lin([s * sk * ex[0] - s * ey[0], s * sk * ex[1] - s * ey[1]]);
+      const [e, f] = map(o[0], o[1]);
+      if (colourOf) setCol(colourOf(gx + (pos.xAdvance * s) / 2) || color);
       const name = `g${fontNo(fk)}_${g.id}`;
       acc.xobj[name] = ref;
-      acc.ops += `q ${m} ${e.toFixed(2)} ${f.toFixed(2)} cm /${name} Do Q\n`;
+      acc.ops += `q ${[cx[0], cx[1], cy[0], cy[1]].map((v) => v.toFixed(4)).join(' ')} ${e.toFixed(2)} ${f.toFixed(2)} cm /${name} Do Q\n`;
     }
     pen += pos.xAdvance;
   });
@@ -403,6 +422,12 @@ async function drawObject(page, kind, o, map, rot, ctx, k) {
     html: o.html, text: o.text, ff: o.ff, b: o.b, i: o.i, u: o.u, fs: o.fs || 14, color: o.c,
     x: o.x, y: o.y, w, al: o.al, soft: softOf(o),
   };
+  // "Match the document": the photo's perspective and light (see shared/warp.js)
+  if (rich.soft > 0) {
+    const H = boxWarp(o);
+    if (H) rich.look = { ...rich.look, warp: (px, py) => { const [X, Y] = applyH(H, px - o.x, py - o.y); return [o.x + X, o.y + Y]; } };
+    if (validStops(o.cg)) rich.look = { ...rich.look, colourOf: (px) => colourAt(o.cg, px - o.x) };
+  }
   if (box) {
     // Same box model as the screen: padding inside the width, then the text.
     rich.x = o.x + BOX_PAD_X; rich.y = o.y + BOX_PAD_Y; rich.w = w - 2 * BOX_PAD_X;

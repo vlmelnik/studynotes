@@ -29,7 +29,12 @@ const FONTS = {
   ptsans: { label: 'PT Sans', css: 'SN PT Sans', kind: 'sans', noSubset: true, files: four('PTSans') },
   ptserif: { label: 'PT Serif', css: 'SN PT Serif', kind: 'serif', noSubset: true, files: four('PTSerif') },
   mono: { label: 'Courier style', css: 'SN Mono', kind: 'mono', files: { r: 'LiberationMono-Regular.ttf', b: 'LiberationMono-Bold.ttf', i: 'LiberationMono-Italic.ttf', bi: 'LiberationMono-BoldItalic.ttf' } },
-  hand: { label: 'Handwriting', css: 'SN Hand', files: { r: 'Neucha-Regular.ttf' } },
+  // handwriting (kind 'hand': recognised handwriting gets the closest one)
+  hand: { label: 'Handwriting', css: 'SN Hand', kind: 'hand', files: { r: 'Neucha-Regular.ttf' } },
+  caveat: { label: 'Caveat (handwriting)', css: 'SN Caveat', kind: 'hand', noSubset: true, files: { r: 'Caveat-Regular.ttf', b: 'Caveat-Bold.ttf' } },
+  pangolin: { label: 'Pangolin (neat handwriting)', css: 'SN Pangolin', kind: 'hand', noSubset: true, files: { r: 'Pangolin-Regular.ttf' } },
+  marck: { label: 'Marck Script (cursive)', css: 'SN Marck', kind: 'hand', files: { r: 'MarckScript-Regular.ttf' } },
+  badscript: { label: 'Bad Script (cursive)', css: 'SN Bad Script', kind: 'hand', files: { r: 'BadScript-Regular.ttf' } },
   round: { label: 'Rounded', css: 'SN Round', files: { r: 'Comfortaa-Variable.ttf' }, variable: true },
 };
 

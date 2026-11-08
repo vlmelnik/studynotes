@@ -54,3 +54,7 @@
 - pdf-lib's font subsetter silently drops glyphs of many Google fonts (Inter, Noto, PT, Fira, Source Sans, EB Garamond): render every new font with pdftoppm before shipping; test/export.test.js checks it.
 - Don't estimate scan blur from font-template correlation: a font that doesn't quite match "fits" better when blurred. Measure from the letters' edges (steepest slope vs contrast).
 - More font candidates need a prior for the common fonts and doc-level rules (one kind, italic/bold only relative to other lines): photos taken at a slant make every line look a bit italic.
+- Per-line perspective from one line is noise (letter shapes): compare piece by piece with the font drawn flat, then fit size change and lean for the whole page.
+- Template correlation can't tell handwriting from print (print-like handwriting fits sans fonts); letter jitter vs the flat font plus reading confidence can.
+- CSS filter on a 3D-transformed (matrix3d) element can rasterise at low resolution in Electron; keep warps mild and check screenshots zoomed in.
+- A "sign in for one feature" must not reuse the sync sign-in: signing in schedules library sync.

@@ -14,8 +14,19 @@
 **Match the document**
 - Edited text looks like the scan around it: as soft as the original (the blur is measured from the letters' edges, independent of the font). On by itself for recognised text; a new button in the text bar and the selection bar turns it on or off for any text box (typed text takes the look of the nearest scanned text). Sharp while typing. The PDF export draws it soft too (outlines, the real text stays searchable and copyable).
 
+**Perspective, light, bold**
+- Photos taken at a slant: the size change along the lines and the letters' lean are measured for the whole page (one flat sheet, robust against single odd lines), against the chosen font drawn flat; with "Match the document" the text box is shown in that perspective (CSS matrix3d) and exported so (each letter placed by the perspective). Straight while typing.
+- Glare and shadow: the ink colour along each line is measured and the text is filled with it (gradient); per letter in the PDF.
+- Blur per line (a part of the page out of focus is softer).
+- Bold: the real strokes are compared with the font drawn at the same size and blur, relative to the other lines; headings much larger than the text need less – semibold headings come out bold.
+- Dark labels next to light paper (price tags): the original picture is read too and the lines found only there are added.
+
+**Handwriting in photos and scans**
+- Handwritten pages (letters standing unevenly, size jumping, a less sure reading) become typed text in the closest of 5 handwriting fonts (Neucha, Caveat, Pangolin, Marck Script, Bad Script – all with Cyrillic), straight and sharp; lines read less surely are kept for handwriting.
+- "Read better with Google" (in the message after recognising, only for handwriting or unsure readings): the line pictures go to the user's Google Drive as a temporary Google Doc with text recognition, the text replaces the boxes' text (one undo step), the doc is deleted right away.
+
 **More fonts**
-- 14 widely used fonts (SIL OFL / Apache): Cambria style (Caladea), Georgia style (Gelasio), Garamond style (EB Garamond), Open Sans, Roboto, Inter, Lato, Source Sans 3, Fira Sans, Montserrat, Noto Sans, Noto Serif, PT Sans, PT Serif – each with bold and italic, ordered by how common they are.
+- 14 widely used fonts plus 4 handwriting fonts (SIL OFL / Apache): Cambria style (Caladea), Georgia style (Gelasio), Garamond style (EB Garamond), Open Sans, Roboto, Inter, Lato, Source Sans 3, Fira Sans, Montserrat, Noto Sans, Noto Serif, PT Sans, PT Serif – each with bold and italic, ordered by how common they are.
 - The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
 
 **Handwriting → text**

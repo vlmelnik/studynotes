@@ -19,7 +19,7 @@ const parts = [
   ['ISNet background-removal model (DIS)', 'Apache-2.0', lic('isnet-LICENSE'), 'https://github.com/xuebinqin/DIS – see also assets/models/NOTICE.txt'],
   ['Carlito font', 'SIL OFL 1.1', lic('carlito-OFL.txt'), 'https://github.com/googlefonts/carlito'],
   ['Liberation fonts (Sans, Serif, Mono)', 'SIL OFL 1.1', lic('liberation-LICENSE'), 'https://github.com/liberationfonts/liberation-fonts'],
-  ...[['Caladea', 'caladea'], ['Gelasio', 'gelasio'], ['Open Sans', 'open-sans'], ['Roboto', 'roboto'], ['Inter', 'inter'], ['Lato', 'lato'], ['Source Sans 3', 'source-sans-3'], ['Fira Sans', 'fira-sans'], ['Montserrat', 'montserrat'], ['Noto Sans', 'noto-sans'], ['Noto Serif', 'noto-serif'], ['EB Garamond', 'eb-garamond'], ['PT Sans', 'pt-sans'], ['PT Serif', 'pt-serif']]
+  ...[['Caladea', 'caladea'], ['Gelasio', 'gelasio'], ['Open Sans', 'open-sans'], ['Roboto', 'roboto'], ['Inter', 'inter'], ['Lato', 'lato'], ['Source Sans 3', 'source-sans-3'], ['Fira Sans', 'fira-sans'], ['Montserrat', 'montserrat'], ['Noto Sans', 'noto-sans'], ['Noto Serif', 'noto-serif'], ['EB Garamond', 'eb-garamond'], ['PT Sans', 'pt-sans'], ['PT Serif', 'pt-serif'], ['Caveat', 'caveat'], ['Pangolin', 'pangolin'], ['Marck Script', 'marck-script'], ['Bad Script', 'bad-script']]
     .map(([n, f]) => [`${n} font`, f === 'roboto' ? 'SIL OFL 1.1 / Apache-2.0' : 'SIL OFL 1.1', lic(`${f}-LICENSE.txt`), 'https://fonts.google.com']),
   ['Comfortaa font', 'SIL OFL 1.1', lic('comfortaa-OFL.txt'), 'https://github.com/alexeiva/comfortaa'],
   ['Neucha font', 'SIL OFL 1.1', lic('neucha-OFL.txt'), 'https://fonts.google.com/specimen/Neucha'],

@@ -6,6 +6,7 @@ import { toast, confirmDialog } from './ui.js';
 import { uid } from './tools.js';
 import { stacked } from '../shared/stacking.js';
 import { FONTS } from '../shared/fonts.js';
+import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
 
@@ -102,7 +103,8 @@ async function rasterize(editor, index, r, S) {
 // the most likely in documents: another one has to fit a little better.
 const CLASSIC = new Set(['carlito', 'sans', 'serif', 'mono']);
 const PRIOR = 0.006; // per line, in correlation
-const familiesFor = (cyr) => Object.keys(FONTS).filter((f) => FONTS[f].kind && (!cyr || FONTS[f].cyr !== false));
+const familiesFor = (cyr) => Object.keys(FONTS).filter((f) => FONTS[f].kind && FONTS[f].kind !== 'hand' && (!cyr || FONTS[f].cyr !== false));
+const HAND = Object.keys(FONTS).filter((f) => FONTS[f].kind === 'hand');
 // blur levels (× letter size) the candidates are compared at: a blurry photo
 // loses thin details like serifs
 const BLURS = [0, 0.03, 0.07, 0.12];
@@ -121,7 +123,8 @@ async function fontScores(li, line, gray, cands) {
   const D = new Float32Array(w * h);
   let dm = 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const v = 1 - gray.data[((li.box.y0 + y) * gray.width + li.box.x0 + x) * 4] / 255;
+    const g = gray.data[((li.box.y0 + y) * gray.width + li.box.x0 + x) * 4] / 255;
+    const v = li.light ? g : 1 - g; // (light letters on a dark label: the light is the ink)
     D[y * w + x] = v; dm += v;
   }
   dm /= w * h;
@@ -197,6 +200,23 @@ function edgeSoftness(im, b, extra = 0) {
   return Math.sqrt(Math.max(0, sigma * sigma - 0.64 - extra * extra)) * 1.2;
 }
 
+/**
+ * Stroke thickness the candidate would have in this line: drawn at the same
+ * place, size and blur, then measured like the real ink.
+ */
+function renderedWeight(c, line, li, blur) {
+  const cv = document.createElement('canvas');
+  cv.width = li.w; cv.height = li.h;
+  const g = cv.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, li.w, li.h);
+  g.fillStyle = '#000'; g.font = cssFont(c, c.px);
+  if (blur > 0.2) g.filter = `blur(${blur.toFixed(2)}px)`;
+  g.fillText(line.text.trim(), line.bbox.x0 - li.box.x0 + c.left, c.baseY - li.box.y0);
+  const im = g.getImageData(0, 0, li.w, li.h);
+  cv.width = cv.height = 0;
+  return strokeWeight(lineInk(im, { x0: 0, y0: 0, x1: li.w, y1: li.h }));
+}
+
 /** Typical thickness of the strokes in pixels (median horizontal ink run). */
 function strokeWeight(li) {
   const runs = [];
@@ -209,7 +229,9 @@ function strokeWeight(li) {
   }
   if (!runs.length) return 0;
   runs.sort((a, b) => a - b);
-  return runs[runs.length >> 1];
+  // mean of the middle half: finer than the median of whole pixels
+  const mid = runs.slice(Math.floor(runs.length * 0.25), Math.ceil(runs.length * 0.75));
+  return mid.reduce((a, v) => a + v, 0) / mid.length;
 }
 
 /**
@@ -217,15 +239,40 @@ function strokeWeight(li) {
  * differ when it clearly fits another one better), bold / italic per line.
  * Bold only when the strokes are clearly thicker than in the other lines.
  */
-function chooseFonts(all, weights) {
+const bestOf = (sc, ff, pred = () => true) => sc.filter((c) => c.ff === ff && pred(c)).sort((x, y) => y.score - x.score)[0];
+
+/** The typeface that fits the whole text best. */
+function mainFamily(all) {
   const fams = [...new Set(all.flat().map((c) => c.ff))];
-  const bestOf = (sc, ff, pred = () => true) => sc.filter((c) => c.ff === ff && pred(c)).sort((x, y) => y.score - x.score)[0];
   const total = (ff) => all.reduce((sum, sc) => { const c = bestOf(sc, ff); return sum + (c ? c.score + c.prior : 0); }, 0);
-  const main = fams.slice().sort((x, y) => total(y) - total(x))[0];
-  // stroke thickness relative to the letter size (bold ≈ 1.5× regular)
-  const rel = all.map((sc, k) => { const r = bestOf(sc, main, (c) => !c.b && !c.i); return r && r.px ? weights[k] / r.px : 0; });
-  const sorted = rel.filter((v) => v > 0).sort((x, y) => x - y);
-  const medW = sorted.length ? sorted[sorted.length >> 1] : 0;
+  return fams.slice().sort((x, y) => total(y) - total(x))[0];
+}
+
+/**
+ * Which lines are bold. q = real stroke thickness ÷ the regular letters'
+ * thickness drawn at the same size and blur (print and photos thicken all
+ * strokes a little, so compare with the typical line): clearly thicker →
+ * bold; headings much larger than the text are usually set bold, so less is
+ * needed there; small print looks thicker without being bold.
+ */
+function boldLines(qs, sizes) {
+  const ok = qs.map((q, k) => (q > 0 && sizes[k] > 0 ? k : -1)).filter((k) => k >= 0);
+  if (!ok.length) return qs.map(() => null);
+  const med = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
+  const mq = med(ok.map((k) => qs[k])), ms = med(ok.map((k) => sizes[k]));
+  return qs.map((q, k) => {
+    if (!(q > 0) || !(sizes[k] > 0)) return null;
+    if (ok.length < 3) return q > 1.45; // nothing to compare with: only clearly bold
+    const r = q / mq, s = sizes[k] / ms;
+    if (s >= 1.6) return r > 0.95;
+    if (s >= 1.2) return r > 1.08;
+    if (s < 0.85) return r > 1.4;
+    return r > 1.25;
+  });
+}
+
+function chooseFonts(all, bolds) {
+  const main = mainFamily(all);
   // italic: clearly better than upright, and more than in the other lines (a
   // photo taken at a slant leans every line a little – that is not italic)
   const gainOf = (sc) => { const r = bestOf(sc, main, (c) => !c.b && !c.i), it = bestOf(sc, main, (c) => c.i); return r && it ? it.score - r.score : 0; };
@@ -239,12 +286,11 @@ function chooseFonts(all, weights) {
     // better – never switch between two similar sans fonts line by line
     const kind = (f) => FONTS[f].kind;
     if (own && inMain && kind(own.ff) !== kind(main) && own.score - inMain.score > 0.08) ff = own.ff;
-    // bold: from the stroke thickness when there are lines to compare with
-    // (and the bold letters must fit at least as well: small blurry print
-    // looks thicker without being bold)
+    // bold: the real strokes compared with the regular and the bold letters
+    // drawn at the same size and blur (0 = as thin as regular, 1 = as thick
+    // as bold); semibold headings count as bold
     const rb = bestOf(sc, ff, (c) => !c.b && !c.i), bb = bestOf(sc, ff, (c) => c.b);
-    const bold = all.length >= 3 && medW ? rel[k] > medW * 1.3 && !!(rb && bb && bb.score >= rb.score - 0.01)
-      : !!(rb && bb && bb.score - rb.score > 0.04);
+    const bold = bolds[k] !== null ? bolds[k] : !!(rb && bb && bb.score - rb.score > 0.04);
     const r = bestOf(sc, ff, (c) => c.b === bold && !c.i), it = bestOf(sc, ff, (c) => c.i && !bold);
     return it && r && it.score - r.score > Math.max(0.06, medGain + 0.05) ? it : (r || bestOf(sc, ff) || own);
   });
@@ -381,6 +427,30 @@ function isDark(im) {
   return v.length > 0 && v[v.length >> 1] < 100;
 }
 
+/** Share of clearly dark pixels. */
+function darkShare(im) {
+  const d = im.data;
+  let n = 0, all = 0;
+  for (let i = 0; i < d.length; i += 4 * 29) { all++; if (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 < 100) n++; }
+  return all ? n / all : 0;
+}
+
+/** Lines from a second reading where the first found nothing (or something worse). */
+function mergeLines(a, b) {
+  const area = (r) => Math.max(0, r.x1 - r.x0) * Math.max(0, r.y1 - r.y0);
+  const inter = (p, q) => area({ x0: Math.max(p.x0, q.x0), y0: Math.max(p.y0, q.y0), x1: Math.min(p.x1, q.x1), y1: Math.min(p.y1, q.y1) });
+  const out = a.slice();
+  for (const l of b) {
+    if (!(l.conf >= 50)) continue;
+    const hit = out.filter((o) => inter(o.bbox, l.bbox) > 0.3 * Math.min(area(o.bbox), area(l.bbox)));
+    if (!hit.length) { out.push(l); continue; }
+    // (only the lines it really covers count, not a neighbour it touches)
+    const main = hit.filter((o) => inter(o.bbox, l.bbox) > 0.5 * area(o.bbox));
+    if (main.length && main.every((o) => l.conf > o.conf + 5)) { for (const o of main) out.splice(out.indexOf(o), 1); out.push(l); }
+  }
+  return out.sort((p, q) => p.bbox.y0 - q.bbox.y0);
+}
+
 function invert(im) {
   const d = im.data;
   for (let i = 0; i < d.length; i += 4) { d[i] = 255 - d[i]; d[i + 1] = 255 - d[i + 1]; d[i + 2] = 255 - d[i + 2]; }
@@ -406,6 +476,41 @@ function dilateMask(m, w, h, r) {
     }
   }
   return out;
+}
+
+/**
+ * Reads the lines once more with Google (Drive's text recognition: much
+ * better for handwriting) and puts the new text into the same boxes. Online,
+ * only when asked; the pictures are deleted from Drive right away.
+ */
+async function readWithGoogle(editor, pageId, ids, crops, lang, original) {
+  const busy = toast('Reading with Google…', { timeout: 300000 });
+  try {
+    const bytes = await Promise.all(crops.map(async (c) => {
+      const bl = await new Promise((res) => c.toBlob(res, 'image/png'));
+      return new Uint8Array(await bl.arrayBuffer());
+    }));
+    const got = await window.api.ocrGoogle(bytes, lang);
+    busy.remove();
+    if (editor.destroyed) return;
+    const before = editor.pageData(pageId);
+    if (!before) return;
+    let changed = 0;
+    const texts = before.texts.map((t) => {
+      const k = ids.indexOf(t.id);
+      // (Google may see bits of the neighbouring lines: its longest line is this one)
+      const text = k >= 0 ? String(got[k] || '').split('\n').map((s) => s.trim()).sort((a, b) => b.length - a.length)[0] || '' : '';
+      // (a line edited meanwhile stays as the user wrote it)
+      if (!text || text === t.text || t.html || t.text !== original[k]) return t;
+      changed++;
+      return { ...t, text };
+    });
+    if (changed) editor.commit(pageId, before, { ...before, texts });
+    toast(changed ? `Google changed ${changed} ${changed === 1 ? 'line' : 'lines'}` : 'Google read the same text', { timeout: 3500 });
+  } catch (err) {
+    busy.remove();
+    toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
+  }
 }
 
 // ---------- main ----------
@@ -469,6 +574,18 @@ export async function makeTextEditable(editor, index, area = null) {
       lines = await recognizeSized(n0.c, n0.bl, langs);
       if (editor.destroyed) { busy.remove(); return; }
     }
+    // dark labels, buttons or screens next to light paper (a price tag, a
+    // sign): evening out the light turns a dark label into "paper" and its
+    // light letters vanish – read the original picture too and add the lines
+    // found only there
+    if (window.__ocrDebug) window.__ocrDebug.raw = lines.map((l) => [l.text, Math.round(l.conf)]);
+    if (norm !== work && darkShare(work) > 0.12) {
+      const nn = await pngOf(work);
+      const extra = await recognizeSized(nn.c, nn.bl, langs);
+      nn.c.width = nn.c.height = 0;
+      if (editor.destroyed) { busy.remove(); return; }
+      lines = mergeLines(lines, extra);
+    }
     const cx = W / 2, cy = H / 2, rad = (angle * Math.PI) / 180, cs = Math.cos(rad), sn = Math.sin(rad);
     const back = (x, y) => [cx + (x - cx) * cs - (y - cy) * sn, cy + (x - cx) * sn + (y - cy) * cs]; // straightened → original pixels
     const toPage = (x, y) => [r.x0 + x / S, r.y0 + y / S];
@@ -502,7 +619,9 @@ export async function makeTextEditable(editor, index, area = null) {
         return { ...l, conf, words: ws, text: ws.map((w) => w.text).join(' '), bbox: { ...l.bbox, x0, x1 }, baseline: { x0, y0: by(x0), x1, y1: by(x1) } };
       }).filter(Boolean);
     });
-    lines = lines.filter((l) => l.conf >= 50 && wordy(l.text.trim()) && l.bbox.y1 - l.bbox.y0 >= 6);
+    // (lines read with less confidence stay for now: handwriting is read so;
+    // they are dropped again below unless they turn out to be handwritten)
+    lines = lines.filter((l) => l.conf >= 35 && wordy(l.text.trim()) && l.bbox.y1 - l.bbox.y0 >= 6).map((l) => ({ ...l, weak: l.conf < 50 }));
     // photos with more than paper (keyboard, handwriting, logos): very short
     // or oversized "lines" must be read with high confidence to count
     const lh = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
@@ -526,7 +645,7 @@ export async function makeTextEditable(editor, index, area = null) {
       const li = lineInk(norm, { x0: l.bbox.x0 - pad, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + pad, y1: l.bbox.y1 + pad });
       const ok = li.w > 0 && li.h > 0;
       inks.push(ok ? li : null);
-      scores.push(ok ? await fontScores(li, l, norm, fams.map((ff) => ({ ff, b: false, i: false }))) : []);
+      scores.push(ok ? await fontScores(li, l, norm, fams.concat(HAND).map((ff) => ({ ff, b: false, i: false }))) : []);
       weights.push(ok ? strokeWeight(li) : 0);
       await new Promise((res) => setTimeout(res)); // keep the window responsive
     }
@@ -540,16 +659,79 @@ export async function makeTextEditable(editor, index, area = null) {
       if (inks[k]) scores[k] = scores[k].concat(await fontScores(inks[k], lines[k], norm, styled));
       await new Promise((res) => setTimeout(res));
     }
-    const keep = scores.map((sc) => sc.length > 0);
+    // handwriting: compared with the best printed font the letters stand
+    // unevenly and change size from piece to piece, and the reading is less
+    // sure. A whole handwritten page, or single lines (a filled-in form).
+    const isHand = (c) => FONTS[c.ff].kind === 'hand';
+    const boxOf = (l, f) => ({ x0: l.bbox.x0 + f.left, top: f.baseY - ((LINE_H * f.px - (f.asc + f.desc)) / 2 + f.asc), bw: l.bbox.x1 - l.bbox.x0, bh: LINE_H * f.px });
+    const medOf = (a) => { const c = a.slice().sort((p, q) => p - q); return c.length ? c[c.length >> 1] : 0; };
+    const jitter = lines.map((l, k) => {
+      const pb = scores[k].filter((c) => !isHand(c)).sort((p, q) => q.score - p.score)[0];
+      if (!inks[k] || !pb) return null;
+      const b = boxOf(l, pb);
+      const m = lineWarp({ li: inks[k], line: l, f: pb, cssFont, box: b, S, bw: b.bw, bh: b.bh });
+      return m ? m.jitter : null;
+    });
+    // (from the surely read lines: noise read weakly jitters a lot)
+    const sure = lines.map((l, k) => !l.weak && jitter[k] !== null);
+    const js = jitter.filter((_, k) => sure[k]);
+    const handPage = js.length >= 2 && (medOf(js) > 0.25 || (medOf(lines.filter((l, k) => sure[k]).map((l) => l.conf)) < 80 && medOf(js) > 0.15));
+    const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3)));
+    if (window.__ocrDebug) window.__ocrDebug.hand = lines.map((l, k) => [jitter[k] === null ? null : +jitter[k].toFixed(2), Math.round(l.conf), handLine[k]]);
+    const keep = scores.map((sc, k) => sc.length > 0 && (!lines[k].weak || handLine[k]));
     lines = lines.filter((_, k) => keep[k]);
-    const fonts = chooseFonts(scores.filter((_, k) => keep[k]), weights.filter((_, k) => keep[k]));
-    // how soft the scan is: blur comes from the camera / scanner, so it is
-    // the same number of pixels for every line – one value for the page
+    const kHand = handLine.filter((_, k) => keep[k]);
+    // printed lines are matched among the printed fonts only
+    for (let k = 0; k < scores.length; k++) if (!handLine[k]) scores[k] = scores[k].filter((c) => !isHand(c));
+    const kInks = inks.filter((_, k) => keep[k]), kWeights = weights.filter((_, k) => keep[k]);
+    // how soft the scan is: mostly from the camera / scanner (the same number
+    // of pixels everywhere), a bit more where the page is out of focus
     // (a straightened picture was resampled once: that softness is not the scan's)
-    const softs = lines.map((l) => edgeSoftness(work, l.bbox, work !== orig ? 0.45 : 0)).filter((v) => v !== null).sort((x, y) => x - y);
+    const lineSoft = lines.map((l) => edgeSoftness(work, l.bbox, work !== orig ? 0.45 : 0));
+    const softs = lineSoft.filter((v) => v !== null).sort((x, y) => x - y);
     const softPx = softs.length ? softs[softs.length >> 1] : 0;
-    if (window.__ocrDebug) window.__ocrDebug.soft = softs;
+    const softOfLine = (k) => (lineSoft[k] === null ? softPx : Math.max(softPx * 0.6, Math.min(softPx * 1.8, lineSoft[k])));
+    if (window.__ocrDebug) window.__ocrDebug.soft = lineSoft;
+    const kAll = scores.filter((_, k) => keep[k]);
+    const kScores = kAll.map((sc, k) => (kHand[k] ? sc.filter((c) => !isHand(c)) : sc));
+    const fam = mainFamily(kScores);
+    const regs = kScores.map((sc) => bestOf(sc, fam, (c) => !c.b && !c.i));
+    // (the page's typical blur: a single line's measure is too noisy here)
+    const qs = regs.map((rc, k) => { if (!rc || !kInks[k] || !kWeights[k]) return 0; const wr = renderedWeight(rc, lines[k], kInks[k], softPx); return wr > 0 ? kWeights[k] / wr : 0; });
+    const bolds = boldLines(qs, regs.map((rc) => (rc ? rc.px : 0)));
+    if (window.__ocrDebug) window.__ocrDebug.w = qs.map((q, k) => [+q.toFixed(2), regs[k] && +regs[k].px.toFixed(1), bolds[k]]);
+    const fonts = chooseFonts(kScores, bolds);
+    // handwritten lines: the handwriting font that fits the page's writing best
+    if (kHand.some(Boolean)) {
+      const hTotal = (ff) => kAll.reduce((a, sc, k) => a + (kHand[k] ? ((bestOf(sc, ff) || { score: 0 }).score) : 0), 0);
+      const hf = HAND.slice().sort((x, y) => hTotal(y) - hTotal(x))[0];
+      kAll.forEach((sc, k) => { const hc = kHand[k] && (bestOf(sc, hf, (c) => !c.b && !c.i) || bestOf(sc, hf)); if (hc) fonts[k] = { ...hc, hand: true }; });
+    }
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
+    // perspective and light of every line (before the paper is cleaned)
+    const measured = lines.map((l, k) => {
+      if (!kInks[k] || fonts[k].hand) return null; // (handwriting becomes plain text: no look)
+      const b = boxOf(l, fonts[k]);
+      return lineWarp({ li: kInks[k], line: l, f: fonts[k], cssFont, box: b, S, bw: b.bw, bh: b.bh });
+    });
+    const warps = pageWarps(measured, S);
+    const geos = lines.map((l, k) => (kInks[k] && !fonts[k].hand ? {
+      warp: warps[k],
+      cg: lineLight({ li: kInks[k], line: l, img: work, box: boxOf(l, fonts[k]), S, fixColour: dark ? invertHex : (c) => c }),
+    } : {}));
+    if (window.__ocrDebug) window.__ocrDebug.geo = geos.map((g) => [g.warp ? g.warp.q : null, g.cg ? g.cg.length : 0]);
+    // the line pictures as they are now, for "Read with Google" afterwards
+    const crops = lines.map((l) => {
+      const hh = l.bbox.y1 - l.bbox.y0, pd = Math.round(hh * 0.12) + 2; // (not into the lines above / below)
+      const x0 = Math.max(0, Math.floor(l.bbox.x0 - pd)), y0 = Math.max(0, Math.floor(l.bbox.y0 - pd));
+      const x1 = Math.min(W, Math.ceil(l.bbox.x1 + pd)), y1 = Math.min(H, Math.ceil(l.bbox.y1 + pd));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, x1 - x0); c.height = Math.max(1, y1 - y0);
+      const im = new ImageData(c.width, c.height);
+      for (let y = 0; y < c.height; y++) im.data.set(work.data.subarray(((y0 + y) * W + x0) * 4, ((y0 + y) * W + x1) * 4), y * c.width * 4);
+      c.getContext('2d').putImageData(im, 0, 0);
+      return c;
+    });
     const looks = cleanLines(work, lines, norm);
     if (dark) {
       invert(work);
@@ -604,10 +786,9 @@ export async function makeTextEditable(editor, index, area = null) {
     const topF = Math.max(0, Math.ceil(stacked(before, 'f').reduce((m, e) => Math.max(m, e.key), 0)));
     let zf = topF + 1;
     const texts = lines.map((l, k) => {
-      const f = fonts[k];
+      const f = fonts[k], geo = geos[k];
       // the box in the straightened picture (pixels) …
-      const top = f.baseY - ((LINE_H * f.px - (f.asc + f.desc)) / 2 + f.asc);
-      const x0 = l.bbox.x0 + f.left, bw = l.bbox.x1 - l.bbox.x0, bh = LINE_H * f.px;
+      const { x0, top, bw, bh } = boxOf(l, f);
       // … turned back around its centre (a text box rotates around its centre)
       const [ccx, ccy] = back(x0 + bw / 2, top + bh / 2);
       const [px, py] = toPage(ccx - bw / 2, ccy - bh / 2);
@@ -620,17 +801,29 @@ export async function makeTextEditable(editor, index, area = null) {
       const bl = l.baseline, bw2 = bl ? bl.x1 - bl.x0 : 0;
       // (long lines only: short baselines are too noisy to trust)
       const res = bw2 > 200 ? (Math.atan2(bl.y1 - bl.y0, bw2) * 180) / Math.PI : 0;
-      const turn = angle + (Math.abs(res) > 0.6 && Math.abs(res) < 8 ? res : 0);
+      // (with a measured perspective the box keeps the page's tilt; the rest is in t.q)
+      const turn = angle + (!geo.warp && !f.hand && Math.abs(res) > 0.6 && Math.abs(res) < 8 ? res : 0);
       if (Math.abs(turn) > 0.35) t.r = Math.round(turn * 10) / 10;
-      // how soft the scanned letters are: the text is drawn the same way
-      // ("Match the document" button), sharp while it is being edited
-      const soft = Math.round((softPx / S) * 100) / 100;
-      if (soft >= 0.05) { t.look = soft; t.fx = soft; }
+      // how the scanned letters look: as soft, in the same perspective and
+      // light ("Match the document" button), straight and sharp while editing
+      if (geo.warp) Object.assign(t, geo.warp);
+      if (geo.cg) t.cg = geo.cg;
+      const soft = Math.round((softOfLine(k) / S) * 100) / 100;
+      if (!f.hand && (soft >= 0.05 || geo.warp || geo.cg)) { t.look = Math.max(soft, 0.02); t.fx = t.look; }
       return t;
     });
     editor.commit(page.id, before, { ...before, items: before.items.concat([item]), texts: before.texts.concat(texts) });
     busy.remove();
-    toast(`${texts.length} ${texts.length === 1 ? 'line is' : 'lines are'} editable now – double-click to change the text`, { timeout: 4000 });
+    // handwriting or an unsure reading: Google reads it better (online, optional)
+    const unsure = fonts.some((f) => f.hand) || lines.reduce((a, l) => a + l.conf, 0) / lines.length < 85;
+    const msg = `${texts.length} ${texts.length === 1 ? 'line is' : 'lines are'} editable now – double-click to change the text`;
+    if (!unsure) { crops.forEach((c) => { c.width = c.height = 0; }); toast(msg, { timeout: 4000 }); return; }
+    // a hint for Google from the letters read (none when unsure)
+    const all = lines.map((l) => l.text).join(' ');
+    const nCyr = (all.match(/[\u0400-\u04ff]/g) || []).length, nLat = (all.match(/[a-zA-ZäöüÄÖÜß]/g) || []).length;
+    const lang = nCyr > (nCyr + nLat) * 0.6 ? 'ru' : nLat > (nCyr + nLat) * 0.9 ? (/[äöüÄÖÜß]|\b(und|der|die|das|ich|Sie)\b/.test(all) ? 'de' : 'en') : '';
+    setTimeout(() => crops.forEach((c) => { c.width = c.height = 0; }), 30000);
+    toast(msg, { timeout: 15000, action: { label: 'Read better with Google', onClick: () => readWithGoogle(editor, page.id, texts.map((t) => t.id), crops, lang, texts.map((t) => t.text)) } });
   } catch (err) {
     busy.remove();
     toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });

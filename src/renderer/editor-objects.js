@@ -7,12 +7,20 @@ import { round2 } from '../shared/geometry.js';
 import { richToPlain, escapeHtml } from '../shared/richtext.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
 import { stacked } from '../shared/stacking.js';
+import { boxWarp, cssMatrix3d, validStops } from '../shared/warp.js';
 import { boxStyle, docLook, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
 import { renderFormFields } from './fill-sign.js';
 
 const LINE_H = 1.3;
 const MARKER = '⁣StudyNotes-clip:';
 const MAX_IMAGE_SIDE = 3200;
+
+// A matched text box's perspective, light and blur grow with its font size.
+function scaleLookBy(t, s) {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  if (Array.isArray(t.q)) Object.assign(t, { q: t.q.map((v) => r2(v * s)), qw: r2(t.qw * s), qh: r2(t.qh * s) });
+  if (Array.isArray(t.cg)) t.cg = t.cg.map(([u, c]) => [r2(u * s), c]);
+}
 
 function fontCss(ff) { return `"${(FONTS[ff] || FONTS[DEFAULT_FONT]).css}", "Segoe UI", sans-serif`; }
 
@@ -312,7 +320,6 @@ export const objectsMixin = {
     const resize = h('div', { class: 'tb-handle resize right', title: 'Drag to change the width' });
     const wrap = h('div', { class: 'textbox-wrap', dataset: { id: t.id }, style: { left: t.x + 'px', top: t.y + 'px', width: t.w + 'px' } }, el, grip, resizeL, resize);
     this.applyBoxLook(el, wrap, t, view.page);
-    if (t.r) Object.assign(el.style, { transform: `rotate(${t.r}deg)`, transformOrigin: '50% 50%' });
     el._tb = { pageId: view.page.id, id: t.id };
     this.textResizeObserver().observe(el);
     this.setTextEditable(el);
@@ -328,10 +335,26 @@ export const objectsMixin = {
       ? { background: box.bg || 'transparent', border: box.bc ? `${BOX_BORDER}px solid ${box.bc}` : 'none', borderRadius: box.br + 'px', padding: `${BOX_PAD_Y}px ${BOX_PAD_X}px` }
       : { background: '', border: '', borderRadius: '', padding: '' });
     wrap.classList.toggle('boxed', !!box);
-    // "Match the document": as soft as the scanned text around it (sharp while editing)
+    // "Match the document": as soft as the scanned text around it, in the
+    // photo's perspective and light (straight, sharp and plain while editing)
     const soft = softOf(t);
     el.classList.toggle('fx', soft > 0);
     if (soft > 0) el.style.setProperty('--fx', soft + 'px'); else el.style.removeProperty('--fx');
+    const H = soft > 0 ? boxWarp(t) : null;
+    el.style.setProperty('--rot', (t.r || 0) + 'deg');
+    // (rotation around the box centre, then the perspective from the top-left corner)
+    el.style.transformOrigin = H ? '0 0' : '50% 50%';
+    el.style.transform = H ? `translate(50%, 50%) rotate(${t.r || 0}deg) translate(-50%, -50%) ${cssMatrix3d(H)}` : (t.r ? `rotate(${t.r}deg)` : '');
+    el.classList.toggle('warp', !!H);
+    const grad = soft > 0 && validStops(t.cg) && !box;
+    el.classList.toggle('grad', grad);
+    if (grad) {
+      el.style.setProperty('--c', t.c || '#000000');
+      el.style.backgroundImage = `linear-gradient(90deg, ${t.cg.map(([u, c]) => `${c} ${u}px`).join(', ')})`;
+      Object.assign(el.style, { color: 'transparent', webkitBackgroundClip: 'text', backgroundClip: 'text', textDecorationColor: t.c || '#000000' });
+    } else if (el.style.backgroundClip === 'text') {
+      Object.assign(el.style, { backgroundImage: '', webkitBackgroundClip: '', backgroundClip: '', color: t.c, textDecorationColor: '' });
+    }
     if (t.aw) {
       const maxW = this.textMaxWidth(page, t.x);
       el.style.width = 'max-content';
@@ -616,8 +639,8 @@ export const objectsMixin = {
       if (!idSet.has(t.id)) return t;
       const n = { ...t };
       if (change.ff) n.ff = change.ff;
-      if (change.size) n.fs = change.size;
-      if (change.color) n.c = change.color;
+      if (change.size) { if (t.fs > 0) scaleLookBy(n, change.size / t.fs); n.fs = change.size; }
+      if (change.color) { n.c = change.color; delete n.cg; } // (a new colour replaces the photo's light)
       for (const k of ['b', 'i', 'u']) {
         if (change[k] === undefined) continue;
         n[k] = change[k];

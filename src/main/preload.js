@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   ocrInstall: invoke('ocr:install'),
   ocrRemove: invoke('ocr:remove'),
   ocrRecognize: invoke('ocr:recognize'),
+  ocrGoogle: invoke('ocr:google'),
   onOcrProgress: (fn) => ipcRenderer.on('ocr:progress', (_e, done, total) => fn(done, total)),
   setTheme: invoke('app:setTheme'),
   onBeforeClose: (fn) => ipcRenderer.on('app:before-close', () => fn()),

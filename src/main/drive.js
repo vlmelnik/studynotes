@@ -580,6 +580,37 @@ class DriveRemote {
     return res.json();
   }
 
+  /**
+   * Text in a picture, read by Google (handwriting too): the picture is
+   * uploaded as a Google Doc with text recognition, the text read back and
+   * the doc deleted again at once. lang: 'de' | 'en' | 'ru' | ''.
+   */
+  async ocrImage(bytes, mimeType = 'image/png', lang = '') {
+    const meta = { name: 'StudyNotes text recognition (temporary)', mimeType: 'application/vnd.google-apps.document', appProperties: { snOcr: '1' } };
+    const boundary = 'sn' + crypto.randomBytes(12).toString('hex');
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
+      Buffer.from(bytes),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const q = new URLSearchParams({ uploadType: 'multipart', fields: 'id', ...(lang ? { ocrLanguage: lang } : {}) });
+    // (one try: a retry after a lost answer would leave an unknown doc behind)
+    const { id } = await this._json(`${UPLOAD_API}/files?${q}`, { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body, tries: 1 });
+    try {
+      const res = await this._request(`${API}/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain`);
+      return (await res.text()).replace(/^\uFEFF/, '').replace(/\r/g, '').trim();
+    } finally {
+      await this._request(`${API}/files/${encodeURIComponent(id)}`, { method: 'DELETE', okStatuses: [404] }).catch(() => {});
+    }
+  }
+
+  /** Deletes temporary text-recognition docs left behind (lost connection). */
+  async ocrCleanup() {
+    const q = encodeURIComponent("appProperties has { key='snOcr' and value='1' } and trashed = false");
+    const r = await this._json(`${API}/files?q=${q}&fields=files(id)&pageSize=100`);
+    for (const f of r.files || []) await this._request(`${API}/files/${encodeURIComponent(f.id)}`, { method: 'DELETE', okStatuses: [404] }).catch(() => {});
+  }
+
   async download(id) {
     const res = await this._request(`${API}/files/${encodeURIComponent(id)}?alt=media`);
     return Buffer.from(await res.arrayBuffer());

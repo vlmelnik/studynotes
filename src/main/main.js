@@ -610,6 +610,7 @@ handle('ocr:status', () => getOcr().status());
 handle('ocr:install', () => getOcr().install((done, total) => send('ocr:progress', done, total)));
 handle('ocr:remove', () => getOcr().remove());
 handle('ocr:recognize', (image, langs) => getOcr().recognize(image, langs));
+handle('ocr:google', (images, lang) => cloud.ocrImages(images, lang));
 app.on('will-quit', () => { if (ocr) ocr.stop(); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));
 handle('app:startupReport', () => { const r = startupReport; startupReport = null; return r; });

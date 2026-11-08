@@ -363,3 +363,12 @@ scans: both lasso area and whole page; add-on data downloaded from the GitHub re
 - [x] Local check on the 6 example photos (not committed)
 - [x] Tests: export soft + every-font glyph check, v17 I, bench with all fonts
 - [ ] Review, full e2e, Windows build, packaged test, re-publish 1.7.0 (REPLACE)
+
+## 1.7.0 redo #2 – perspective, lighting, bold, handwriting (2026-11-08 evening)
+User answers: offline + online button (Google Drive OCR); handwriting → closest handwriting font; perspective/lighting only with "Match the document".
+- [x] A. Bold: headings like "Allerheiligen" / "All Saints' Day" (semibold) must come out bold; stable rule
+- [x] B. Perspective per line: quad from x-height band fits (left/right) + stroke shear → homography t.q; screen matrix3d, PDF per-glyph affine
+- [x] C. Lighting: ink colour gradient along the line (glare/shadow) t.cg; per-line blur (depth of field); screen gradient text, PDF per-glyph colour
+- [x] D. Handwriting: detect handwritten lines, handwriting fonts (Caveat, Neucha, …) closest match, straight sharp boxes; keep weaker lines
+- [x] E. "Recognise more accurately (Google)": per-line crops → Drive OCR (convert to Doc, export text, delete); fake for tests
+- [ ] F. Tests (unit + e2e + bench + local photos), review, build, re-publish 1.7.0

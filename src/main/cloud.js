@@ -32,9 +32,8 @@ class CloudSync {
   // ---------- token storage (encrypted) ----------
   tokenFile() { return path.join(this.o.userData, 'google-token.bin'); }
 
-  tokenStore() {
+  tokenStore(file = this.tokenFile()) {
     const { safeStorage } = this.o.electron;
-    const file = this.tokenFile();
     return {
       load: async () => {
         try {
@@ -163,6 +162,50 @@ class CloudSync {
     }
     this.running = this._sync(opts).finally(() => { this.running = null; });
     return this.running;
+  }
+
+  /**
+   * Drive for text recognition only. Signed in for sync: that account.
+   * Otherwise its own sign-in (own token file) that never turns sync on –
+   * recognising a few lines must not start uploading the library.
+   */
+  async ocrRemote() {
+    if (this.fake()) return this.fake().remote;
+    if (await this.signedIn()) return this.remote();
+    const cfg = this.config();
+    if (!cfg.clientId) throw new Error('Google sign-in is not available in this version');
+    const { shell, net } = this.o.electron;
+    if (!this._ocrAuth) {
+      this._ocrAuth = new GoogleAuth({
+        clientId: cfg.clientId.trim(),
+        clientSecret: (cfg.clientSecret || '').trim(),
+        tokenStore: this.tokenStore(path.join(this.o.userData, 'google-ocr-token.bin')),
+        openExternal: (url) => shell.openExternal(url),
+        fetch: (...a) => net.fetch(...a),
+      });
+      this._ocrRemote = new DriveRemote({ auth: this._ocrAuth, fetch: (...a) => net.fetch(...a) });
+    }
+    if (!(await this._ocrAuth.isSignedIn().catch(() => false))) await this._ocrAuth.signIn();
+    return this._ocrRemote;
+  }
+
+  /** Text of pictures read by Google (signs in first if needed). images: [Uint8Array] (PNG). */
+  async ocrImages(images, lang = '') {
+    const remote = await this.ocrRemote();
+    // temporary docs a broken connection may have left behind last time
+    if (remote.ocrCleanup) await remote.ocrCleanup().catch(() => {});
+    const out = new Array(images.length).fill('');
+    // a few at a time: each picture is three small requests; one failure stops all
+    let next = 0, failed = null;
+    const worker = async () => {
+      while (next < images.length && !failed) {
+        const k = next++;
+        try { out[k] = await remote.ocrImage(Buffer.from(images[k]), 'image/png', lang); } catch (e) { failed = failed || e; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(4, images.length)) }, worker));
+    if (failed) throw failed;
+    return out;
   }
 
   async signedIn() {

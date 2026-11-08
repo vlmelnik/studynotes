@@ -33,7 +33,7 @@ async function launch() {
   const app = await electron.launch({
     executablePath: process.env.STUDYNOTES_EXE || require('electron'),
     args: [...(packaged ? [] : [root]), '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_OCR_URL: ocrUrl(), STUDYNOTES_FAKE_INK: '1' },
+    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_OCR_URL: ocrUrl(), STUDYNOTES_FAKE_INK: '1', STUDYNOTES_FAKE_DRIVE: path.join(tmp, 'drive') },
   });
   const win = await app.firstWindow();
   win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -45,7 +45,7 @@ async function launch() {
 
 
 (async () => {
-  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I').split(',');
+  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K').split(',');
   let { app, win, ed } = await launch();
   const rel = await ed(async () => { const r = await window.api.createNotebook('', { title: 'v17', paper: 'blank', pageCount: 4 }); await window.__app.openNotebook(r); return r; });
   await win.waitForTimeout(600);
@@ -377,6 +377,87 @@ async function launch() {
     check('I: clicked again: sharp text', !t2.fx && !/blur/.test(await filterOf('new')), JSON.stringify(t2));
   }
 
+  // ===================================================================== J. handwriting
+  const picture = (draw) => ed(async (code) => {
+    const e = window.__app.active;
+    const S = 4, W = 520, H = 170;
+    const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#f7f6f2'; ctx.fillRect(0, 0, cv.width, cv.height);
+    await (0, eval)(code)(ctx, S);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+    const src = await window.api.writeAsset(e.rel, new Uint8Array(await blob.arrayBuffer()), 'png');
+    e.viewer.fitWidth(); e.viewer.scrollToPage(0);
+    e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'pic', type: 'img', x: 30, y: 60, w: W, h: H, src }] });
+  }, draw.toString());
+  const recognise = async () => {
+    await win.waitForTimeout(300);
+    await ed(() => { window.__ocrDebug = []; window.__mk = window.__app.active.makePageEditable(0); });
+    await win.waitForTimeout(300);
+    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
+    await ed(() => window.__mk);
+    if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ hand: window.__ocrDebug.hand, lightDbg: window.__ocrDebug.light }))));
+    return ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).texts.slice().sort((a, b) => a.y - b.y); });
+  };
+  if (sections.includes('J')) {
+    await picture(async (ctx, S) => {
+      await document.fonts.load('400 30px "SN Caveat"');
+      ctx.fillStyle = '#1d2a6b';
+      let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      const lines = ['Liebe Anna, vielen Dank für deinen Brief', 'wir sehen uns am Montag in der Stadt', 'und gehen zusammen ins Kino am Abend'];
+      lines.forEach((t, k) => {
+        let x = 20 * S;
+        for (const w of t.split(' ')) {
+          const fs = (22 + rnd() * 5) * S;
+          ctx.font = `400 ${fs}px "SN Caveat"`;
+          ctx.save(); ctx.translate(x, (45 + k * 45 + rnd() * 5) * S); ctx.rotate(rnd() * 0.08); ctx.fillText(w, 0, 0); ctx.restore();
+          x += ctx.measureText(w + ' ').width + rnd() * 6 * S;
+        }
+      });
+    });
+    const t = await recognise();
+    const handFonts = ['hand', 'caveat', 'pangolin', 'marck', 'badscript'];
+    check('J: handwriting becomes text in a handwriting font, straight and sharp', t.length >= 2 && t.every((q) => handFonts.includes(q.ff) && !q.fx && !q.q),
+      JSON.stringify(t.map((q) => [q.text, q.ff, q.fx || 0])));
+    const btn = win.locator('.toast-action', { hasText: 'Read better with Google' });
+    check('J: "Read better with Google" is offered', await btn.count() === 1);
+    if (await btn.count()) {
+      await btn.click();
+      await win.waitForFunction(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.some((q) => q.text === 'Google line ok'), null, { timeout: 20000 }).catch(() => {});
+      const t2 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts);
+      check('J: Google\'s reading replaces the text (one undo step)', t2.length === t.length && t2.every((q) => q.text === 'Google line ok'), JSON.stringify(t2.map((q) => q.text)));
+      await ed(() => window.__app.active.undo());
+      const t3 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts);
+      check('J: undo brings the offline reading back', t3.length === t.length && t3.every((q) => q.text !== 'Google line ok'));
+    }
+  }
+
+  // ===================================================================== K. perspective and light
+  if (sections.includes('K')) {
+    await picture(async (ctx, S) => {
+      await document.fonts.load('400 30px "SN Sans"');
+      // a page photographed at a slant: letters lean, the right side is nearer (larger), light falls off
+      const lines = ['The tenant agrees to pay the monthly rent', 'before the third working day of each month.', 'Please check the size of every room carefully.'];
+      lines.forEach((t, k) => {
+        let x = 20 * S;
+        for (const ch of t) {
+          const f = 1 + 0.45 * ((x / S - 20) / 460);
+          const v = Math.round(17 + 120 * Math.min(1, (x / S - 20) / 400));
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.font = `400 ${13 * f * S}px "SN Sans"`;
+          ctx.save(); ctx.translate(x, (50 + k * 40) * S); ctx.transform(1, 0, -0.18, 1, 0, 0); ctx.fillText(ch, 0, 0); ctx.restore();
+          x += ctx.measureText(ch).width;
+        }
+      });
+    });
+    const t = await recognise();
+    check('K: perspective is measured (t.q)', t.length >= 2 && t.filter((q) => Array.isArray(q.q)).length >= 2, JSON.stringify(t.map((q) => [q.text, q.q])));
+    check('K: the light along the line is measured (t.cg)', t.filter((q) => Array.isArray(q.cg) && q.cg.length >= 2).length >= 2, JSON.stringify(t.map((q) => q.cg)));
+    const tr = await ed(() => [...document.querySelectorAll('.textbox.fx.warp')].map((el) => getComputedStyle(el).transform));
+    check('K: shown in perspective (matrix3d) when matched', tr.length >= 2 && tr.every((v) => v.startsWith('matrix3d')), tr.join(' | '));
+    await shot(win, 'perspective');
+  }
+
   // ===================================================================== Z. (local only) a real screenshot
   if (sections.includes('Z') && process.env.SN_IMG) {
     const bytes = [...fs.readFileSync(process.env.SN_IMG)];
@@ -397,13 +478,15 @@ async function launch() {
     const tag = process.env.SN_TAG || 'real';
     await win.screenshot({ path: path.join(out, `v17-${tag}-before.png`), clip: clipZ });
     const t0 = Date.now();
-    await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
+    await ed(() => { window.__ocrDebug = []; window.__mk = window.__app.active.makePageEditable(0); });
     await win.waitForTimeout(300);
     if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
+    if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ hand: window.__ocrDebug.hand }))));
     console.log(`time ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     for (const q of d.texts) console.log(JSON.stringify([q.text, q.ff, !!q.b, !!q.i, q.fs, q.c, q.r || 0, q.fx || 0]));
+    if (process.env.SN_CSS) await ed((css) => { const st = document.createElement('style'); st.textContent = css; document.head.append(st); }, process.env.SN_CSS);
     await win.waitForTimeout(800);
     await win.screenshot({ path: path.join(out, `v17-${tag}-after.png`), clip: clipZ });
   }

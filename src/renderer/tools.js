@@ -98,6 +98,15 @@ function transformItem(it, s, tx, ty) {
   return out;
 }
 
+// A matched text box's perspective and light stops scale with it.
+function scaleLook(t, s) {
+  if (Array.isArray(t.q)) Object.assign(t, { q: t.q.map((v) => round2(v * s)), qw: round2(t.qw * s), qh: round2(t.qh * s) });
+  if (Array.isArray(t.cg)) t.cg = t.cg.map(([u, c]) => [round2(u * s), c]);
+  if (t.fx > 0) t.fx = round2(t.fx * s);
+  if (t.look > 0) t.look = round2(t.look * s);
+  return t;
+}
+
 export class Tools {
   constructor(editor) {
     this.editor = editor;
@@ -1096,7 +1105,7 @@ export class Tools {
       ...before,
       strokes: before.strokes.map((st) => (sel.strokeIds.has(st.id) ? transformStroke(st, s, s, tx, ty) : st)),
       texts: before.texts.map((t) => (sel.textIds.has(t.id)
-        ? { ...t, x: round2(t.x * s + tx), y: round2(t.y * s + ty), w: round2(t.w * s), fs: round2(t.fs * s) } : t)),
+        ? scaleLook({ ...t, x: round2(t.x * s + tx), y: round2(t.y * s + ty), w: round2(t.w * s), fs: round2(t.fs * s) }, s) : t)),
       items: before.items.map((it) => (sel.itemIds.has(it.id) ? transformItem(it, s, tx, ty) : it)),
     };
   }
@@ -1144,8 +1153,8 @@ export class Tools {
       texts: before.texts.map((t) => {
         if (!sel.textIds.has(t.id)) return t;
         const n = { ...t };
-        if (color) n.c = color;
-        if (font) n.fs = round2(Math.max(4, t.fs * font));
+        if (color) { n.c = color; delete n.cg; }
+        if (font) { n.fs = round2(Math.max(4, t.fs * font)); scaleLook(n, n.fs / t.fs); n.x = t.x; n.y = t.y; }
         if (ff) n.ff = ff;
         if (b !== undefined) n.b = b;
         if (i !== undefined) n.i = i;
