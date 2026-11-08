@@ -51,3 +51,6 @@
 - tesseract.js 7 in Node passes a boolean to getCore → it loads the full (non "-lstm") cores; package those, not the -lstm ones. Test OCR in the packaged app (asar).
 - e2e sections must reset zoom/scroll themselves; an earlier section can leave the page scrolled away.
 - Release workflow: add-on data gets its own release (upload/NOT_LATEST) so the app release stays "latest".
+- pdf-lib's font subsetter silently drops glyphs of many Google fonts (Inter, Noto, PT, Fira, Source Sans, EB Garamond): render every new font with pdftoppm before shipping; test/export.test.js checks it.
+- Don't estimate scan blur from font-template correlation: a font that doesn't quite match "fits" better when blurred. Measure from the letters' edges (steepest slope vs contrast).
+- More font candidates need a prior for the common fonts and doc-level rules (one kind, italic/bold only relative to other lines): photos taken at a slant make every line look a bit italic.

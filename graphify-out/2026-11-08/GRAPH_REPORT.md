@@ -1,30 +1,30 @@
 # Graph Report - studynotes  (2026-11-08)
 
 ## Corpus Check
-- 88 files · ~157,273 words
+- 88 files · ~171,602 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 9 file(s) not represented in the graph (top: (none) 8, .css 1)
 
 ## Summary
-- 1447 nodes · 3583 edges · 74 communities (55 shown, 19 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 251 edges (avg confidence: 0.85)
+- 1467 nodes · 3626 edges · 80 communities (60 shown, 20 thin omitted)
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 253 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
 - Viewer
 - DriveRemote
 - main/main.js
-- editor.js
+- fill-sign.js
 - ocr-bench.js
 - App
 - inkrender.js
 - Library
 - showMenu
-- .onMove
+- Tools
 - export.js
 - bgremove.js
 - with
-- ref_os
+- screenshots.js
 - ref_fs
 - editor-objects.js
 - with
@@ -35,21 +35,20 @@
 - localbackup.js
 - FakeDriveApi
 - inkrender.js
-- Editor
 - scan-edit.js
-- build.js
+- PageView
 - CloudSync
 - geometry.js
 - v11.test.js
 - FakeRemote
 - i18n.js
 - build
-- .onKey
 - v13.js
+- .pageMenu
 - sync.js
 - Laser
 - library-view.js
-- PageView
+- editor-panels.js
 - cleanup-branches.yml
 - scripts
 - FakeAuth
@@ -59,9 +58,12 @@
 - win
 - Lessons
 - StudyNotes – notes for Claude
+- run.js
+- v161.js
 - ui.js
 - pen-filter.js
-- pdf-lib
+- v15.js
+- stacked
 - Now (v1.4)
 - StudyNotes – GoodNotes-style desktop app for Windows
 - v16.js
@@ -70,6 +72,7 @@
 - v1.5 – plan (2026-10-30)
 - round2
 - release-notes.md
+- v12.js
 - package.json
 - tools.js
 - richtext.js
@@ -91,7 +94,7 @@
 7. `icon()` - 37 edges
 8. `Viewer` - 33 edges
 9. `DriveRemote` - 28 edges
-10. `showMenu()` - 27 edges
+10. `makeTextEditable()` - 28 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `2026-10-26 (v1.4)` --references--> `h()`  [INFERRED]
@@ -108,7 +111,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (74 total, 19 thin omitted)
+## Communities (80 total, 20 thin omitted)
 
 ### Community 1 - "DriveRemote"
 Cohesion: 0.05
@@ -116,71 +119,75 @@ Nodes (24): AREAS, authError(), b64url(), buildAuthUrl(), createPkce(), decodePa
 
 ### Community 2 - "main/main.js"
 Cohesion: 0.05
-Nodes (46): entryStream(), exportLibrary(), exportNotebookArchive(), importLibrary(), openZip(), readEntries(), readManifest(), walk() (+38 more)
+Nodes (50): entryStream(), exportLibrary(), exportNotebookArchive(), importLibrary(), openZip(), readEntries(), readManifest(), walk() (+42 more)
 
-### Community 3 - "editor.js"
-Cohesion: 0.11
-Nodes (23): EMPTY, ERASER_SIZES, HL_PALETTE, HL_SIZES, NEON_PALETTE, PALETTE, PEN_SIZES, SHAPE_ICONS (+15 more)
+### Community 3 - "fill-sign.js"
+Cohesion: 0.36
+Nodes (9): cropToInk(), fillBar(), loadFormFields(), placeNext(), renderFormFields(), signatureDialog(), todayText(), urlFor() (+1 more)
 
 ### Community 4 - "ocr-bench.js"
 Cohesion: 0.17
 Nodes (9): CONDS, errors, FONTS, launch(), ocrUrl(), out, results, root (+1 more)
 
+### Community 5 - "App"
+Cohesion: 0.10
+Nodes (3): defaultToolState(), App, encodeRel()
+
 ### Community 6 - "inkrender.js"
-Cohesion: 0.15
-Nodes (28): livePath(), sizedPath(), strokePath(), angleBetween(), applyTapers(), bandPiece(), beadOutline(), beadPath() (+20 more)
+Cohesion: 0.14
+Nodes (30): fillOutline(), livePath(), sizedPath(), strokePath(), angleBetween(), applyTapers(), bandPiece(), beadOutline() (+22 more)
 
 ### Community 7 - "Library"
 Cohesion: 0.08
-Nodes (22): cleanupExternal(), copyName(), externalPath(), hasUnwrittenNotes(), idFor(), isExternal(), openExternal(), readEmbedded() (+14 more)
+Nodes (27): cleanupExternal(), copyName(), externalPath(), hasUnwrittenNotes(), idFor(), isExternal(), openExternal(), readEmbedded() (+19 more)
 
 ### Community 8 - "showMenu"
-Cohesion: 0.17
-Nodes (8): ALIGN_ICON, ALIGN_NEXT, sizeControl(), swatch(), TextBar, closeMenu(), h(), showMenu()
+Cohesion: 0.21
+Nodes (11): icon(), ALIGN_ICON, ALIGN_NEXT, sizeControl(), swatch(), TEXT_SIZES, TextBar, closeMenu() (+3 more)
 
 ### Community 10 - "export.js"
-Cohesion: 0.14
-Nodes (28): contentBBox(), drawContent(), drawImage(), drawInkText(), drawObject(), drawPolyline(), drawRich(), drawStroke() (+20 more)
+Cohesion: 0.11
+Nodes (35): contentBBox(), drawContent(), drawImage(), drawInkText(), drawObject(), drawPaper(), drawPolyline(), drawRich() (+27 more)
 
 ### Community 11 - "bgremove.js"
-Cohesion: 0.12
-Nodes (25): bgraPremulToRGBA(), callWorker(), capSize(), chunk(), computeMask(), crc32(), CRC_TABLE, decodeImage() (+17 more)
+Cohesion: 0.09
+Nodes (29): bgraPremulToRGBA(), callWorker(), capSize(), chunk(), computeMask(), crc32(), CRC_TABLE, decodeImage() (+21 more)
 
 ### Community 12 - "with"
 Cohesion: 0.07
 Nodes (28): CSC_IDENTITY_AUTO_DISCOVERY, ID, SECRET, tag, jobs, windows, name, permissions (+20 more)
 
-### Community 13 - "ref_os"
-Cohesion: 0.07
-Nodes (20): playwright-core, FRAMES, outDir, rawDir, root, tmp, out, root (+12 more)
+### Community 13 - "screenshots.js"
+Cohesion: 0.18
+Nodes (5): FRAMES, outDir, rawDir, root, tmp
 
 ### Community 14 - "ref_fs"
-Cohesion: 0.09
-Nodes (11): local, FILES, dayOf(), notebookSignatures(), pad(), publish(), checkResult(), meanAlpha() (+3 more)
+Cohesion: 0.13
+Nodes (13): dist, pdfjs, root, local, FILES, dayOf(), notebookSignatures(), pad() (+5 more)
 
 ### Community 15 - "editor-objects.js"
-Cohesion: 0.09
-Nodes (18): blobToImage(), BLOCK, fontCss(), objectsMixin, prepareImage(), rangeOffsets(), safeCache, safeHtml() (+10 more)
+Cohesion: 0.10
+Nodes (16): blobToImage(), BLOCK, fontCss(), objectsMixin, prepareImage(), rangeOffsets(), safeCache, safeHtml() (+8 more)
 
 ### Community 16 - "with"
 Cohesion: 0.08
 Nodes (24): GH_TOKEN, jobs, publish, name, permissions, contents, runs-on, steps (+16 more)
 
 ### Community 17 - "Plan"
-Cohesion: 0.20
-Nodes (10): A. Sync & data safety (most important), B. Text box (GoodNotes style), C. Shapes, D. Laser, E. Library, F. Pictures, G. Pages, H. Misc (+2 more)
+Cohesion: 0.17
+Nodes (12): A. Sync & data safety (most important), B. Text box (GoodNotes style), C. Shapes, D. Laser, E. Library, F. Pictures, G. Pages, H. Misc (+4 more)
 
 ### Community 18 - "toast"
 Cohesion: 0.25
 Nodes (3): LibraryView, promptDialog(), toast()
 
 ### Community 19 - "dependencies"
-Cohesion: 0.12
-Nodes (21): author, dependencies, onnxruntime-node@^1.30.0, pdf-lib@^1.17.1, @pdf-lib/fontkit@^1.1.1, perfect-freehand@^1.2.3, tesseract.js@^7.0.0, yauzl@^3.4.0 (+13 more)
+Cohesion: 0.15
+Nodes (13): dependencies, onnxruntime-node@^1.30.0, pdf-lib@^1.17.1, @pdf-lib/fontkit@^1.1.1, perfect-freehand@^1.2.3, tesseract.js@^7.0.0, yauzl@^3.4.0, yazl@^3.3.1 (+5 more)
 
 ### Community 20 - "tools.js"
-Cohesion: 0.14
-Nodes (14): before(), build(), charAt(), highlightStrokes(), layouts, peekLayout(), ready, spanBetween() (+6 more)
+Cohesion: 0.18
+Nodes (12): before(), build(), charAt(), highlightStrokes(), layouts, peekLayout(), ready, spanBetween() (+4 more)
 
 ### Community 21 - "localbackup.js"
 Cohesion: 0.25
@@ -192,23 +199,23 @@ Nodes (6): compile(), FakeDriveApi, json(), md5(), parseMultipart(), unquote()
 
 ### Community 23 - "inkrender.js"
 Cohesion: 0.15
-Nodes (22): drawPaper(), cutClipCache, cutClips(), drawLive(), drawPaperRegion(), fillCache, fillPath(), liveCache (+14 more)
+Nodes (22): drawStrokeInk(), withCuts(), cutClipCache, cutClips(), drawLive(), fillCache, fillPath(), liveCache (+14 more)
 
 ### Community 25 - "scan-edit.js"
-Cohesion: 0.15
-Nodes (27): CANDIDATES, chooseFonts(), cssFont(), dilateMask(), ensureOcr(), fixUmlauts(), fontScores(), imageCanvas() (+19 more)
+Cohesion: 0.11
+Nodes (34): BLURS, chooseFonts(), CLASSIC, cssFont(), dilateMask(), edgeSoftness(), ensureOcr(), familiesFor() (+26 more)
 
-### Community 26 - "build.js"
-Cohesion: 0.33
-Nodes (5): esbuild@^0.28.2, esbuild, dist, pdfjs, root
+### Community 26 - "PageView"
+Cohesion: 0.09
+Nodes (12): drawPaperRegion(), drawStrokes(), overlaps(), BitmapCache, contains(), dpr(), intersect(), MAX_ZOOM (+4 more)
 
 ### Community 28 - "geometry.js"
-Cohesion: 0.18
-Nodes (24): arcPts(), arrowHead(), bboxCache, bboxesOverlap(), densify(), distPointSeg(), distSegRect(), distSegSeg() (+16 more)
+Cohesion: 0.15
+Nodes (27): arcPts(), arrowHead(), bboxCache, bboxesOverlap(), BOX_SHAPES, densify(), distPointSeg(), distSegRect() (+19 more)
 
 ### Community 29 - "v11.test.js"
-Cohesion: 0.19
-Nodes (14): sleep(), findThunderbird(), outlookScript(), powershell(), psQuote(), run(), sendMail(), sendTelegram() (+6 more)
+Cohesion: 0.11
+Nodes (6): pdf-lib, @pdf-lib/fontkit, fontFile(), FONTS, FONT, ROOT
 
 ### Community 31 - "i18n.js"
 Cohesion: 0.19
@@ -227,12 +234,12 @@ Cohesion: 0.29
 Nodes (13): absInside(), conflictName(), isIgnoredName(), isNotebookJson(), loadState(), md5Buffer(), pad(), pruneEmptyDirs() (+5 more)
 
 ### Community 38 - "library-view.js"
-Cohesion: 0.14
-Nodes (16): drawPaper(), COVER_COLORS, fitTitle(), pageCanvas(), LABEL, templatePicker(), thumbCanvas(), encodeRel() (+8 more)
+Cohesion: 0.11
+Nodes (26): EMPTY, ERASER_SIZES, HL_PALETTE, HL_SIZES, NEON_PALETTE, PALETTE, PEN_SIZES, SHAPE_ICONS (+18 more)
 
-### Community 39 - "PageView"
-Cohesion: 0.05
-Nodes (25): collapse(), fold(), indexFor(), MARKS, normalize(), richPlain(), searchLibrary(), searchNotebook() (+17 more)
+### Community 39 - "editor-panels.js"
+Cohesion: 0.11
+Nodes (16): collapse(), fold(), indexFor(), MARKS, normalize(), richPlain(), searchLibrary(), searchNotebook() (+8 more)
 
 ### Community 40 - "cleanup-branches.yml"
 Cohesion: 0.15
@@ -262,17 +269,29 @@ Nodes (7): 2026-10-26 (v1.4), 2026-10-30 (v1.5), 2026-10-31 (v1.6), Lessons, v1.
 Cohesion: 0.50
 Nodes (3): Checks, Code map (graphify), StudyNotes – notes for Claude
 
+### Community 52 - "run.js"
+Cohesion: 0.28
+Nodes (6): check(), main(), mem(), out, results, root
+
+### Community 53 - "v161.js"
+Cohesion: 0.22
+Nodes (5): errors, out, results, root, tmp
+
 ### Community 54 - "ui.js"
-Cohesion: 0.23
-Nodes (13): icon(), P, confirmDialog(), debounce(), describeKey(), iconButton(), keySignature(), modal() (+5 more)
+Cohesion: 0.21
+Nodes (12): P, confirmDialog(), describeKey(), keySignature(), modal(), parseRange(), sameKey(), shortcutKey() (+4 more)
 
 ### Community 55 - "pen-filter.js"
 Cohesion: 0.25
 Nodes (3): alpha(), OneEuro, PenFilter
 
-### Community 56 - "pdf-lib"
-Cohesion: 0.09
-Nodes (13): pdf-lib, errors, libDir, out, results, root, tmp, userData (+5 more)
+### Community 56 - "v15.js"
+Cohesion: 0.10
+Nodes (13): playwright-core, out, root, out, results, root, errors, libDir (+5 more)
+
+### Community 57 - "stacked"
+Cohesion: 0.73
+Nodes (4): layerOf(), restack(), stacked(), ids()
 
 ### Community 58 - "Now (v1.4)"
 Cohesion: 0.22
@@ -287,8 +306,8 @@ Cohesion: 0.22
 Nodes (5): errors, out, results, root, tmp
 
 ### Community 62 - "todo.md"
-Cohesion: 0.22
-Nodes (8): Bugs, Features, Release, Review v1.3 (2026-10-20), v1.3 – feature requests (2026-10-20), v1.6.1 – plan (2026-10-31), v1.6 – plan (2026-10-31), v1.7.0 – plan (2026-11-08)
+Cohesion: 0.25
+Nodes (7): 1.7.0 redo – more fonts, "Match the document" (2026-11-08), Bugs, Features, Release, v1.6.1 – plan (2026-10-31), v1.6 – plan (2026-10-31), v1.7.0 – plan (2026-11-08)
 
 ### Community 63 - "Review v1.1 (2026-10-19)"
 Cohesion: 0.29
@@ -299,16 +318,20 @@ Cohesion: 0.33
 Nodes (6): From the v1.4 plan, New requests, Publishing, Review v1.5 (2026-10-30), v1.5 – plan (2026-10-30), Verify
 
 ### Community 65 - "round2"
-Cohesion: 0.22
-Nodes (7): placeAt(), segTouchesRect(), transformItem(), uid(), mapCuts(), round2(), transformStroke()
+Cohesion: 0.25
+Nodes (8): placeAt(), rotPt(), segTouchesRect(), transformItem(), uid(), mapCuts(), round2(), transformStroke()
+
+### Community 68 - "v12.js"
+Cohesion: 0.40
+Nodes (3): out, results, root
 
 ### Community 69 - "package.json"
-Cohesion: 0.17
-Nodes (12): devDependencies, electron-builder@^26.15.3, pdfjs-dist@^6.4.299, playwright-core@^1.64.1, @tesseract.js-data/deu@^1.0.0, @tesseract.js-data/eng@^1.0.0, @tesseract.js-data/rus@^1.0.0, electron-builder (+4 more)
+Cohesion: 0.12
+Nodes (21): author, description, devDependencies, electron-builder@^26.15.3, esbuild@^0.28.2, pdfjs-dist@^6.4.299, playwright-core@^1.64.1, @tesseract.js-data/deu@^1.0.0 (+13 more)
 
 ### Community 70 - "tools.js"
-Cohesion: 0.19
-Nodes (14): itemBBox(), rotPt(), textBBox(), turnedBox(), unionBox(), releaseCanvas(), pointInPolygon(), rectsIntersect() (+6 more)
+Cohesion: 0.22
+Nodes (8): itemBBox(), textBBox(), turnedBox(), unionBox(), pointInPolygon(), rectsIntersect(), resample(), strokeInLasso()
 
 ### Community 72 - "richtext.js"
 Cohesion: 0.36
@@ -331,22 +354,22 @@ Cohesion: 0.50
 Nodes (4): Decisions (your answers), Plan, Review v1.2 (2026-10-20), v1.2 – feature requests (2026-10-19)
 
 ## Knowledge Gaps
-- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Editor` connect `Editor` to `Viewer`, `round2`, `.pageMenu`, `editor.js`, `App`, `PageView`, `showMenu`, `Thumbs`, `.constructor`, `.pageData`, `ui.js`?**
-  _High betweenness centrality (0.092) - this node is a cross-community bridge._
+- **Why does `snapAngle()` connect `geometry.js` to `round2`, `Tools`, `Review v1.1 (2026-10-19)`?**
+  _High betweenness centrality (0.095) - this node is a cross-community bridge._
 - **Should `DriveRemote` be split into smaller, more focused modules?**
   _Cohesion score 0.05379746835443038 - nodes in this community are weakly interconnected._
-- **Why does `snapAngle()` connect `tools.js` to `.onMove`, `geometry.js`, `tools.js`, `Review v1.1 (2026-10-19)`?**
-  _High betweenness centrality (0.069) - this node is a cross-community bridge._
+- **Why does `Bugs found and fixed` connect `Review v1.1 (2026-10-19)` to `geometry.js`?**
+  _High betweenness centrality (0.094) - this node is a cross-community bridge._
 - **Should `main/main.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.051587301587301584 - nodes in this community are weakly interconnected._
-- **Why does `Bugs found and fixed` connect `Review v1.1 (2026-10-19)` to `tools.js`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
-- **Should `editor.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.11333333333333333 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05029838022165388 - nodes in this community are weakly interconnected._
 - **Should `App` be split into smaller, more focused modules?**
-  _Cohesion score 0.11605937921727395 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10042283298097252 - nodes in this community are weakly interconnected._
+- **Should `inkrender.js` be split into smaller, more focused modules?**
+  _Cohesion score 0.13548387096774195 - nodes in this community are weakly interconnected._
+- **Should `Library` be split into smaller, more focused modules?**
+  _Cohesion score 0.07740384615384616 - nodes in this community are weakly interconnected._

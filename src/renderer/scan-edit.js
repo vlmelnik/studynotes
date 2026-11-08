@@ -98,8 +98,14 @@ async function rasterize(editor, index, r, S) {
 }
 
 // ---------- font ----------
-const CANDIDATES = [];
-for (const ff of ['carlito', 'sans', 'serif', 'mono']) for (const [b, i] of [[false, false], [true, false], [false, true]]) CANDIDATES.push({ ff, b, i });
+// Every typeface with a kind can be matched. The classic office fonts are
+// the most likely in documents: another one has to fit a little better.
+const CLASSIC = new Set(['carlito', 'sans', 'serif', 'mono']);
+const PRIOR = 0.006; // per line, in correlation
+const familiesFor = (cyr) => Object.keys(FONTS).filter((f) => FONTS[f].kind && (!cyr || FONTS[f].cyr !== false));
+// blur levels (× letter size) the candidates are compared at: a blurry photo
+// loses thin details like serifs
+const BLURS = [0, 0.03, 0.07, 0.12];
 
 const cssFont = (c, px) => `${c.i ? 'italic ' : ''}${c.b ? 700 : 400} ${px}px "${FONTS[c.ff].css}"`;
 
@@ -108,7 +114,7 @@ const cssFont = (c, px) => `${c.i ? 'italic ' : ''}${c.b ? 700 : 400} ${px}px "$
  * the size that gives the line's width and compared with the real ink.
  * Returns [{ ff, b, i, px, score, left, asc, desc, baseY }] (one per candidate).
  */
-async function fontScores(li, line, gray) {
+async function fontScores(li, line, gray, cands) {
   const text = line.text.trim();
   const w = li.w, h = li.h;
   // darkness of the real line (0 = paper … 1 = ink), from the light-corrected picture
@@ -127,7 +133,7 @@ async function fontScores(li, line, gray) {
   const inkW = line.bbox.x1 - line.bbox.x0;
   const baseY = ((line.baseline.y0 + line.baseline.y1) / 2) - li.box.y0;
   const out = [];
-  for (const c of CANDIDATES) {
+  for (const c of cands) {
     await document.fonts.load(cssFont(c, 40), text).catch(() => {});
     ctx.font = cssFont(c, 100);
     const m = ctx.measureText(text);
@@ -141,7 +147,8 @@ async function fontScores(li, line, gray) {
     // a blurry photo loses thin details (serifs): compare with the candidate
     // drawn sharp and blurred as much as the photo might be, keep the best
     let score = 0;
-    for (const blur of [0, px * 0.035, px * 0.07]) {
+    for (const bk of BLURS) {
+      const blur = bk * px;
       ctx.clearRect(0, 0, w, h);
       ctx.filter = blur ? `blur(${blur.toFixed(2)}px)` : 'none';
       ctx.fillText(text, ox, baseY);
@@ -154,11 +161,40 @@ async function fontScores(li, line, gray) {
       am /= w * h * 255;
       let cov = 0, av = 0;
       for (let k = 0; k < w * h; k++) { const v = a[k * 4 + 3] / 255 - am; cov += v * (D[k] - dm); av += v * v; }
-      score = Math.max(score, av && dv ? cov / Math.sqrt(av * dv) : 0);
+      const sc = av && dv ? cov / Math.sqrt(av * dv) : 0;
+      if (sc > score) score = sc;
     }
-    out.push({ ...c, px, score, left: mm.actualBoundingBoxLeft, asc: mm.fontBoundingBoxAscent, desc: mm.fontBoundingBoxDescent, baseY: baseY + li.box.y0 });
+    out.push({ ...c, px, score, prior: CLASSIC.has(c.ff) ? PRIOR : 0, left: mm.actualBoundingBoxLeft, asc: mm.fontBoundingBoxAscent, desc: mm.fontBoundingBoxDescent, baseY: baseY + li.box.y0 });
   }
   return out;
+}
+
+/**
+ * How blurred the letters are (Gaussian sigma in pixels), from the letters'
+ * edges alone – independent of the font: a step from paper to ink blurred by
+ * sigma has its steepest slope = contrast / (sigma·√2π). A perfectly sharp
+ * edge still measures ≈ 0.8 px (pixels are whole), which is taken out.
+ */
+function edgeSoftness(im, b, extra = 0) {
+  const x0 = Math.max(1, Math.floor(b.x0)), x1 = Math.min(im.width - 1, Math.ceil(b.x1));
+  const y0 = Math.max(1, Math.floor(b.y0)), y1 = Math.min(im.height - 1, Math.ceil(b.y1));
+  if (x1 - x0 < 8 || y1 - y0 < 6) return null;
+  const d = im.data, W = im.width;
+  const g = (x, y) => { const i = (y * W + x) * 4; return d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11; };
+  const vals = [], grads = [];
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    vals.push(g(x, y));
+    const gx = (g(x + 1, y) - g(x - 1, y)) / 2, gy = (g(x, y + 1) - g(x, y - 1)) / 2;
+    grads.push(Math.hypot(gx, gy));
+  }
+  vals.sort((p, q) => p - q); grads.sort((p, q) => p - q);
+  const contrast = vals[Math.floor(vals.length * 0.95)] - vals[Math.floor(vals.length * 0.03)];
+  const steep = grads[Math.floor(grads.length * 0.985)];
+  if (contrast < 40 || !(steep > 0)) return null;
+  const sigma = contrast / (steep * Math.sqrt(2 * Math.PI));
+  // (× 1.2: strokes thinner than the blur lose some contrast – checked against
+  // pictures blurred by a known amount in the bench)
+  return Math.sqrt(Math.max(0, sigma * sigma - 0.64 - extra * extra)) * 1.2;
 }
 
 /** Typical thickness of the strokes in pixels (median horizontal ink run). */
@@ -182,27 +218,35 @@ function strokeWeight(li) {
  * Bold only when the strokes are clearly thicker than in the other lines.
  */
 function chooseFonts(all, weights) {
-  const fams = ['carlito', 'sans', 'serif', 'mono'];
+  const fams = [...new Set(all.flat().map((c) => c.ff))];
   const bestOf = (sc, ff, pred = () => true) => sc.filter((c) => c.ff === ff && pred(c)).sort((x, y) => y.score - x.score)[0];
-  const total = (ff) => all.reduce((sum, sc) => sum + ((bestOf(sc, ff) || { score: 0 }).score), 0);
+  const total = (ff) => all.reduce((sum, sc) => { const c = bestOf(sc, ff); return sum + (c ? c.score + c.prior : 0); }, 0);
   const main = fams.slice().sort((x, y) => total(y) - total(x))[0];
   // stroke thickness relative to the letter size (bold ≈ 1.5× regular)
   const rel = all.map((sc, k) => { const r = bestOf(sc, main, (c) => !c.b && !c.i); return r && r.px ? weights[k] / r.px : 0; });
   const sorted = rel.filter((v) => v > 0).sort((x, y) => x - y);
   const medW = sorted.length ? sorted[sorted.length >> 1] : 0;
+  // italic: clearly better than upright, and more than in the other lines (a
+  // photo taken at a slant leans every line a little – that is not italic)
+  const gainOf = (sc) => { const r = bestOf(sc, main, (c) => !c.b && !c.i), it = bestOf(sc, main, (c) => c.i); return r && it ? it.score - r.score : 0; };
+  const gains = all.map(gainOf).sort((x, y) => x - y);
+  const medGain = all.length >= 3 ? gains[gains.length >> 1] : 0;
   return all.map((sc, k) => {
     let ff = main;
     const own = sc.slice().sort((x, y) => y.score - x.score)[0];
     const inMain = bestOf(sc, main);
     // another kind of typeface (serif / sans / mono) only when it clearly fits
     // better – never switch between two similar sans fonts line by line
-    const kind = (f) => (f === 'carlito' || f === 'sans' ? 'sans' : f);
+    const kind = (f) => FONTS[f].kind;
     if (own && inMain && kind(own.ff) !== kind(main) && own.score - inMain.score > 0.08) ff = own.ff;
     // bold: from the stroke thickness when there are lines to compare with
-    const bold = all.length >= 3 && medW ? rel[k] > medW * 1.3
-      : (() => { const r = bestOf(sc, ff, (c) => !c.b && !c.i), b = bestOf(sc, ff, (c) => c.b); return !!(r && b && b.score - r.score > 0.04); })();
+    // (and the bold letters must fit at least as well: small blurry print
+    // looks thicker without being bold)
+    const rb = bestOf(sc, ff, (c) => !c.b && !c.i), bb = bestOf(sc, ff, (c) => c.b);
+    const bold = all.length >= 3 && medW ? rel[k] > medW * 1.3 && !!(rb && bb && bb.score >= rb.score - 0.01)
+      : !!(rb && bb && bb.score - rb.score > 0.04);
     const r = bestOf(sc, ff, (c) => c.b === bold && !c.i), it = bestOf(sc, ff, (c) => c.i && !bold);
-    return it && r && it.score - r.score > 0.05 ? it : (r || bestOf(sc, ff) || own);
+    return it && r && it.score - r.score > Math.max(0.06, medGain + 0.05) ? it : (r || bestOf(sc, ff) || own);
   });
 }
 
@@ -216,7 +260,7 @@ const HEAD_H = 28; // headings: big bold letters lose umlaut dots when larger //
  * (screenshots, zoomed scans) loses umlaut dots; very small text loses
  * detail. After a first pass the picture is rescaled for a second one.
  */
-async function recognizeSized(canvas, blob) {
+async function recognizeSized(canvas, blob, langs = LANGS) {
   const scaled = async (src, f) => {
     const c2 = document.createElement('canvas');
     c2.width = Math.max(1, Math.round(src.width * f)); c2.height = Math.max(1, Math.round(src.height * f));
@@ -228,7 +272,7 @@ async function recognizeSized(canvas, blob) {
     return b2;
   };
   const read = async (bl, f, dx = 0, dy = 0) => {
-    const got = await window.api.ocrRecognize(new Uint8Array(await bl.arrayBuffer()), LANGS);
+    const got = await window.api.ocrRecognize(new Uint8Array(await bl.arrayBuffer()), langs);
     const sc = (b) => ({ x0: b.x0 / f + dx, y0: b.y0 / f + dy, x1: b.x1 / f + dx, y1: b.y1 / f + dy });
     return got.map((l) => ({ ...l, bbox: sc(l.bbox), baseline: sc(l.baseline), words: l.words.map((w) => ({ ...w, bbox: sc(w.bbox) })) }));
   };
@@ -257,6 +301,27 @@ async function recognizeSized(canvas, blob) {
     if (again.length === 1 && (again[0].conf > l.conf || (plain(again[0].text) === plain(l.text) && again[0].text !== l.text))) lines[k] = again[0];
   }
   return fixUmlauts(lines);
+}
+
+/**
+ * The languages to read with once the first reading shows the script: a
+ * German / English page read with Russian too gets stray Cyrillic look-alikes
+ * ("Рог" for "Fior") in blurry places, and the other way round. null = keep all.
+ */
+function narrowLangs(lines) {
+  let lat = 0, cyr = 0;
+  const words = lines.flatMap((l) => l.words || []);
+  for (const w of words) {
+    if (w.conf < 60) continue;
+    lat += (w.text.match(/[a-zA-ZäöüÄÖÜß]/g) || []).length;
+    cyr += (w.text.match(/[\u0400-\u04ff]/g) || []).length;
+  }
+  if (lat + cyr < 20) return null;
+  // (a real quote in the other script is read with confidence: keep all then)
+  const stray = (re) => words.some((w) => re.test(w.text)) && !words.some((w) => re.test(w.text) && w.conf >= 85 && w.text.length >= 3);
+  if (lat >= (lat + cyr) * 0.9 && stray(/[\u0400-\u04ff]/)) return ['deu', 'eng'];
+  if (cyr >= (lat + cyr) * 0.9 && stray(/[äöüÄÖÜß]/)) return ['rus', 'eng'];
+  return null;
 }
 
 // A word read without its umlaut (big or blurry letters lose the dots) while
@@ -307,6 +372,21 @@ function paperColor(im) {
   const p = px[Math.floor(px.length * 0.2)] || [0, 255, 255, 255];
   return [p[1], p[2], p[3]];
 }
+
+/** Light text on a dark background (dark mode screenshots, menus, signs)? */
+function isDark(im) {
+  const d = im.data, v = [];
+  for (let i = 0; i < d.length; i += 4 * 53) v.push(d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11);
+  v.sort((a, b) => a - b);
+  return v.length > 0 && v[v.length >> 1] < 100;
+}
+
+function invert(im) {
+  const d = im.data;
+  for (let i = 0; i < d.length; i += 4) { d[i] = 255 - d[i]; d[i + 1] = 255 - d[i + 1]; d[i + 2] = 255 - d[i + 2]; }
+}
+
+const invertHex = (c) => '#' + (0xffffff ^ parseInt(String(c).slice(1, 7), 16)).toString(16).padStart(6, '0');
 
 /** Tilt of the text in degrees (median of the long lines' baselines). */
 function skewOf(lines) {
@@ -359,6 +439,11 @@ export async function makeTextEditable(editor, index, area = null) {
     const { canvas, ctx } = await rasterize(editor, index, r, S);
     const W = canvas.width, H = canvas.height;
     const orig = ctx.getImageData(0, 0, W, H);
+    // light letters on dark: everything below works on the negative (dark
+    // letters on light paper), the cleaned picture and the colours are turned
+    // back at the end
+    const dark = isDark(orig);
+    if (dark) invert(orig);
     // 1. even out the light (photos: shadows, glare) – recognition works on this
     let norm = normalizeLight(orig, Math.max(24, Math.round(S * 16)));
     // even light (scan, screenshot, PDF): read the original, it keeps fine
@@ -367,6 +452,8 @@ export async function makeTextEditable(editor, index, area = null) {
     const pngOf = async (im) => { const c = imageCanvas(im); const bl = await new Promise((res) => c.toBlob(res, 'image/png')); return { c, bl }; };
     let n0 = await pngOf(norm);
     let lines = await recognizeSized(n0.c, n0.bl);
+    const langs = narrowLangs(lines) || LANGS;
+    if (langs !== LANGS && Math.abs(skewOf(lines)) <= 0.35) lines = await recognizeSized(n0.c, n0.bl, langs);
     if (editor.destroyed) { busy.remove(); return; }
     // 2. a tilted page (photo, crooked scan): straighten it, read again,
     //    and give the text boxes the same tilt
@@ -379,7 +466,7 @@ export async function makeTextEditable(editor, index, area = null) {
       work = rotateImage(orig, -angle, paperColor(orig));
       norm = norm0 === orig ? work : rotateImage(norm0, -angle, [255, 255, 255]);
       n0 = await pngOf(norm);
-      lines = await recognizeSized(n0.c, n0.bl);
+      lines = await recognizeSized(n0.c, n0.bl, langs);
       if (editor.destroyed) { busy.remove(); return; }
     }
     const cx = W / 2, cy = H / 2, rad = (angle * Math.PI) / 180, cs = Math.cos(rad), sn = Math.sin(rad);
@@ -387,35 +474,88 @@ export async function makeTextEditable(editor, index, area = null) {
     const toPage = (x, y) => [r.x0 + x / S, r.y0 + y / S];
     // real text: enough letters / digits, not edges or shadows read as "|_~"
     const wordy = (t) => (t.match(/[\p{L}\p{N}]/gu) || []).length >= Math.max(2, t.replace(/\s/g, '').length * 0.6);
-    // specks at the start / end of a line (shadows, dust) are not words
-    lines = lines.map((l) => {
-      const ws = (l.words || []).slice();
+    // a wide gap splits a "line" into separate ones (columns, a price far
+    // right, a stray mark): each piece gets its own box and size.
+    // Specks at the start / end of a piece (shadows, dust) are not words.
+    lines = lines.flatMap((l) => {
+      const all = l.words || [];
+      const lhgt = l.bbox.y1 - l.bbox.y0;
       const junk = (w) => !w || !/[\p{L}\p{N}]/u.test(w.text);
-      while (ws.length && junk(ws[0])) ws.shift();
-      while (ws.length && junk(ws[ws.length - 1])) ws.pop();
-      if (!ws.length || ws.length === (l.words || []).length) return l;
-      const x0 = Math.min(...ws.map((w) => w.bbox.x0)), x1 = Math.max(...ws.map((w) => w.bbox.x1));
-      const k = (x) => (l.baseline.x1 - l.baseline.x0 ? (x - l.baseline.x0) / (l.baseline.x1 - l.baseline.x0) : 0);
-      const by = (x) => l.baseline.y0 + (l.baseline.y1 - l.baseline.y0) * k(x);
-      return { ...l, words: ws, text: ws.map((w) => w.text).join(' '), bbox: { ...l.bbox, x0, x1 }, baseline: { x0, y0: by(x0), x1, y1: by(x1) } };
+      // (gaps between real words: a speck between two columns doesn't join them)
+      const groups = [[]];
+      let lastReal = null;
+      for (const w of all) {
+        if (!junk(w) && lastReal && w.bbox.x0 - lastReal.bbox.x1 > lhgt * 2.5) groups.push([]);
+        groups[groups.length - 1].push(w);
+        if (!junk(w)) lastReal = w;
+      }
+      return groups.map((g) => {
+        const ws = g.slice();
+        while (ws.length && junk(ws[0])) ws.shift();
+        while (ws.length && junk(ws[ws.length - 1])) ws.pop();
+        if (ws.length === all.length) return l;
+        if (!ws.length) return null;
+        const x0 = Math.min(...ws.map((w) => w.bbox.x0)), x1 = Math.max(...ws.map((w) => w.bbox.x1));
+        const k = (x) => (l.baseline.x1 - l.baseline.x0 ? (x - l.baseline.x0) / (l.baseline.x1 - l.baseline.x0) : 0);
+        const by = (x) => l.baseline.y0 + (l.baseline.y1 - l.baseline.y0) * k(x);
+        const conf = groups.length > 1 ? ws.reduce((a, w) => a + w.conf, 0) / ws.length : l.conf;
+        return { ...l, conf, words: ws, text: ws.map((w) => w.text).join(' '), bbox: { ...l.bbox, x0, x1 }, baseline: { x0, y0: by(x0), x1, y1: by(x1) } };
+      }).filter(Boolean);
     });
     lines = lines.filter((l) => l.conf >= 50 && wordy(l.text.trim()) && l.bbox.y1 - l.bbox.y0 >= 6);
+    // photos with more than paper (keyboard, handwriting, logos): very short
+    // or oversized "lines" must be read with high confidence to count
+    const lh = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
+    const medH = lh.length ? lh[lh.length >> 1] : 0;
+    lines = lines.filter((l) => {
+      const n = (l.text.match(/[\p{L}\p{N}]/gu) || []).length;
+      if (n <= 3 && l.conf < 80) return false;
+      return !(lines.length >= 3 && l.bbox.y1 - l.bbox.y0 > medH * 2.5 && (l.conf < 85 || n < 4));
+    });
     if (area && area.poly) lines = lines.filter((l) => pointInPolygon(...toPage(...back((l.bbox.x0 + l.bbox.x1) / 2, (l.bbox.y0 + l.bbox.y1) / 2)), area.poly));
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
 
     // 3. font (needs the ink), then clean the paper
-    const scores = [], weights = [];
+    //    first every typeface in its regular style, then bold / italic only
+    //    for the few that fit best (fast enough with many fonts)
+    const cyr = lines.some((l) => /[\u0400-\u04ff]/.test(l.text));
+    const fams = familiesFor(cyr);
+    const scores = [], weights = [], inks = [];
     for (const l of lines) {
       const hgt = l.bbox.y1 - l.bbox.y0, pad = Math.max(2, Math.round(hgt * 0.15));
       const li = lineInk(norm, { x0: l.bbox.x0 - pad, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + pad, y1: l.bbox.y1 + pad });
-      scores.push(li.w > 0 && li.h > 0 ? await fontScores(li, l, norm) : []);
-      weights.push(li.w > 0 && li.h > 0 ? strokeWeight(li) : 0);
+      const ok = li.w > 0 && li.h > 0;
+      inks.push(ok ? li : null);
+      scores.push(ok ? await fontScores(li, l, norm, fams.map((ff) => ({ ff, b: false, i: false }))) : []);
+      weights.push(ok ? strokeWeight(li) : 0);
+      await new Promise((res) => setTimeout(res)); // keep the window responsive
+    }
+    const sum = (ff) => scores.reduce((a, sc) => { const c = sc.find((q) => q.ff === ff); return a + (c ? c.score + c.prior : 0); }, 0);
+    const ranked = fams.slice().sort((x, y) => sum(y) - sum(x));
+    // the 3 best, plus the best of each other kind (a serif heading in a sans text)
+    const top = new Set(ranked.slice(0, 3));
+    for (const kd of ['sans', 'serif', 'mono']) { const f = ranked.find((q) => FONTS[q].kind === kd); if (f) top.add(f); }
+    const styled = [...top].flatMap((ff) => [{ ff, b: true, i: false }, { ff, b: false, i: true }]);
+    for (let k = 0; k < lines.length; k++) {
+      if (inks[k]) scores[k] = scores[k].concat(await fontScores(inks[k], lines[k], norm, styled));
+      await new Promise((res) => setTimeout(res));
     }
     const keep = scores.map((sc) => sc.length > 0);
     lines = lines.filter((_, k) => keep[k]);
     const fonts = chooseFonts(scores.filter((_, k) => keep[k]), weights.filter((_, k) => keep[k]));
+    // how soft the scan is: blur comes from the camera / scanner, so it is
+    // the same number of pixels for every line – one value for the page
+    // (a straightened picture was resampled once: that softness is not the scan's)
+    const softs = lines.map((l) => edgeSoftness(work, l.bbox, work !== orig ? 0.45 : 0)).filter((v) => v !== null).sort((x, y) => x - y);
+    const softPx = softs.length ? softs[softs.length >> 1] : 0;
+    if (window.__ocrDebug) window.__ocrDebug.soft = softs;
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
     const looks = cleanLines(work, lines, norm);
+    if (dark) {
+      invert(work);
+      if (work !== orig) invert(orig);
+      for (const lk of looks) lk.color = invertHex(lk.color);
+    }
     n0.c.width = n0.c.height = 0;
 
     // 4. the cleaned paper as a picture over the area of the lines (in the
@@ -475,7 +615,17 @@ export async function makeTextEditable(editor, index, area = null) {
         id: uid(), x: round2(px), y: round2(py), w: round2(bw / S + f.px / S), fs: round2(f.px / S),
         c: looks[k].color, ff: f.ff, b: f.b || undefined, i: f.i || undefined, aw: true, text: l.text.trim(), lay: 'f', z: zf++,
       };
-      if (Math.abs(angle) > 0.35) t.r = Math.round(angle * 10) / 10;
+      // a photo taken at a slant (perspective): lines tilt a little
+      // differently, each box gets its own line's tilt
+      const bl = l.baseline, bw2 = bl ? bl.x1 - bl.x0 : 0;
+      // (long lines only: short baselines are too noisy to trust)
+      const res = bw2 > 200 ? (Math.atan2(bl.y1 - bl.y0, bw2) * 180) / Math.PI : 0;
+      const turn = angle + (Math.abs(res) > 0.6 && Math.abs(res) < 8 ? res : 0);
+      if (Math.abs(turn) > 0.35) t.r = Math.round(turn * 10) / 10;
+      // how soft the scanned letters are: the text is drawn the same way
+      // ("Match the document" button), sharp while it is being edited
+      const soft = Math.round((softPx / S) * 100) / 100;
+      if (soft >= 0.05) { t.look = soft; t.fx = soft; }
       return t;
     });
     editor.commit(page.id, before, { ...before, items: before.items.concat([item]), texts: before.texts.concat(texts) });

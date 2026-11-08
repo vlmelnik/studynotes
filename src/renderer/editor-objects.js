@@ -7,7 +7,7 @@ import { round2 } from '../shared/geometry.js';
 import { richToPlain, escapeHtml } from '../shared/richtext.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
 import { stacked } from '../shared/stacking.js';
-import { boxStyle, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
+import { boxStyle, docLook, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
 import { renderFormFields } from './fill-sign.js';
 
 const LINE_H = 1.3;
@@ -328,6 +328,10 @@ export const objectsMixin = {
       ? { background: box.bg || 'transparent', border: box.bc ? `${BOX_BORDER}px solid ${box.bc}` : 'none', borderRadius: box.br + 'px', padding: `${BOX_PAD_Y}px ${BOX_PAD_X}px` }
       : { background: '', border: '', borderRadius: '', padding: '' });
     wrap.classList.toggle('boxed', !!box);
+    // "Match the document": as soft as the scanned text around it (sharp while editing)
+    const soft = softOf(t);
+    el.classList.toggle('fx', soft > 0);
+    if (soft > 0) el.style.setProperty('--fx', soft + 'px'); else el.style.removeProperty('--fx');
     if (t.aw) {
       const maxW = this.textMaxWidth(page, t.x);
       el.style.width = 'max-content';
@@ -504,7 +508,7 @@ export const objectsMixin = {
       return;
     }
     const prev = te.before.texts.find((q) => q.id === te.id);
-    const keys = ['text', 'html', 'b', 'i', 'u', 'ff', 'fs', 'c', 'al', 'bx', 'bg', 'bc', 'br'];
+    const keys = ['text', 'html', 'b', 'i', 'u', 'ff', 'fs', 'c', 'al', 'bx', 'bg', 'bc', 'br', 'fx'];
     if (t && (!prev || keys.some((k) => prev[k] !== t[k]))) this.pushUndo(te.pageId, te.before, d, true);
     if (this.textBar) this.textBar.update();
   },
@@ -620,6 +624,10 @@ export const objectsMixin = {
         if (n.html) n.html = n.html.replace(new RegExp(`</?${k}>`, 'gi'), '');
       }
       if (change.al) n.al = change.al;
+      if (change.fx !== undefined) {
+        const v = change.fx ? docLook(before, n) : 0;
+        if (v > 0) n.fx = v; else delete n.fx;
+      }
       if (change.box !== undefined) {
         delete n.bx; delete n.bg; delete n.bc; delete n.br;
         if (change.box) {

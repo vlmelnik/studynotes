@@ -6,7 +6,16 @@
 - Lasso tool → option "Text area": draw a rectangle around printed text on a scan, photo or PDF page; or use the new page button in the toolbar (also in the page menu) for the whole page. The normal lasso stays as it was.
 - Text is recognised offline (Tesseract, German first so umlauts are right, English, Russian; very large or small text is rescaled for a second pass); the language data (7 MB) is downloaded once from the StudyNotes GitHub release (Settings → Add-ons, checked with SHA-256).
 - Photos: uneven light, shadows and glare are evened out before reading; tilted text (crooked scan or photo) is straightened for reading and the text boxes get the same tilt; headings are read once more at their best size.
-- One typeface for the whole text, matched by drawing candidates (Calibri / Arial / Times / Courier styles) and comparing them with the scan; bold only where strokes are clearly thicker; size and colour from the scan.
+- One typeface for the whole text, matched by drawing every font of the app (regular first, then bold / italic of the best few) and comparing them with the scan; the classic office fonts win ties; Cyrillic text only gets fonts with Cyrillic letters; bold and italic only where clearly different from the other lines; size and colour from the scan.
+- Light text on a dark background (dark-mode screenshots, menus, signs) is read on the negative; colours stay light.
+- A German / English page is read again without Russian (and the other way round) when stray look-alike letters show up; wide gaps split a line into separate boxes (columns, prices); very short or oversized "lines" (logos, keyboard, handwriting in a photo) need a high confidence.
+- Photos taken at a slant: every line gets its own tilt.
+
+**Match the document**
+- Edited text looks like the scan around it: as soft as the original (the blur is measured from the letters' edges, independent of the font). On by itself for recognised text; a new button in the text bar and the selection bar turns it on or off for any text box (typed text takes the look of the nearest scanned text). Sharp while typing. The PDF export draws it soft too (outlines, the real text stays searchable and copyable).
+
+**More fonts**
+- 14 widely used fonts (SIL OFL / Apache): Cambria style (Caladea), Georgia style (Gelasio), Garamond style (EB Garamond), Open Sans, Roboto, Inter, Lato, Source Sans 3, Fira Sans, Montserrat, Noto Sans, Noto Serif, PT Sans, PT Serif – each with bold and italic, ordered by how common they are.
 - The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
 
 **Handwriting → text**

@@ -42,4 +42,31 @@ function roundedRect(x, y, w, h, r, seg = 6) {
   return pts;
 }
 
-module.exports = { BOX_PAD_X, BOX_PAD_Y, BOX_BORDER, BOX_PRESETS, boxStyle, roundedRect };
+
+// "Match the document": how soft (blur radius, page units) a text box is drawn
+// so it looks like the scanned text around it. Its own measured look first
+// (set by "Make text editable"), else the nearest measured box on the page,
+// else a light default that suits most scans.
+const DEFAULT_SOFT = 0.3;
+function docLook(page, t) {
+  if (t.look > 0) return t.look;
+  let best = null, bd = Infinity;
+  for (const o of (page && page.texts) || []) {
+    if (!(o.look > 0) || o.id === t.id) continue;
+    const d = Math.hypot((o.x || 0) - (t.x || 0), (o.y || 0) - (t.y || 0));
+    if (d < bd) { bd = d; best = o; }
+  }
+  // (blur comes from the camera or scanner: the same for big and small letters)
+  return best ? softLimit(best.look, t.fs) : DEFAULT_SOFT;
+}
+
+const softLimit = (v, fs) => Math.min(v, 3, 0.15 * (fs || 14));
+
+/** The blur a text box is drawn with (0 = sharp). Framed boxes stay sharp:
+ *  only letters are made soft, never a box's fill or border. */
+function softOf(t) {
+  if (!(t && t.fx > 0) || boxStyle(t)) return 0;
+  return softLimit(t.fx, t.fs);
+}
+
+module.exports = { BOX_PAD_X, BOX_PAD_Y, BOX_BORDER, BOX_PRESETS, boxStyle, roundedRect, docLook, softOf, DEFAULT_SOFT };

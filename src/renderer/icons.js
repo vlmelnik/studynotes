@@ -55,6 +55,7 @@ const P = {
   image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5-8.5 8.5"/>',
   scanText: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 8.5h7M12 8.5v7.5"/>',
   pageDelete: '<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h4.5"/><path d="M14 3.5l4 4v3"/><path d="M14.5 15.5l5 5M19.5 15.5l-5 5"/>',
+  matchDoc: '<path d="M6 6.5h9M10.5 6.5V18"/><path d="M15.5 13.5c1.6.4 2.8 1.6 3 3.2M15.2 17.6c.9.2 1.6.8 1.8 1.6" stroke-dasharray="1.2 1.6"/>',
   eyedropper: '<path d="M14.5 5.5l4 4"/><path d="M16.2 3.8a2.3 2.3 0 0 1 3.3 3.3l-2 2-3.3-3.3z"/><path d="M14.6 7.4L5.8 16.2 5 19l2.8-.8 8.8-8.8"/>',
   formatPaint: '<rect x="4" y="3.5" width="13" height="5" rx="1.2"/><path d="M17 6h2.5v5H11v3"/><path d="M10 14h2v6.5h-2z"/>',
   signature: '<path d="M3 17c2.5 0 3.5-9 6-9 1.6 0 .6 7 2.6 7 1.4 0 2-3 3.4-3 1 0 1 2 2.2 2H21"/><path d="M3 20.5h18"/>',

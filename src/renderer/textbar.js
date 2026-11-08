@@ -99,7 +99,7 @@ export class TextBar {
 
   // Values shown in the bar: the selected words' style while editing, else the box's.
   displayed(t) {
-    const out = { fs: t.fs, ff: t.ff || DEFAULT_FONT, c: t.c, b: !!t.b, i: !!t.i, u: !!t.u, al: t.al || 'left', box: boxStyle(t) };
+    const out = { fs: t.fs, ff: t.ff || DEFAULT_FONT, c: t.c, b: !!t.b, i: !!t.i, u: !!t.u, al: t.al || 'left', box: boxStyle(t), fx: t.fx > 0 };
     if (!this.target || !this.target.editing) return out;
     const s = window.getSelection();
     if (!s.rangeCount) return out;
@@ -153,6 +153,7 @@ export class TextBar {
         ed.el.classList.add('painting');
         ed.toast('Now select the text that should get this style');
       }, !!ed.formatPainter),
+      btn('matchDoc', v.fx ? 'Matched to the document (soft like the scan) – click for sharp text' : 'Match the document: make the text as soft as the scan around it', () => apply({ fx: !v.fx }), v.fx),
       h('button', { class: 'tb-btn tb-box' + (v.box ? ' active' : ''), title: 'Text box style', 'aria-label': 'Text box style', onclick: (e) => this.boxMenu(e.currentTarget, v.box, (box) => apply({ box })) }, swatch(v.box)),
       sep(),
       btn('cut', 'Cut', () => this.boxAction('cut')),

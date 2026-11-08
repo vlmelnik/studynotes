@@ -138,3 +138,67 @@ test('1.7: export adds recognised handwriting as invisible, copyable text (also 
   const ok = await exportNotebook({ notebook, pages: { p: { strokes, texts: [], items: [] } }, readFont, inkTextAll: async () => { throw new Error('no'); } });
   assert.ok(ok.length > 100);
 });
+
+test('1.7: "Match the document" text is drawn soft (outlines) and stays searchable once', { skip: !require('fs').existsSync('/usr/bin/pdftoppm') && 'pdftoppm not installed' }, async () => {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const assets = path.join(__dirname, '..', 'assets');
+  const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
+  const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 400, h: 200 }] };
+  const base = { x: 20, y: 40, w: 300, fs: 24, c: '#000000', ff: 'opensans', text: 'Soft letters', r: 3 };
+  const render = async (t) => {
+    const bytes = await exportNotebook({ notebook, pages: { p: { strokes: [], texts: [t], items: [] } }, readFont });
+    const js = await pdfjs.getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false, isEvalSupported: false }).promise;
+    const str = (await (await js.getPage(1)).getTextContent()).items.map((i) => i.str).join('');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-soft-'));
+    fs.writeFileSync(path.join(dir, 'a.pdf'), bytes);
+    execFileSync('pdftoppm', ['-r', '72', '-gray', path.join(dir, 'a.pdf'), path.join(dir, 'o')]);
+    const pgm = fs.readFileSync(path.join(dir, fs.readdirSync(dir).find((f) => f.endsWith('.pgm'))));
+    fs.rmSync(dir, { recursive: true, force: true });
+    // pixels that are neither paper nor full ink: the soft edge
+    let mid = 0, ink = 0;
+    const px = pgm.subarray(pgm.length - 400 * 200);
+    for (const v of px) { if (v < 60) ink++; else if (v < 220) mid++; }
+    return { str, mid, ink };
+  };
+  const sharp = await render(base);
+  const soft = await render({ ...base, fx: 0.8 });
+  assert.strictEqual(soft.str.replace(/\s+/g, ' ').trim(), 'Soft letters', 'the text is there exactly once');
+  assert.ok(soft.mid > sharp.mid * 1.5, `soft edges: ${soft.mid} vs ${sharp.mid}`);
+  assert.ok(soft.ink > sharp.ink * 0.3, 'still dark letters');
+});
+
+test('1.7: every font exports all its letters (pdf-lib subsetting can drop glyphs)', { skip: !require('fs').existsSync('/usr/bin/pdftoppm') && 'pdftoppm not installed' }, async () => {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const { FONTS } = require('../src/shared/fonts');
+  const assets = path.join(__dirname, '..', 'assets');
+  const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
+  const ids = Object.keys(FONTS).filter((f) => FONTS[f].kind);
+  const ROW = 40, W = 600;
+  const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: W, h: ids.length * ROW * 2 }] };
+  const texts = [];
+  ids.forEach((ff, k) => {
+    const text = FONTS[ff].cyr === false ? 'Größe fifty Wohnung' : 'Größe fifty Привет';
+    texts.push({ id: `r${k}`, x: 10, y: k * 2 * ROW + 5, w: 580, fs: 24, c: '#000000', ff, text });
+    texts.push({ id: `b${k}`, x: 10, y: (k * 2 + 1) * ROW + 5, w: 580, fs: 24, c: '#000000', ff, b: true, i: true, text });
+  });
+  const bytes = await exportNotebook({ notebook, pages: { p: { strokes: [], texts, items: [] } }, readFont });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-fonts-'));
+  fs.writeFileSync(path.join(dir, 'a.pdf'), bytes);
+  execFileSync('pdftoppm', ['-r', '72', '-gray', path.join(dir, 'a.pdf'), path.join(dir, 'o')]);
+  const pgm = fs.readFileSync(path.join(dir, fs.readdirSync(dir).find((f) => f.endsWith('.pgm'))));
+  fs.rmSync(dir, { recursive: true, force: true });
+  const H = ids.length * ROW * 2;
+  const px = pgm.subarray(pgm.length - W * H);
+  const ink = [];
+  for (let r = 0; r < ids.length * 2; r++) {
+    let n = 0;
+    for (let y = r * ROW; y < (r + 1) * ROW; y++) for (let x = 0; x < W; x++) if (px[y * W + x] < 128) n++;
+    ink.push(n);
+  }
+  const med = ink.slice().sort((a, b) => a - b)[ink.length >> 1];
+  const bad = ink.map((n, r) => [ids[r >> 1] + (r & 1 ? ' bold italic' : ''), n]).filter(([, n]) => n < med * 0.45); // (thin fonts like Garamond have less ink)
+  assert.deepStrictEqual(bad, [], 'fonts with missing letters');
+});

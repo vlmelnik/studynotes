@@ -1,11 +1,20 @@
 {
-  "3": "editor.js",
-  "4": "ocr-bench.js",
-  "26": "build.js",
-  "36": "sync.js",
-  "39": "PageView",
+  "3": "fill-sign.js",
+  "9": "Tools",
+  "13": "screenshots.js",
+  "14": "ref_fs",
+  "24": ".renderOptions",
+  "26": "PageView",
+  "29": "v11.test.js",
+  "33": ".selectionToolbar",
+  "39": "editor-panels.js",
   "45": ".constructor",
-  "48": "win",
-  "56": "pdf-lib",
-  "65": "round2"
+  "50": ".onKey",
+  "52": "run.js",
+  "53": "v161.js",
+  "56": "v15.js",
+  "57": "stacked",
+  "61": ".endSelTransform",
+  "68": "v12.js",
+  "71": "forms.js"
 }

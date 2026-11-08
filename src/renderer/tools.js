@@ -3,6 +3,7 @@
 // the select tool, the lasso and paste.
 import { h, showMenu } from './ui.js';
 import { icon } from './icons.js';
+import { docLook } from '../shared/textbox.js';
 import { drawLive, drawStrokes } from './inkrender.js';
 import { releaseCanvas } from './viewer.js';
 import {
@@ -886,6 +887,8 @@ export class Tools {
           tbtn(h('b', {}, 'B'), 'Bold (Ctrl+B)', () => this.restyle({ b: !allB }), allB),
           tbtn(h('i', {}, 'I'), 'Italic (Ctrl+I)', () => this.restyle({ i: !allI }), allI),
           tbtn(h('u', {}, 'U'), 'Underline (Ctrl+U)', () => this.restyle({ u: !allU }), allU));
+        const allFx = texts.every((t) => t.fx > 0);
+        parts.push(tbtn(h('span', { class: 'chip-ic', html: icon('matchDoc', 18) }), allFx ? 'Matched to the document – click for sharp text' : 'Match the document: make the text as soft as the scan around it', () => this.restyle({ fx: !allFx }), allFx));
       }
     }
     if (tables.length === 1 && !strokes.length && !texts.length && items.length === 1) {
@@ -1124,7 +1127,7 @@ export class Tools {
   }
 
   // Colour / width / font / bold … for everything selected.
-  restyle({ color, width, font, ff, b, i, u, fill }) {
+  restyle({ color, width, font, ff, b, i, u, fill, fx }) {
     const sel = this.sel;
     if (!sel) return;
     const before = this.editor.pageData(sel.pageId);
@@ -1147,6 +1150,7 @@ export class Tools {
         if (b !== undefined) n.b = b;
         if (i !== undefined) n.i = i;
         if (u !== undefined) n.u = u;
+        if (fx !== undefined) { const v = fx ? docLook(before, t) : 0; if (v > 0) n.fx = v; else delete n.fx; }
         return n;
       }),
       items: before.items.map((it) => {

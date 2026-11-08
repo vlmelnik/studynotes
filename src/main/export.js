@@ -3,13 +3,13 @@
 // notes are drawn on top as vectors (ink, shapes, text, tables) plus the
 // embedded images – sharp at any zoom, small files.
 
-const { PDFDocument, rgb, BlendMode, degrees, pushGraphicsState, popGraphicsState, moveTo, lineTo, closePath, clipEvenOdd, endPath } = require('pdf-lib');
+const { PDFDocument, rgb, BlendMode, degrees, pushGraphicsState, popGraphicsState, moveTo, lineTo, closePath, clipEvenOdd, endPath, concatTransformationMatrix, setGraphicsState, drawObject: doXObject } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 // Ligatures would be drawn as one glyph that PDF readers can't copy/search ("ti" in "Wichtig" vanished).
 const NO_LIGATURES = { liga: false, clig: false, calt: false, rlig: false, dlig: false };
 const { getOutline, getSizedOutline, outlineToSvgPath, strokeLook, lighten, isClosedShape } = require('../shared/ink');
 const { paperGeometry, pageBackground } = require('../shared/paper');
-const { boxStyle, roundedRect, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } = require('../shared/textbox');
+const { boxStyle, roundedRect, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } = require('../shared/textbox');
 const { stacked } = require('../shared/stacking');
 const { parseRich, plainToHtml, layoutRich } = require('../shared/richtext');
 const { fontFile } = require('../shared/fonts');
@@ -96,7 +96,7 @@ function splitByGlyphs(text, fk) {
 // Rich text: per-run bold/italic/underline plus optional size, font and colour
 // (<span data-fs data-ff data-c>). Lines are as tall as their largest run, like
 // in the browser. `al` = left | center | right.
-async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, dry = false, turn = 0 }, map, rot, k = 1) {
+async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, dry = false, turn = 0, soft = 0 }, map, rot, k = 1) {
   const paras = parseRich(html || plainToHtml(text || ''), { b, i, u });
   // layoutRich needs a synchronous measure: pre-load every font variant used.
   const variants = new Map();
@@ -118,6 +118,11 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
   const lines = layoutRich(paras, maxW, mSync);
   if (dry) return lines.reduce((sum, line) => sum + Math.max(fs, ...line.runs.map(sizeOf), 1) * LINE_H, 0);
   const fb = await fonts.fallback();
+  // "Match the document": soft letters like the scan. A PDF has no blur, so
+  // the letters' outlines are collected into one form that is placed several
+  // times, a little shifted and faint (≈ a Gaussian blur); the real text is
+  // drawn invisible on top, for search and copying.
+  const acc = soft > 0 ? { ops: '', xobj: {} } : null;
   let ly = y;
   for (const line of lines) {
     // Like CSS line boxes: never smaller than the box's own font size (the strut).
@@ -138,6 +143,13 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
         const [u0, v0] = map(cx, by);
         const opts = { x: u0, y: v0, size: rfs * k, font, color: hexToRgb(rcol), rotate: degrees(normRotation(rot) - (turn || 0)) };
         if (f.synthItalic) opts.ySkew = degrees(12); // shear x by y: slanted letters
+        if (acc) {
+          const fk = part.ok ? f.fk : fb.fk;
+          for (const sb of f.synthBold ? [0, rfs * 0.035] : [0]) softWord(acc, page.doc.context, fk, part.t, rfs, cx + sb, by, map, f.synthItalic, rcol);
+          page.drawText(part.t, { ...opts, opacity: 0 });
+          cx += pw;
+          continue;
+        }
         page.drawText(part.t, opts);
         if (f.synthBold) {
           const [u1, v1] = map(cx + rfs * 0.035, by);
@@ -147,12 +159,104 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
       }
       if (run.u) {
         const uy = by + rfs * 0.12;
-        drawPolyline(page, [[x + dx + run.x, uy], [x + dx + run.x + run.w, uy]], map, rcol, Math.max(0.5, rfs * 0.06) * k);
+        if (acc) {
+          const t2 = Math.max(0.5 / k, rfs * 0.06) / 2, x0 = x + dx + run.x, x1 = x0 + run.w;
+          const c = hexToRgb(rcol);
+          acc.ops += `${c.red.toFixed(3)} ${c.green.toFixed(3)} ${c.blue.toFixed(3)} rg\n` + [[x0, uy - t2], [x1, uy - t2], [x1, uy + t2], [x0, uy + t2]]
+            .map(([px, py], n) => { const [u, v] = map(px, py); return `${u.toFixed(2)} ${v.toFixed(2)} ${n ? 'l' : 'm'}\n`; }).join('') + 'h f\n';
+        } else drawPolyline(page, [[x + dx + run.x, uy], [x + dx + run.x + run.w, uy]], map, rcol, Math.max(0.5, rfs * 0.06) * k);
       }
     }
     ly += lineH;
   }
+  if (acc && acc.ops) {
+    const ctx = page.doc.context;
+    const form = page.node.newXObject('SnSoftText', ctx.register(ctx.flateStream(acc.ops, { Type: 'XObject', Subtype: 'Form', BBox: [-1e5, -1e5, 1e5, 1e5], Resources: { XObject: acc.xobj } })));
+    const states = softStates(page);
+    const [bu, bv] = map(0, 0);
+    SOFT_RINGS.forEach(([r, n], ri) => {
+      for (let q = 0; q < n; q++) {
+        const ang = (q / n) * Math.PI * 2 + (r ? 0.4 : 0);
+        const [u1, v1] = map(Math.cos(ang) * r * soft, Math.sin(ang) * r * soft);
+        page.pushOperators(pushGraphicsState(), setGraphicsState(states[ri]), concatTransformationMatrix(1, 0, 0, 1, u1 - bu, v1 - bv), doXObject(form), popGraphicsState());
+      }
+    });
+  }
   return ly - y;
+}
+
+// [radius in blur units, copies, opacity] – together about a Gaussian blur
+const SOFT_RINGS = [[0, 1, 0.5], [0.7, 8, 0.18], [1.5, 8, 0.07]];
+
+// The faint copies' opacities as graphics states, made once per page.
+const softStateCache = new WeakMap();
+function softStates(page) {
+  let names = softStateCache.get(page);
+  if (!names) {
+    names = SOFT_RINGS.map(([, , a], k) => {
+      const ref = page.doc.context.register(page.doc.context.obj({ Type: 'ExtGState', ca: a, CA: a }));
+      return page.node.newExtGState(`SnSoft${k}`, ref);
+    });
+    softStateCache.set(page, names);
+  }
+  return names;
+}
+
+// Each letter's outline is stored once per document (font units) and the
+// words place them: a soft page stays small.
+const glyphForms = new WeakMap(); // PDF context → Map(fontkit font → Map(glyph id → ref))
+function glyphForm(ctx, fk, g) {
+  let byFont = glyphForms.get(ctx);
+  if (!byFont) { byFont = new Map(); glyphForms.set(ctx, byFont); }
+  let byId = byFont.get(fk);
+  if (!byId) { byId = new Map(); byFont.set(fk, byId); }
+  if (byId.has(g.id)) return byId.get(g.id);
+  let ops = '', lx = 0, ly = 0;
+  const n = (v) => Math.round(v);
+  for (const c of g.path.commands) {
+    const a = c.args;
+    if (c.command === 'moveTo') { ops += `${n(a[0])} ${n(a[1])} m\n`; lx = a[0]; ly = a[1]; }
+    else if (c.command === 'lineTo') { ops += `${n(a[0])} ${n(a[1])} l\n`; lx = a[0]; ly = a[1]; }
+    else if (c.command === 'quadraticCurveTo') {
+      // quadratic → cubic
+      ops += `${n(lx + (2 / 3) * (a[0] - lx))} ${n(ly + (2 / 3) * (a[1] - ly))} ${n(a[2] + (2 / 3) * (a[0] - a[2]))} ${n(a[3] + (2 / 3) * (a[1] - a[3]))} ${n(a[2])} ${n(a[3])} c\n`;
+      lx = a[2]; ly = a[3];
+    } else if (c.command === 'bezierCurveTo') { ops += `${a.slice(0, 6).map(n).join(' ')} c\n`; lx = a[4]; ly = a[5]; }
+    else if (c.command === 'closePath') ops += 'h\n';
+  }
+  const ref = ops ? ctx.register(ctx.flateStream(ops + 'f\n', { Type: 'XObject', Subtype: 'Form', BBox: [-1e4, -1e4, 1e4, 1e4], Resources: {} })) : null;
+  byId.set(g.id, ref);
+  return ref;
+}
+
+const fontNos = new WeakMap();
+let fontCount = 0;
+const fontNo = (fk) => { if (!fontNos.has(fk)) fontNos.set(fk, ++fontCount); return fontNos.get(fk); };
+
+/** Adds the letters of `text` (filled in `color`, PDF space) to acc { ops, xobj }. */
+function softWord(acc, ctx, fk, text, size, x, baseY, map, italic, color) {
+  let run;
+  try { run = fk.layout(text, NO_LIGATURES); } catch { return; }
+  const s = size / fk.unitsPerEm, sk = italic ? Math.tan((12 * Math.PI) / 180) : 0;
+  // page → PDF is affine: its two axes
+  const [ou, ov] = map(0, 0), [xu, xv] = map(1, 0), [yu, yv] = map(0, 1);
+  const ax = [xu - ou, xv - ov], ay = [yu - ou, yv - ov];
+  // letter (font units, y up) → page: x + (pen + gx)·s + gy·s·sk, baseY − gy·s
+  const m = [s * ax[0], s * ax[1], s * sk * ax[0] - s * ay[0], s * sk * ax[1] - s * ay[1]].map((v) => v.toFixed(4)).join(' ');
+  const col = hexToRgb(color);
+  acc.ops += `${col.red.toFixed(3)} ${col.green.toFixed(3)} ${col.blue.toFixed(3)} rg\n`;
+  let pen = 0;
+  run.glyphs.forEach((g, k) => {
+    const pos = run.positions[k];
+    const ref = glyphForm(ctx, fk, g);
+    if (ref) {
+      const [e, f] = map(x + (pen + pos.xOffset) * s, baseY - pos.yOffset * s);
+      const name = `g${fontNo(fk)}_${g.id}`;
+      acc.xobj[name] = ref;
+      acc.ops += `q ${m} ${e.toFixed(2)} ${f.toFixed(2)} cm /${name} Do Q\n`;
+    }
+    pen += pos.xAdvance;
+  });
 }
 
 function svgPath(points, map, close) {
@@ -297,7 +401,7 @@ async function drawObject(page, kind, o, map, rot, ctx, k) {
   const w = (o.w || 200) * (o.aw ? 1.04 : 1) + (o.aw ? 2 : 0);
   const rich = {
     html: o.html, text: o.text, ff: o.ff, b: o.b, i: o.i, u: o.u, fs: o.fs || 14, color: o.c,
-    x: o.x, y: o.y, w, al: o.al,
+    x: o.x, y: o.y, w, al: o.al, soft: softOf(o),
   };
   if (box) {
     // Same box model as the screen: padding inside the width, then the text.

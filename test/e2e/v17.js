@@ -45,7 +45,7 @@ async function launch() {
 
 
 (async () => {
-  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H').split(',');
+  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I').split(',');
   let { app, win, ed } = await launch();
   const rel = await ed(async () => { const r = await window.api.createNotebook('', { title: 'v17', paper: 'blank', pageCount: 4 }); await window.__app.openNotebook(r); return r; });
   await win.waitForTimeout(600);
@@ -192,6 +192,14 @@ async function launch() {
       e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'scan', type: 'img', x: 40, y: 60, w: W, h: H, src }] });
     });
     await win.waitForTimeout(500);
+    await win.waitForTimeout(300);
+    const r0 = await ed(() => window.__app.active.viewer.pageClientRect(0));
+    const z0 = await ed(() => window.__app.active.viewer.zoom);
+    const ph = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).items[0].h);
+    const clipZ = { x: r0.left + 25 * z0, y: r0.top + 55 * z0, width: 530 * z0, height: Math.min(ph + 10, 760) * z0 };
+    const tag = process.env.SN_TAG || 'real';
+    await win.screenshot({ path: path.join(out, `v17-${tag}-before.png`), clip: clipZ });
+    const t0 = Date.now();
     await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
     await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
@@ -340,6 +348,35 @@ async function launch() {
       JSON.stringify(t.map((q) => [q.ff, !!q.b, !!q.i, q.fs])));
   }
 
+  // ===================================================================== I. match the document
+  if (sections.includes('I')) {
+    await ed(() => {
+      const e = window.__app.active;
+      e.setPageData(e.pages[0].id, { strokes: [], items: [], texts: [
+        { id: 'scan', x: 80, y: 80, w: 200, fs: 14, c: '#333333', ff: 'opensans', text: 'From the scan', look: 0.42, fx: 0.42, aw: true },
+        { id: 'new', x: 80, y: 200, w: 200, fs: 14, c: '#333333', ff: 'opensans', text: 'Typed later' },
+      ] });
+    });
+    await win.waitForTimeout(250);
+    const filterOf = (id) => ed((id) => getComputedStyle(document.querySelector(`.textbox[data-id="${id}"]`)).filter, id);
+    check('I: scanned text is drawn as soft as the scan', /blur\(0\.42px\)/.test(await filterOf('scan')), await filterOf('scan'));
+    await ed(() => { const e = window.__app.active; e.setTool('select'); e.tools.select(0, e.pages[0].id, new Set(), new Set(['new'])); });
+    await win.waitForSelector('.text-bar .tb-btn[title^="Match the document"]');
+    await win.click('.text-bar .tb-btn[title^="Match the document"]');
+    await win.waitForTimeout(250);
+    const t1 = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).texts.find((t) => t.id === 'new'); });
+    check('I: the button gives typed text the look of the scan next to it', t1.fx === 0.42 && /blur/.test(await filterOf('new')), JSON.stringify(t1));
+    await ed(() => { const e = window.__app.active; e.editText(e.pages[0].id, 'new'); });
+    await win.waitForTimeout(150);
+    check('I: sharp while editing', !/blur/.test(await filterOf('new')), await filterOf('new'));
+    await ed(() => { const e = window.__app.active; document.activeElement.blur(); e.setTool('select'); e.tools.select(0, e.pages[0].id, new Set(), new Set(['new'])); });
+    await win.waitForSelector('.text-bar .tb-btn[title^="Matched to the document"]');
+    await win.click('.text-bar .tb-btn[title^="Matched to the document"]');
+    await win.waitForTimeout(250);
+    const t2 = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).texts.find((t) => t.id === 'new'); });
+    check('I: clicked again: sharp text', !t2.fx && !/blur/.test(await filterOf('new')), JSON.stringify(t2));
+  }
+
   // ===================================================================== Z. (local only) a real screenshot
   if (sections.includes('Z') && process.env.SN_IMG) {
     const bytes = [...fs.readFileSync(process.env.SN_IMG)];
@@ -352,16 +389,23 @@ async function launch() {
       e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'real', type: 'img', x: 30, y: 60, w, h, src }] });
     }, bytes);
     await win.waitForTimeout(400);
+    await win.waitForTimeout(300);
+    const r0 = await ed(() => window.__app.active.viewer.pageClientRect(0));
+    const z0 = await ed(() => window.__app.active.viewer.zoom);
+    const ph = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).items[0].h);
+    const clipZ = { x: r0.left + 25 * z0, y: r0.top + 55 * z0, width: 530 * z0, height: Math.min(ph + 10, 760) * z0 };
+    const tag = process.env.SN_TAG || 'real';
+    await win.screenshot({ path: path.join(out, `v17-${tag}-before.png`), clip: clipZ });
+    const t0 = Date.now();
     await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
     await win.waitForTimeout(300);
     if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
-    console.log(JSON.stringify(d.texts.map((q) => [q.text, q.ff, !!q.b, q.fs, q.c])));
-    await win.waitForTimeout(500);
-    const r = await ed(() => window.__app.active.viewer.pageClientRect(0));
-    const z = await ed(() => window.__app.active.viewer.zoom);
-    await win.screenshot({ path: path.join(out, 'v17-real.png'), clip: { x: r.left + 20 * z, y: r.top + 50 * z, width: 545 * z, height: 120 * z } });
+    console.log(`time ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    for (const q of d.texts) console.log(JSON.stringify([q.text, q.ff, !!q.b, !!q.i, q.fs, q.c, q.r || 0, q.fx || 0]));
+    await win.waitForTimeout(800);
+    await win.screenshot({ path: path.join(out, `v17-${tag}-after.png`), clip: clipZ });
   }
 
   await app.close();

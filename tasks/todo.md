@@ -353,3 +353,13 @@ scans: both lasso area and whole page; add-on data downloaded from the GitHub re
       lasso menu "Copy as text" / "Convert to text"; shows which languages Windows can read
 - [x] Export: handwriting as invisible text layer (copyable / searchable PDF), setting
 - [ ] Tests, review, build, publish v1.7.0 + add-on release (add-on release ocr-data-1 published)
+
+## 1.7.0 redo – more fonts, "Match the document" (2026-11-08)
+- [x] 14 common fonts (Google, OFL/Apache) + licences + notices; ordered by use; kind / cyr / noSubset
+- [x] OCR: match against all fonts (two stages), classic prior, Cyrillic filter, italic/bold relative rules
+- [x] Blur measured from edges → t.look / t.fx; CSS blur on screen (sharp while typing); PDF soft outlines + invisible text
+- [x] Button in text bar + selection bar (nearest look for typed text)
+- [x] Light text on dark (invert), language narrowing, gap splitting, junk filters, per-line tilt
+- [x] Local check on the 6 example photos (not committed)
+- [x] Tests: export soft + every-font glyph check, v17 I, bench with all fonts
+- [ ] Review, full e2e, Windows build, packaged test, re-publish 1.7.0 (REPLACE)

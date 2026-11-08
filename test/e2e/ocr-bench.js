@@ -51,7 +51,9 @@ const LINES = process.env.RU
   ? ['Арендатор обязуется вносить плату вовремя', 'и бережно относиться к мебели в квартире.', 'Залог возвращается через месяц после выезда.']
   : process.env.EN ? ['The tenant agrees to pay the monthly rent', 'before the third working day of each month.', 'Please check the size of every room carefully.']
     : ['Der Mieter zahlt die Kaution für die Wohnung', 'in drei gleichen Raten bis zum Monatsende.', 'Bitte prüfen Sie die Größe der Räume genau.'];
-const FONTS = [['SN Sans', 'sans'], ['SN Serif', 'serif'], ['SN Carlito', 'carlito'], ['SN Mono', 'mono'], ['DejaVu Serif', 'serif'], ['DejaVu Sans', 'sans']];
+const FONTS = [['SN Sans', 'sans'], ['SN Serif', 'serif'], ['SN Carlito', 'carlito'], ['SN Mono', 'mono'], ['DejaVu Serif', 'serif'], ['DejaVu Sans', 'sans'],
+  ['SN Caladea', 'cambria'], ['SN Gelasio', 'georgia'], ['SN Open Sans', 'opensans'], ['SN Roboto', 'roboto'], ['SN Inter', 'inter'], ['SN Lato', 'lato'],
+  ['SN Source Sans', 'sourcesans'], ['SN Fira Sans', 'fira'], ['SN Montserrat', 'montserrat'], ['SN Noto Serif', 'notoserif'], ['SN Garamond', 'garamond'], ['SN PT Serif', 'ptserif']];
 const CONDS = (process.env.CONDS || 'clean,tilt+2.5,tilt-4,blur,photo,hard').split(',');
 
 function lev(a, b) {
@@ -120,7 +122,8 @@ function lev(a, b) {
       const fams = [...new Set(t.map((q) => q.ff))].join('/');
       const rot = t.length ? (t.reduce((a, q) => a + (q.r || 0), 0) / t.length).toFixed(1) : '-';
       rows.push({ font: css, cond, cer, fams, want: fam, rot, n: t.length });
-      console.log(`${css.padEnd(13)} ${cond.padEnd(9)} CER ${(cer * 100).toFixed(1).padStart(5)}%  font ${fams.padEnd(14)} (want ${fam})  angle ${rot}  lines ${t.length}`);
+      const soft = t.length ? Math.max(...t.map((q) => q.look || 0)) : 0;
+      console.log(`${css.padEnd(15)} ${cond.padEnd(9)} soft ${soft.toFixed(2)} CER ${(cer * 100).toFixed(1).padStart(5)}%  font ${fams.padEnd(14)} (want ${fam})  angle ${rot}  lines ${t.length}`);
       if (process.env.DUMP) {
         const urls = await ed(() => window.__ocrDebug);
         urls.forEach((u, k) => fs.writeFileSync(path.join(out, `dump-${css.replace(/\W/g, '')}-${cond}-${k ? 'orig' : 'norm'}.png`), Buffer.from(u.split(',')[1], 'base64')));
