@@ -5,6 +5,7 @@
 **Scans and PDFs: make printed text editable**
 - Lasso tool → option "Text area": draw a rectangle around printed text on a scan, photo or PDF page; or use the new page button in the toolbar (also in the page menu) for the whole page. The normal lasso stays as it was.
 - Text is recognised offline (Tesseract, German first so umlauts are right, English, Russian; very large or small text is rescaled for a second pass); the language data (7 MB) is downloaded once from the StudyNotes GitHub release (Settings → Add-ons, checked with SHA-256).
+- Photos: uneven light, shadows and glare are evened out before reading; tilted text (crooked scan or photo) is straightened for reading and the text boxes get the same tilt; headings are read once more at their best size.
 - One typeface for the whole text, matched by drawing candidates (Calibri / Arial / Times / Courier styles) and comparing them with the scan; bold only where strokes are clearly thicker; size and colour from the scan.
 - The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
 

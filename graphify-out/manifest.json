@@ -192,9 +192,9 @@
     "semantic_hash": ""
   },
   "src/renderer/whats-new.js": {
-    "mtime": 1794148533.1061525,
-    "seen": 1794148739.229881,
-    "ast_hash": "5f948254bc4d4e8dc9e9f27a1e3317ff",
+    "mtime": 1794150767.2973487,
+    "seen": 1794151121.0345721,
+    "ast_hash": "a2901e1c16820e76758337bb27f781fe",
     "semantic_hash": ""
   },
   "src/shared/fonts.js": {
@@ -426,9 +426,9 @@
     "semantic_hash": ""
   },
   "src/shared/i18n-ru.js": {
-    "mtime": 1794148533.1068745,
-    "seen": 1794148739.2298875,
-    "ast_hash": "cb9d22e7e2a9c61bfb371d301f98a061",
+    "mtime": 1794150770.8097115,
+    "seen": 1794151121.0345774,
+    "ast_hash": "af829e3a4298caee34fc5254c7fd73a9",
     "semantic_hash": ""
   },
   "src/shared/pen-filter.js": {
@@ -450,9 +450,9 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1794148533.1074157,
-    "seen": 1794148739.2299268,
-    "ast_hash": "e0ef7f7843a4dcffb4ad9ef9ebea37ec",
+    "mtime": 1794150767.298926,
+    "seen": 1794151121.0346189,
+    "ast_hash": "3c0c739debfbb845ed04cf8d1a9e2d68",
     "semantic_hash": ""
   },
   "docs/USER-GUIDE.md": {
@@ -522,9 +522,9 @@
     "semantic_hash": ""
   },
   ".github/workflows/publish-prebuilt.yml": {
-    "mtime": 1794145605.3057392,
-    "seen": 1794146516.9407,
-    "ast_hash": "a32e4f03d84546465c4a6bbafa8d09a5",
+    "mtime": 1794149010.2023785,
+    "seen": 1794151121.0344996,
+    "ast_hash": "5059d7d2e5c8d2a84f2e846b4a621f7e",
     "semantic_hash": ""
   },
   "test/e2e/v161.js": {
@@ -552,15 +552,15 @@
     "semantic_hash": ""
   },
   "src/renderer/scan-edit.js": {
-    "mtime": 1794148490.722458,
-    "seen": 1794148739.2298708,
-    "ast_hash": "146e1701c2e38062388e153629c583b4",
+    "mtime": 1794151114.52304,
+    "seen": 1794151121.0345638,
+    "ast_hash": "5c628d5487c7dca1be1b50f20e07e4bb",
     "semantic_hash": ""
   },
   "src/shared/scan-clean.js": {
-    "mtime": 1794144516.8036077,
-    "seen": 1794146516.9407887,
-    "ast_hash": "4d65821017abb7d5850b5fd02586ca0d",
+    "mtime": 1794150474.3526459,
+    "seen": 1794151121.0345838,
+    "ast_hash": "fd9ef659a5756508c6099c29f00e38a2",
     "semantic_hash": ""
   },
   "test/e2e/v17.js": {
@@ -573,6 +573,12 @@
     "mtime": 1794144488.211737,
     "seen": 1794146516.9408205,
     "ast_hash": "93789e5f7751e000f70445993370cc75",
+    "semantic_hash": ""
+  },
+  "test/e2e/ocr-bench.js": {
+    "mtime": 1794150978.7268724,
+    "seen": 1794151121.034591,
+    "ast_hash": "67860aeb79dc3d28790a71fb94e45abe",
     "semantic_hash": ""
   }
 }

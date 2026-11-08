@@ -164,14 +164,16 @@ function inpaint(img, fill, seed = 1) {
  * Clears the given text lines from the image (in place).
  * lines: [{ bbox:{x0,y0,x1,y1} }] in pixels. Returns per line { color, light, inkBox }.
  */
-function cleanLines(img, lines) {
+function cleanLines(img, lines, maskImg = img) {
   const W = img.width, H = img.height;
   const fill = new Uint8Array(W * H);
   const out = [];
   for (const l of lines) {
     const hgt = l.bbox.y1 - l.bbox.y0;
     const pad = Math.max(2, Math.round(hgt * 0.15));
-    const li = lineInk(img, { x0: l.bbox.x0 - pad, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + pad, y1: l.bbox.y1 + pad });
+    // ink found on the light-corrected picture, colours from the real one
+    // (a little wider: a full stop the reader missed is cleaned too)
+    const li = lineInk(maskImg, { x0: l.bbox.x0 - hgt * 0.4, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + hgt * 0.5, y1: l.bbox.y1 + pad });
     const color = inkColor(img, li);
     // anti-aliased edges and paper shadows next to the letters go too
     const grown = dilate(li.ink, li.w, li.h, Math.max(1, Math.round(hgt * 0.07)));
@@ -180,7 +182,95 @@ function cleanLines(img, lines) {
   }
   inpaint(img, fill);
   void H;
+  out.fill = fill; // which pixels were painted over
   return out;
 }
 
-module.exports = { lineInk, inkColor, dilate, inpaint, cleanLines, otsu };
+/**
+ * Evens out the light of a photo: every pixel is divided by the brightness of
+ * the paper around it (estimated from bright blocks), so shadows, gradients
+ * and glare become plain white paper and the text stays dark. Returns a new
+ * grey image (RGBA) of the same size.
+ */
+function normalizeLight(img, block = 32) {
+  const { width: W, height: H, data: d } = img;
+  // luminance, lightly smoothed (sensor noise, JPEG blocks)
+  const L0 = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) L0[i] = lum(d, i * 4);
+  const L = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let s = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= H) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= W) continue;
+          s += L0[yy * W + xx] * (dx || dy ? 1 : 2); n += dx || dy ? 1 : 2;
+        }
+      }
+      L[y * W + x] = s / n;
+    }
+  }
+  // the paper's brightness per block = the bright part of the block
+  const gw = Math.ceil(W / block), gh = Math.ceil(H / block);
+  const grid = new Float32Array(gw * gh);
+  const tmp = [];
+  for (let gy = 0; gy < gh; gy++) {
+    for (let gx = 0; gx < gw; gx++) {
+      tmp.length = 0;
+      for (let y = gy * block; y < Math.min(H, (gy + 1) * block); y += 2) for (let x = gx * block; x < Math.min(W, (gx + 1) * block); x += 2) tmp.push(L[y * W + x]);
+      tmp.sort((p, q) => p - q);
+      grid[gy * gw + gx] = tmp[Math.floor(tmp.length * 0.9)] || 255;
+    }
+  }
+  // smooth it with a median of the neighbours (blocks full of text look dark,
+  // and a hard edge – picture next to white paper – must not spread)
+  let sm = grid;
+  for (let pass = 0; pass < 2; pass++) {
+    const src = sm, dst = new Float32Array(gw * gh), nb = [];
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        nb.length = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const x = gx + dx, y = gy + dy;
+          if (x >= 0 && y >= 0 && x < gw && y < gh) nb.push(src[y * gw + x]);
+        }
+        nb.sort((p, q) => p - q);
+        // median of the neighbours: smooth, and a hard edge does not spread
+        dst[gy * gw + gx] = nb[nb.length >> 1];
+      }
+    }
+    sm = dst;
+  }
+  const N = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const fy = Math.min(gh - 1.001, Math.max(0, y / block - 0.5)), y0 = Math.floor(fy), ty = fy - y0;
+    for (let x = 0; x < W; x++) {
+      const fx = Math.min(gw - 1.001, Math.max(0, x / block - 0.5)), x0 = Math.floor(fx), tx = fx - x0;
+      const g = (a, b) => sm[Math.min(gh - 1, b) * gw + Math.min(gw - 1, a)];
+      const bg = (g(x0, y0) * (1 - tx) + g(x0 + 1, y0) * tx) * (1 - ty) + (g(x0, y0 + 1) * (1 - tx) + g(x0 + 1, y0 + 1) * tx) * ty;
+      N[y * W + x] = Math.min(1.2, L[y * W + x] / Math.max(30, bg));
+    }
+  }
+  // contrast: the darkest ink → black, the paper → white (faint photos)
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < W * H; i++) hist[Math.min(255, Math.round(N[i] * 212))]++;
+  let acc = 0, lo = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > W * H * 0.004) { lo = v / 212; break; } }
+  const hi = 0.93, span = Math.max(0.15, hi - lo);
+  const out = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    const v = Math.max(0, Math.min(1, (N[i] - lo) / span)) * 255;
+    out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = v; out[i * 4 + 3] = 255;
+  }
+  // was the light uneven at all? (scans and screenshots: no – then the
+  // original is the better picture to read from)
+  const bgs = Array.from(sm).sort((p, q) => p - q);
+  const spread = bgs[Math.floor(bgs.length * 0.95)] - bgs[Math.floor(bgs.length * 0.05)];
+  const uneven = spread > 28 || bgs[bgs.length >> 1] < 170;
+  return { width: W, height: H, data: out, uneven };
+}
+
+module.exports = { lineInk, inkColor, dilate, inpaint, cleanLines, otsu, normalizeLight };

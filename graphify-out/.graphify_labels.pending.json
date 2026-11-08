@@ -1,16 +1,11 @@
 {
-  "1": "DriveRemote",
-  "14": "ref_fs",
-  "23": "inkrender.js",
-  "29": "v11.test.js",
-  "36": "sync.test.js",
-  "48": "external.js",
-  "54": "ui.js",
-  "55": "pen-filter.js",
-  "65": ".onKey",
-  "71": "backup.js",
-  "72": "richtext.js",
-  "77": "Ocr",
-  "79": "send.js",
-  "83": "geometry.test.js"
+  "3": "editor.js",
+  "4": "ocr-bench.js",
+  "26": "build.js",
+  "36": "sync.js",
+  "39": "PageView",
+  "45": ".constructor",
+  "48": "win",
+  "56": "pdf-lib",
+  "65": "round2"
 }

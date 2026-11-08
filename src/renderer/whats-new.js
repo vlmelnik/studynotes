@@ -8,7 +8,7 @@ export const RELEASES = [
     version: '1.7',
     tagline: 'Edit scanned text, handwriting to text, eyedropper',
     items: [
-      ['text', 'Make scanned text editable', 'Lasso tool → "Text area": draw a rectangle around text on a scan, photo or PDF – or use the page button in the toolbar for the whole page. The text is recognised (English, German, Russian), the paper is cleaned behind it, and it comes back as text boxes in a matching font, size and colour. Works offline after a one-time download (Settings → Add-ons).'],
+      ['text', 'Make scanned text editable', 'Lasso tool → "Text area": draw a rectangle around text on a scan, photo or PDF – or use the page button in the toolbar for the whole page. The text is recognised (English, German, Russian) – also on photos with shadows, glare, slight blur or a tilt – the paper is cleaned behind it, and it comes back as text boxes in a matching font, size, colour and tilt. Works offline after a one-time download (Settings → Add-ons).'],
       ['pen', 'Handwriting to text', 'Select your handwriting → "Copy as text" or "To text". Optionally the PDF export adds it as searchable, copyable text. Uses the handwriting recognizer built into Windows.'],
       ['pen', 'Eyedropper', 'Next to the colours (and in "More colours"): take any colour from the page. Shortcut: press I and click, or hold Alt and click.'],
       ['notebook', 'Fixes', 'Going back from the library keeps your page and zoom. Things dragged onto the next page stay in front and move to that page.'],
