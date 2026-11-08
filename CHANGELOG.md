@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.0
+
+**Scans and PDFs: make printed text editable**
+- Lasso a part of a scan, photo or PDF page and choose "Make text editable", or use the new page button in the toolbar (also in the page menu) for the whole page.
+- Text is recognised offline (Tesseract, English / German / Russian); the language data (7 MB) is downloaded once from the StudyNotes GitHub release (Settings → Add-ons, checked with SHA-256).
+- The font is matched by drawing candidates (Calibri / Arial / Times / Courier styles, regular, bold, italic) and comparing them with the scan; size and colour are taken from the scan.
+- The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
+
+**Handwriting → text**
+- Select handwriting → "Copy as text" or "To text" (a text box in the ink colour). Uses the handwriting recognizer built into Windows (offline); Settings → Add-ons shows which languages Windows can read.
+- Settings → "Export handwriting as text": the exported PDF contains the recognised handwriting as invisible, searchable and copyable text.
+
+**Eyedropper**
+- New tool (key I): click anywhere on the page to take that colour for the pen, highlighter, shapes or text, then you are back in your tool. Hold Alt and click to pick without switching tools. On ink it takes the ink's exact colour.
+
+**Fixes**
+- Library → notebook (and switching tabs) keeps the page and zoom instead of jumping to the cover.
+- Objects dragged onto the next page no longer disappear behind it: they stay in front while dragging and move to that page (on top of what is there), one undo step.
+
 ## 1.6.1
 
 **Ink**

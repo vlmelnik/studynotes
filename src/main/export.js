@@ -374,6 +374,40 @@ function contentBBox(data) {
  * @param {string[]} [args.pageIds] subset/order of pages to export (default all)
  * Older call style ({ pdfBytes, fontBytes }) is still accepted.
  */
+// Handwriting as invisible text over the ink: the PDF can be searched and the
+// handwriting selected and copied as text.
+const inkOf = (data) => data.strokes.filter((st) => st.t === 'pen' && !st.sh && st.p.length >= 6).map((st) => st.p.filter((_, i) => i % 3 !== 2));
+
+// All pages in one go (the recognizer is slow to start): pageId → words.
+async function recognizeInk(list, pages, inkTextAll) {
+  const ids = [], groups = [];
+  for (const pg of list) {
+    const ink = inkOf(pages[pg.id] || { strokes: [] });
+    if (ink.length) { ids.push(pg.id); groups.push(ink); }
+  }
+  const out = new Map();
+  if (!groups.length) return out;
+  try {
+    const res = await inkTextAll(groups);
+    ids.forEach((id, k) => out.set(id, (res[k] && res[k].words) || []));
+  } catch { /* no recognizer: the export still works, without the text */ }
+  return out;
+}
+
+async function drawInkText(page, words, map, ctx) {
+  if (!words || !words.length) return;
+  const { pdfFont } = await ctx.fonts.get('sans', false, false);
+  for (const w of words) {
+    if (!w.text || w.w <= 0 || w.h <= 0) continue;
+    let width = 0;
+    try { width = pdfFont.widthOfTextAtSize(w.text, 1); } catch { continue; } // letters the font lacks
+    if (!(width > 0)) continue;
+    const size = Math.max(2, Math.min(w.w / width, w.h * 1.4));
+    const [x, y] = map(w.x, w.y + w.h * 0.8);
+    page.drawText(w.text, { x, y, size, font: pdfFont, opacity: 0 });
+  }
+}
+
 async function exportNotebook(args) {
   const { notebook, pages, pageIds } = args;
   const readSource = args.readSource || (async () => args.pdfBytes);
@@ -403,6 +437,8 @@ async function exportNotebook(args) {
 
   const wanted = pageIds ? new Set(pageIds) : null;
   const list = notebook.pages.filter((p) => !wanted || wanted.has(p.id));
+  const inkWords = args.inkTextAll ? await recognizeInk(list, pages, args.inkTextAll) : new Map();
+  const inkText = async (page, pg, map) => { if (inkWords.has(pg.id)) await drawInkText(page, inkWords.get(pg.id), map, ctx); };
 
   // Copy the PDF pages we need, per source; duplicates need their own copy.
   const copied = new Map(); // `${src}:${index}` -> [PDFPage]
@@ -432,7 +468,9 @@ async function exportNotebook(args) {
       out.addPage(page);
       if (pg.rot) page.setRotation(degrees(normRotation(page.getRotation().angle + pg.rot)));
       const rotation = page.getRotation().angle;
-      await drawContent(page, data, makeMapper(page.getCropBox(), rotation), rotation, ctx);
+      const map = makeMapper(page.getCropBox(), rotation);
+      await drawContent(page, data, map, rotation, ctx);
+      if (rotation === 0) await inkText(page, pg, map);
     } else if (pg.kind === 'board') {
       const bb = contentBBox(data) || [0, 0, 595, 842];
       const m = 36;
@@ -447,6 +485,7 @@ async function exportNotebook(args) {
       const map = (x, y) => [x, pg.h - y];
       drawPaper(page, pg, map, 1);
       await drawContent(page, data, map, 0, ctx);
+      await inkText(page, pg, map);
     }
   }
   if (args.beforeSave) await args.beforeSave(out);

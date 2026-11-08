@@ -12,6 +12,8 @@ const parts = [
   ['@pdf-lib/fontkit', 'MIT', lic('fontkit-LICENSE'), 'https://github.com/Hopding/fontkit'],
   ['perfect-freehand', 'MIT', nm('perfect-freehand/LICENSE'), 'https://github.com/steveruizok/perfect-freehand'],
   ['onnxruntime-node', 'MIT', lic('onnxruntime-LICENSE'), 'https://github.com/microsoft/onnxruntime'],
+  ['Tesseract.js', 'Apache-2.0', nm('tesseract.js/LICENSE.md'), 'https://github.com/naptha/tesseract.js'],
+  ['Tesseract OCR engine (tesseract.js-core)', 'Apache-2.0', nm('tesseract.js-core/LICENSE'), 'https://github.com/tesseract-ocr/tesseract – language data (tessdata_best, Apache-2.0) is downloaded as the text recognition add-on'],
   ['yauzl', 'MIT', nm('yauzl/LICENSE'), 'https://github.com/thejoshwolfe/yauzl'],
   ['yazl', 'MIT', nm('yazl/LICENSE'), 'https://github.com/thejoshwolfe/yazl'],
   ['ISNet background-removal model (DIS)', 'Apache-2.0', lic('isnet-LICENSE'), 'https://github.com/xuebinqin/DIS – see also assets/models/NOTICE.txt'],

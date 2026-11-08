@@ -10,7 +10,7 @@ import {
   shapeStrokes, snapAngle, strokeBBox, round2, distToStroke, rectsIntersect, LINE_SHAPES,
 } from '../shared/geometry.js';
 import { FONTS } from '../shared/fonts.js';
-import { restack, stacked } from '../shared/stacking.js';
+import { restack, stacked, layerOf } from '../shared/stacking.js';
 import { Laser } from './laser.js';
 import { isClosedShape } from '../shared/ink.js';
 import { placeAt } from './fill-sign.js';
@@ -122,6 +122,24 @@ export class Tools {
     s.addEventListener('dblclick', (e) => this.onDoubleClick(e));
   }
 
+  // Holding Alt with a drawing tool shows the eyedropper (Alt + click picks).
+  watchAltKey() {
+    const pickTools = ['pen', 'hl', 'text', 'select', 'lasso']; // (shapes: Alt = free angles)
+    const set = (on) => this.editor.el.classList.toggle('alt-pick', on && pickTools.includes(this.tool));
+    this._altDown = (e) => { if (e.key === 'Alt') set(true); };
+    this._altUp = (e) => { if (e.key === 'Alt' || !e.altKey) set(false); };
+    this._altBlur = () => set(false);
+    window.addEventListener('keydown', this._altDown);
+    window.addEventListener('keyup', this._altUp);
+    window.addEventListener('blur', this._altBlur);
+  }
+
+  unwatchAltKey() {
+    window.removeEventListener('keydown', this._altDown);
+    window.removeEventListener('keyup', this._altUp);
+    window.removeEventListener('blur', this._altBlur);
+  }
+
   get tool() { return this.state.tool; }
   get selecting() { return this.tool === 'select' || this.tool === 'lasso'; }
 
@@ -134,6 +152,13 @@ export class Tools {
       const c = this.cur;
       if (!(e.pointerType === 'pen' && penButton(e) && c.kind === 'stroke' && c.pointerId !== e.pointerId)) return;
       this.onUp({ pointerId: c.pointerId });
+    }
+    // Eyedropper (tool, or Alt + click with a drawing tool)
+    const pickTools = ['pen', 'hl', 'text', 'select', 'lasso']; // (shapes: Alt = free angles)
+    if (e.button === 0 && (this.tool === 'picker' || (e.altKey && pickTools.includes(this.tool)))) {
+      e.preventDefault();
+      this.editor.pickColorAt(e.clientX, e.clientY, this.tool === 'picker' ? this.editor.pickerFor : this.tool);
+      return;
     }
     const target = e.target;
     // Interactive elements inside pages handle themselves.
@@ -729,7 +754,19 @@ export class Tools {
     const strokeIds = new Set(data.strokes.filter((st) => strokeInLasso(st, c.pts)).map((st) => st.id));
     const textIds = new Set(data.texts.filter((t) => centerIn(textBBox(t))).map((t) => t.id));
     const itemIds = new Set(data.items.filter((it) => centerIn(itemBBox(it))).map((it) => it.id));
+    const page = this.viewer.pages[c.index];
+    // nothing caught on a PDF page: offer to make its printed text editable
+    // (pictures are selected as before – their toolbar has the same button)
+    if (!strokeIds.size && !textIds.size && !itemIds.size && page.kind === 'pdf') {
+      const last = c.pts[c.pts.length - 1], z = this.viewer.zoom;
+      const lasso = c.pts.slice();
+      showMenu([{ label: 'Make text editable', icon: 'scanText', onClick: () => this.editor.makePageEditable(c.index, { poly: lasso }) }],
+        c.rect.left + last[0] * z + 6, c.rect.top + last[1] * z + 6);
+      return;
+    }
     this.select(c.index, c.pageId, strokeIds, textIds, itemIds);
+    // "Make text editable" on lassoed pictures uses the lasso, not the whole picture
+    if (this.sel) this.sel.lassoPoly = c.pts.slice();
   }
 
   // ---------- selection ----------
@@ -813,6 +850,19 @@ export class Tools {
     }
     if (strokes.length && !texts.length && !items.length) {
       parts.push(h('span', { class: 'sep' }), btn('minus', 'Thinner', () => this.restyle({ width: 0.8 })), btn('plus', 'Thicker', () => this.restyle({ width: 1.25 })));
+    }
+    // handwriting → text (Windows' handwriting recognizer)
+    if (strokes.some((st) => st.t === 'pen' && !st.sh)) {
+      parts.push(h('span', { class: 'sep' }),
+        tbtn('Copy as text', 'Recognise the handwriting and copy it as text', () => this.editor.handwritingToText('copy')),
+        tbtn('To text', 'Replace the handwriting by a text box', () => this.editor.handwritingToText('convert')));
+    }
+    const scans = items.filter((it) => it.type === 'img');
+    if (scans.length && !strokes.length && !texts.length) {
+      parts.push(h('span', { class: 'sep' }), tbtn('Make text editable', 'Recognise the printed text of this picture and make it editable', () => {
+        const b = this.sel.bbox, idx = this.sel.index;
+        this.editor.makePageEditable(idx, { poly: this.sel.lassoPoly || [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]] });
+      }));
     }
     const closed = strokes.filter((st) => isClosedShape(st));
     if (closed.length) {
@@ -939,6 +989,9 @@ export class Tools {
       this.cur.delta = 0;
     }
     sel.bar.style.visibility = 'hidden';
+    // what is being dragged stays above the neighbouring pages
+    sel.view.el.classList.add('drag-front');
+    this.cur.frontEl = sel.view.el;
     this.capture(e);
   }
 
@@ -972,6 +1025,7 @@ export class Tools {
   }
 
   endSelTransform(c, cancelled) {
+    if (c.frontEl) c.frontEl.classList.remove('drag-front');
     const sel = this.sel;
     if (!sel) return;
     sel.bar.style.visibility = '';
@@ -981,11 +1035,54 @@ export class Tools {
     }
     const moved = c.mode === 'move' ? (Math.abs(c.tx) + Math.abs(c.ty) > 0.01) : Math.abs(c.s - 1) > 1e-3;
     if (cancelled || !moved) { this.positionSelection(); return; }
+    if (c.mode === 'move' && this.moveSelectionToPage(c.tx, c.ty)) return;
     const [ax, ay] = c.mode === 'move' ? [0, 0] : c.anchor;
     const s = c.mode === 'move' ? 1 : c.s;
     const tx = ax * (1 - s) + c.tx, ty = ay * (1 - s) + c.ty;
     const before = this.editor.pageData(sel.pageId);
     this.recommit(before, this.scaledData(before, s, tx, ty));
+  }
+
+  // Dropped over another page: the objects move to that page (on top of
+  // what is there), one undo step for both pages.
+  moveSelectionTo(target, tx, ty) {
+    const sel = this.sel, z = this.viewer.zoom;
+    const rs = this.viewer.pageClientRect(sel.index), rt = this.viewer.pageClientRect(target);
+    // (pageClientRect is where page unit 0,0 lies on screen)
+    const dx = round2(tx + (rs.left - rt.left) / z), dy = round2(ty + (rs.top - rt.top) / z);
+    const src = this.editor.pageData(sel.pageId);
+    const tpage = this.viewer.pages[target];
+    const dst = this.editor.pageData(tpage.id);
+    const topOf = (layer) => Math.max(0, Math.ceil(stacked(dst, layer).reduce((m, e) => Math.max(m, e.key), 0)));
+    const zTop = { f: topOf('f') + 1, b: topOf('b') + 1 };
+    const front = (o, kind) => { const lay = layerOf(kind, o); return { ...o, lay, z: zTop[lay]++ }; };
+    const strokes = src.strokes.filter((st) => sel.strokeIds.has(st.id)).map((st) => transformStroke(st, 1, 1, dx, dy));
+    const texts = src.texts.filter((t) => sel.textIds.has(t.id)).map((t) => front({ ...t, x: round2(t.x + dx), y: round2(t.y + dy) }, 'text'));
+    const items = src.items.filter((it) => sel.itemIds.has(it.id)).map((it) => front(transformItem(it, 1, dx, dy), 'item'));
+    const ids = { s: new Set(strokes.map((o) => o.id)), t: new Set(texts.map((o) => o.id)), i: new Set(items.map((o) => o.id)) };
+    this.clearSelection(true);
+    this.editor.commitGroup([
+      { pageId: sel.pageId, before: src, after: { ...src, strokes: src.strokes.filter((o) => !ids.s.has(o.id)), texts: src.texts.filter((o) => !ids.t.has(o.id)), items: src.items.filter((o) => !ids.i.has(o.id)) } },
+      { pageId: tpage.id, before: dst, after: { ...dst, strokes: dst.strokes.concat(strokes), texts: dst.texts.concat(texts), items: dst.items.concat(items) } },
+    ]);
+    this.select(target, tpage.id, ids.s, ids.t, ids.i);
+  }
+
+  // After a move: is the selection's centre now over another page?
+  moveSelectionToPage(tx, ty) {
+    const sel = this.sel;
+    if (!sel || this.editor.isBoard) return false;
+    const z = this.viewer.zoom, r = this.viewer.pageClientRect(sel.index);
+    const cx = r.left + ((sel.bbox[0] + sel.bbox[2]) / 2 + tx) * z;
+    const cy = r.top + ((sel.bbox[1] + sel.bbox[3]) / 2 + ty) * z;
+    const n = this.viewer.pages.length;
+    for (let i = 0; i < n; i++) {
+      if (i === sel.index) continue;
+      const q = this.viewer.pageClientRect(i), p = this.viewer.pages[i];
+      const x0 = q.left + (p.ox || 0) * z, y0 = q.top + (p.oy || 0) * z;
+      if (cx >= x0 && cx <= x0 + q.width && cy >= y0 && cy <= y0 + q.height) { this.moveSelectionTo(i, tx, ty); return true; }
+    }
+    return false;
   }
 
   // Commit a change to the selected objects and keep them selected.

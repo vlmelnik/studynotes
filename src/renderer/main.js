@@ -1,5 +1,6 @@
 // App shell: tabs (Library + open notebooks), notebook loading, settings.
 import { h, toast, modal, debounce, confirmDialog, shortcutKey, keySignature, describeKey } from './ui.js';
+import { installOcr } from './scan-edit.js';
 import { icon } from './icons.js';
 import { LibraryView } from './library-view.js';
 import { Editor, defaultToolState } from './editor.js';
@@ -450,6 +451,7 @@ class App {
         check('Draw & hold to create shapes', 'shapeHold', 'Hold the pen still at the end of a stroke to snap it to a line, rectangle, triangle or ellipse'),
         check('Pasted text keeps formatting', 'pasteFormatting', 'Off: text is always pasted as plain text. On: bold, italic, underline and lists are kept'),
         this.tabletSettings(),
+        this.addonSettings(),
         h('div', { class: 'field' }, h('span', {}, 'Backup & moving to a new version or PC'),
           h('div', { class: 'row wrap' },
             h('button', { class: 'btn', onclick: () => this.exportSettings() }, 'Export settings…'),
@@ -464,6 +466,38 @@ class App {
         h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when the driver uses "Windows Ink" (newer Wacom drivers: Wacom Tablet Properties → Mapping → Use Windows Ink; older Bamboo drivers do it automatically).`)),
       actions: [{ label: 'Done', primary: true, result: true }],
     });
+  }
+
+  // ---------- add-ons: text recognition ----------
+  addonSettings() {
+    const s = this.settings;
+    const ocrState = h('span', { class: 'addon-state' }, '…');
+    const ocrBtns = h('span', { class: 'row-btns' });
+    const refreshOcr = async () => {
+      const st = await window.api.ocrStatus().catch(() => null);
+      if (!st) return;
+      const mb = (st.size / 1048576).toFixed(0);
+      ocrState.textContent = st.installed ? 'Installed (English, German, Russian)' : `Not installed (${mb} MB download)`;
+      ocrBtns.replaceChildren(st.installed
+        ? h('button', { class: 'btn ghost', onclick: async () => { await window.api.ocrRemove(); refreshOcr(); } }, 'Remove')
+        : h('button', { class: 'btn', onclick: async () => { ocrState.textContent = 'Downloading…'; await installOcr((d, t) => { ocrState.textContent = `Downloading… ${Math.round((d / t) * 100)} %`; }); refreshOcr(); } }, 'Download'));
+    };
+    refreshOcr();
+    // Windows handwriting recognizers (installed with the Windows language packs)
+    const recSel = h('select', { class: 'rec-select', onchange: () => { s.inkRecognizer = recSel.value; this.saveSettings(); } }, h('option', { value: '' }, 'Windows default'));
+    const recState = h('small', { class: 'hint' }, '');
+    window.api.inkRecognizers().then((list) => {
+      for (const n of list) recSel.append(h('option', { value: n, class: 'no-i18n' }, n));
+      recSel.value = list.includes(s.inkRecognizer) ? s.inkRecognizer : '';
+      if (!list.length) recState.textContent = 'Windows has no handwriting recognizer installed. Add one: Windows Settings → Time & language → Language → (language) → Options → Handwriting.';
+    }, (err) => { recSel.disabled = true; recState.textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); });
+    return h('div', { class: 'field' }, h('span', {}, 'Add-ons'),
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Text recognition'), ocrState, ocrBtns),
+      h('small', { class: 'hint' }, 'Makes printed text of scans, photos and PDFs editable (lasso an area, or the page button in the toolbar). Works offline after the download.'),
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Handwriting'), recSel),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!s.exportInkText, onchange: (e) => { s.exportInkText = e.target.checked; this.saveSettings(); } }), 'Export handwriting as text (the PDF can be searched and copied)'),
+      h('small', { class: 'hint' }, 'Select handwriting → "Copy as text" or "To text"; export can add it as copyable text. Uses the handwriting recognizer built into Windows (offline).'),
+      recState);
   }
 
   // ---------- graphics tablet ----------

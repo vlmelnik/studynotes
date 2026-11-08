@@ -44,3 +44,10 @@
 - Union-of-pieces outlines with non-zero fill: a band whose inner edge folds gets the opposite winding and cuts a hole; break bands where the bend is tighter than the width.
 - A background tab has no size: never record its scroll position (it saved page 0).
 - Measure UI sizes from the DOM (ResizeObserver) instead of storing derived heights that go stale.
+
+### v1.7
+- A hidden tab loses its scroll position (detached elements forget scrollTop): restore the recorded view when the tab is shown again.
+- Canvas + library pictures: load through fetch → createImageBitmap, an <img> from the custom protocol taints the canvas (toBlob fails).
+- tesseract.js 7 in Node passes a boolean to getCore → it loads the full (non "-lstm") cores; package those, not the -lstm ones. Test OCR in the packaged app (asar).
+- e2e sections must reset zoom/scroll themselves; an earlier section can leave the page scrolled away.
+- Release workflow: add-on data gets its own release (upload/NOT_LATEST) so the app release stays "latest".

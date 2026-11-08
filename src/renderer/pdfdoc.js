@@ -143,6 +143,20 @@ export class PdfDoc {
     return { promise, cancel: task.cancel, setPriority: (pr) => { task.priority = pr; } };
   }
 
+  /** Only the part `r` (page units at scale 1) of page n, at `scale`. */
+  async renderRegion(n, scale, rotate, r) {
+    const page = await this.getPage(n);
+    const vp = page.getViewport({ scale, rotation: (page.rotate + rotate) % 360 });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil((r.x1 - r.x0) * scale));
+    canvas.height = Math.max(1, Math.ceil((r.y1 - r.y0) * scale));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas, canvasContext: ctx, viewport: vp, background: '#ffffff', transform: [1, 0, 0, 1, -r.x0 * scale, -r.y0 * scale] }).promise;
+    return canvas;
+  }
+
   async textContent(n) {
     const page = await this.getPage(n);
     return page.getTextContent();

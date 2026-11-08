@@ -336,4 +336,20 @@ setting "also text" (default off: ink only); pencil = fine graphite grain.
 - [x] Text box: frame/selection always matches real text height (move, resize);
       bigger side handles (whole height)
 - [x] Mouse wheel over a size field changes the value
-- [ ] Tests, review, build, publish v1.6.1
+- [x] Tests, review, build, publish v1.6.1
+
+# v1.7.0 – plan (2026-11-08)
+Answers: handwriting = Windows built-in recognizer (tested only on user's PC);
+scans: both lasso area and whole page; add-on data downloaded from the GitHub release.
+- [x] Bug: Library ↔ notebook loses page/zoom (starts at the cover)
+- [x] Bug: objects dragged onto the next page disappear behind that page → always in front
+- [x] Eyedropper: tool (key I) + hold Alt and click while drawing; sets pen / highlighter / text colour
+- [x] Add-on manager: Settings → Add-ons → "Text recognition (EN/DE/RU)" download from GitHub release
+      (tag `ocr-data-1`, SHA-256 checked) into userData/addons/ocr; remove button
+- [x] Scan → editable: lasso area ("Make text editable") + page button; Tesseract (bundled core,
+      language data from add-on); font matched by rendering candidates; background cleaned
+      (inpaint) as picture patch; editable text boxes in matching font/size/colour on top
+- [x] Handwriting → text: Windows InkRecognizer through a PowerShell helper (no binaries);
+      lasso menu "Copy as text" / "Convert to text"; shows which languages Windows can read
+- [x] Export: handwriting as invisible text layer (copyable / searchable PDF), setting
+- [ ] Tests, review, build, publish v1.7.0 + add-on release (add-on release ocr-data-1 published)

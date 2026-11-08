@@ -116,3 +116,25 @@ test('export: rotated and semi-transparent pictures look like on screen', { skip
   assert.ok(bottom[2] > 200 && bottom[0] < 60, 'bottom blue ' + bottom);
   assert.ok(outside[0] > 240 && outside[1] > 240 && outside[2] > 240, 'outside white ' + outside);
 });
+
+test('1.7: export adds recognised handwriting as invisible, copyable text (also Cyrillic)', async () => {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const assets = path.join(__dirname, '..', 'assets');
+  const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
+  const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 595, h: 842 }] };
+  const strokes = [{ id: 's', t: 'pen', c: '#000', s: 2, p: [100, 100, 0.5, 160, 110, 0.5, 200, 100, 0.5] }, { id: 'h', t: 'pen', sh: 1, c: '#000', s: 2, p: [0, 0, 0.5, 10, 10, 0.5] }];
+  let got = null;
+  const inkTextAll = async (groups) => { got = groups; return [{ words: [{ text: 'Hallo', x: 100, y: 95, w: 60, h: 20 }, { text: 'мир', x: 170, y: 95, w: 30, h: 20 }] }]; };
+  const bytes = await exportNotebook({ notebook, pages: { p: { strokes, texts: [], items: [] } }, readFont, inkTextAll });
+  assert.strictEqual(got.length, 1, 'one call for all pages');
+  assert.strictEqual(got[0].length, 1, 'shapes are not handwriting');
+  assert.deepStrictEqual(got[0][0], [100, 100, 160, 110, 200, 100]);
+  const js = await pdfjs.getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false, isEvalSupported: false }).promise;
+  const content = await (await js.getPage(1)).getTextContent();
+  const str = content.items.map((i) => i.str).join(' ');
+  assert.match(str, /Hallo/);
+  assert.match(str, /мир/);
+  // a recognizer that fails does not break the export
+  const ok = await exportNotebook({ notebook, pages: { p: { strokes, texts: [], items: [] } }, readFont, inkTextAll: async () => { throw new Error('no'); } });
+  assert.ok(ok.length > 100);
+});

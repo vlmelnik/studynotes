@@ -11,11 +11,12 @@ import { TextBar, sizeControl, TEXT_SIZES } from './textbar.js';
 import { loadFormFields, signatureDialog, fillBar } from './fill-sign.js';
 import { PdfDoc, isCancel, Util } from './pdfdoc.js';
 import { normalize, fold } from '../main/search.js';
-import { round2, BOX_SHAPES, LINE_SHAPES, mapCuts } from '../shared/geometry.js';
+import { round2, BOX_SHAPES, LINE_SHAPES, mapCuts, strokeHit } from '../shared/geometry.js';
 import { PAPERS, PAGE_SIZES } from '../shared/paper.js';
 import { templatePicker } from './template-picker.js';
 import { PEN_STYLES } from '../shared/ink.js';
 import { FONTS } from '../shared/fonts.js';
+import { makeTextEditable } from './scan-edit.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
 const UNDO_LIMIT = 300;
@@ -102,6 +103,7 @@ export class Editor {
     this.viewer.onPageChange = (i) => this.onPageChange(i);
     this.viewer.onZoomChange = (z) => this.onZoomChange(z);
     this.tools = new Tools(this);
+    this.tools.watchAltKey();
     this.viewer.scroller.addEventListener('scroll', () => this.textBar.schedulePosition(), { passive: true });
     // Show the style of the words under the cursor while editing text.
     this._onSelChange = () => {
@@ -226,6 +228,14 @@ export class Editor {
   // When a tab becomes active again.
   activate() {
     this.viewer.computeLayout();
+    // while the tab was hidden its scroll position was lost (detached
+    // elements forget it): go back to the view recorded when it was left
+    const vs = this.doc.nb.view;
+    if (vs && this.isBoard && vs.cx != null) this.viewer.centerOn(vs.cx, vs.cy);
+    else if (vs && !this.isBoard && vs.page != null) {
+      const L = this.viewer.layout[Math.min(vs.page, this.viewer.layout.length - 1)];
+      if (L) this.viewer.scroller.scrollTop = L.y + (vs.y ?? 0) * this.viewer.zoom;
+    }
     this.viewer.scheduleUpdate();
     this.viewer.scroller.focus({ preventScroll: true });
   }
@@ -295,6 +305,16 @@ export class Editor {
     this.setPageData(pageId, after);
   }
 
+  // Changes on several pages as one undo step (e.g. objects moved to another page).
+  commitGroup(changes) {
+    this.finishEditing();
+    this.undoStack.push({ kind: 'group', items: changes.map(({ pageId, before, after }) => ({ pageId, before, after })) });
+    if (this.undoStack.length > UNDO_LIMIT) this.undoStack.shift();
+    this.redoStack.length = 0;
+    this.updateUndoButtons();
+    for (const c of changes) this.setPageData(c.pageId, c.after);
+  }
+
   addStroke(pageId, st) {
     this.finishEditing();
     const before = this.pageData(pageId);
@@ -345,7 +365,13 @@ export class Editor {
   }
 
   applyHistory(e, which) {
-    if (e.kind === 'pages') {
+    if (e.kind === 'group') {
+      const list = which === 'before' ? [...e.items].reverse() : e.items;
+      for (const it of list) this.setPageData(it.pageId, it[which]);
+      const idx = this.pages.findIndex((p) => p.id === list[list.length - 1].pageId);
+      const [first, last] = this.viewer.visibleRange();
+      if (idx >= 0 && (idx < first || idx > last)) this.viewer.scrollToPage(idx);
+    } else if (e.kind === 'pages') {
       if (e.sources) this.doc.nb.sources = e.sources[which];
       if (e.data) { this.doc.pages[e.data.pageId] = e.data[which]; this.dirtyPages.add(e.data.pageId); }
       this.applyPages(e[which]);
@@ -454,6 +480,7 @@ export class Editor {
     window.removeEventListener('pointerup', this._onPaintUp, true);
     window.removeEventListener('pointerdown', this._onPaintDown, true);
     if (this._textRO) this._textRO.disconnect();
+    this.tools.unwatchAltKey();
     this.viewer.destroy();
     this.sidebar.destroy();
     this.el.remove();
@@ -483,6 +510,7 @@ export class Editor {
       toolBtn('eraser', 'eraser', 'Eraser (E)'),
       toolBtn('text', 'text', 'Text (T)'),
       toolBtn('shape', 'shapes', 'Shapes (S)'),
+      toolBtn('picker', 'eyedropper', 'Eyedropper: pick a colour from the page (I, or hold Alt and click)'),
       toolBtn('laser', 'laser', 'Laser pointer (K)'),
       toolBtn('hand', 'hand', 'Hand / pan (Space)'),
     ];
@@ -497,6 +525,7 @@ export class Editor {
       this.isBoard ? null : h('div', { class: 'split-btn' },
         iconButton('addPage', 'Add a page after this one (same style)', () => this.addPageSameStyle(), 'bar-btn'),
         h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })),
+      this.isBoard ? null : iconButton('scanText', 'Make the text of this page editable (scans, photos, PDFs)', () => this.makePageEditable(this.viewer.currentIndex), 'bar-btn scan-text'),
       this.isBoard ? null : iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'),
       iconButton('send', 'Send by e-mail or Telegram', (e) => this.sendMenu(e.currentTarget), 'bar-btn'),
       iconButton('export', 'Export PDF', (e) => this.exportMenu(e.currentTarget), 'bar-btn'),
@@ -514,7 +543,12 @@ export class Editor {
   }
 
   setTool(tool, initial = false) {
-    if (!initial && tool !== 'lasso' && tool !== 'select') this.tools.clearSelection();
+    // the eyedropper works for the tool used before it (and goes back to it)
+    if (tool === 'picker') {
+      if (this.toolState.tool !== 'picker') this.pickerFor = this.toolState.tool;
+      if (initial) tool = this.pickerFor || 'pen';
+    }
+    if (!initial && tool !== 'lasso' && tool !== 'select' && tool !== 'picker') this.tools.clearSelection();
     if (tool !== 'text') this.finishEditing(true);
     this.toolState.tool = tool;
     for (const b of this.toolButtons) b.classList.toggle('active', b.dataset.tool === tool);
@@ -672,6 +706,80 @@ export class Editor {
     list.unshift(cfg);
     this.settings.recentPens = list.slice(0, 6);
     this.app.saveSettings();
+  }
+
+  // Scans / photos / PDF text → editable text boxes (text recognition add-on).
+  makePageEditable(index, area = null) {
+    this.tools.clearSelection();
+    return makeTextEditable(this, index, area);
+  }
+
+  // Handwriting of the selection → text (copy, or replace by a text box).
+  async handwritingToText(mode) {
+    const sel = this.tools.sel;
+    if (!sel) return;
+    const d = this.pageData(sel.pageId);
+    const strokes = d.strokes.filter((st) => sel.strokeIds.has(st.id) && st.t === 'pen' && !st.sh);
+    if (!strokes.length) return;
+    const busy = toast('Reading the handwriting…', { timeout: 60000 });
+    let res;
+    try {
+      res = await window.api.inkRecognize(strokes.map((st) => st.p.filter((_, i) => i % 3 !== 2)), this.settings.inkRecognizer || '');
+    } catch (err) {
+      busy.remove();
+      toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 7000 });
+      return;
+    }
+    busy.remove();
+    if (this.destroyed) return;
+    if (!res.text) { toast('No handwriting recognised'); return; }
+    if (mode === 'copy') {
+      await navigator.clipboard.writeText(res.text).catch(() => {});
+      toast(h('span', {}, 'Copied: ', h('i', { class: 'no-i18n' }, res.text.length > 60 ? res.text.slice(0, 60) + '…' : res.text)), { timeout: 3000 });
+      return;
+    }
+    // a text box where the writing was, in its colour and about its size
+    const b = sel.bbox;
+    // the page may have changed while the recognizer worked: build on what is there now
+    const now = this.pageData(sel.pageId);
+    const ids = new Set(strokes.map((st) => st.id).filter((id) => now.strokes.some((st) => st.id === id)));
+    if (!ids.size) return;
+    const lineCount = res.text.split('\n').length;
+    const fs = Math.max(8, Math.min(48, round2(((b[3] - b[1]) / lineCount) * 0.62)));
+    const counts = new Map();
+    for (const st of strokes) counts.set(st.c, (counts.get(st.c) || 0) + 1);
+    const color = [...counts.entries()].sort((a, c) => c[1] - a[1])[0][0];
+    const text = { id: uid(), x: round2(b[0]), y: round2(b[1]), w: round2(Math.max(40, b[2] - b[0])), fs, c: color, ff: this.toolState.text.ff || 'carlito', text: res.text, aw: true };
+    this.tools.clearSelection(true);
+    this.commit(sel.pageId, now, { ...now, strokes: now.strokes.filter((st) => !ids.has(st.id)), texts: now.texts.concat([text]) });
+    this.tools.select(sel.index, sel.pageId, new Set(), new Set([text.id]));
+  }
+
+  // Eyedropper: take the colour under the pointer for `forTool`.
+  async pickColorAt(clientX, clientY, forTool) {
+    // ink under the pointer: its exact colour (see-through pens would mix with
+    // the paper on screen); otherwise the colour of the pixel on screen
+    let hex = null;
+    const hit = this.viewer.hit(clientX, clientY);
+    if (hit) {
+      const d = this.pageData(hit.page.id), r = 3 / this.viewer.zoom;
+      for (let i = d.strokes.length - 1; i >= 0 && !hex; i--) {
+        const st = d.strokes[i];
+        if (strokeHit(st, hit.x, hit.y, hit.x, hit.y, r) && /^#[0-9a-f]{6}$/i.test(st.c)) hex = st.c.toLowerCase();
+      }
+    }
+    if (!hex) hex = await window.api.screenPixel(clientX, clientY).catch(() => null);
+    if (!hex || this.destroyed) return;
+    const ts = this.toolState;
+    const sel = this.tools.sel;
+    if (forTool === 'hl') ts.hl.color = hex;
+    else if ((forTool === 'select' || forTool === 'lasso') && sel) this.tools.restyle({ color: hex });
+    else if (forTool === 'text' && this.textEdit) this.applyTextStyle({ color: hex });
+    else ts.pen.color = hex; // pen, shapes and text share the colour
+    this.rememberColor(hex);
+    if (this.toolState.tool === 'picker') this.setTool(this.pickerFor && this.pickerFor !== 'picker' ? this.pickerFor : 'pen');
+    else { this.renderOptions(); this.app.saveToolState(); }
+    toast(h('span', { class: 'picked' }, h('span', { class: 'picked-swatch', style: { background: hex } }), `Colour picked: ${hex}`), { timeout: 1200 });
   }
 
   rememberColor(c) {
@@ -1134,6 +1242,7 @@ export class Editor {
       { label: 'Add page before', icon: 'addPage', onClick: () => this.insertPage(index, this.styleOf(this.pages[index]), 'before') },
       { label: 'Move up', icon: 'chevronLeft', disabled: index === 0, onClick: () => this.movePage(index, index - 1) },
       { label: 'Move down', icon: 'chevronRight', disabled: index === this.pages.length - 1, onClick: () => this.movePage(index, index + 1) },
+      { label: 'Make text editable (recognise)', icon: 'scanText', onClick: () => this.makePageEditable(index) },
       { label: 'Export this page…', icon: 'export', onClick: () => this.exportPages([this.pages[index].id]) },
       { label: 'Send this page by e-mail', icon: 'mail', onClick: () => this.send('mail', [this.pages[index].id], `page ${index + 1}`) },
       'sep',
@@ -1177,7 +1286,7 @@ export class Editor {
     if (ctrl) return false; // Ctrl+V is handled by the paste event
     if ((k === 'delete' || k === 'backspace') && sel) return this.tools.deleteSelection(), true;
     if (k === 'escape') { this.tools.clearSelection(); this.searchPanel.close(); this.textBar.update(); return true; }
-    const map = { v: 'select', p: 'pen', h: 'hl', e: 'eraser', l: 'lasso', s: 'shape', t: 'text', k: 'laser' };
+    const map = { v: 'select', p: 'pen', h: 'hl', e: 'eraser', l: 'lasso', s: 'shape', t: 'text', k: 'laser', i: 'picker' };
     if (map[k]) return this.setTool(map[k]), true;
     if (this.isBoard) return false;
     if (k === 'pagedown' || (k === 'arrowright' && !e.shiftKey)) return this.viewer.scrollToPage(this.viewer.currentIndex + 1), true;

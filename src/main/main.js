@@ -20,6 +20,8 @@ const localBackup = require('./localbackup');
 const { sendMail, sendTelegram } = require('./send');
 const { makeSettingsExport, readSettingsImport } = require('../shared/format');
 const { CloudSync } = require('./cloud');
+const { Ocr } = require('./ocr');
+const handwriting = require('./handwriting');
 
 const DIST = path.join(__dirname, '..', '..', 'dist');
 const ASSETS = path.join(__dirname, '..', '..', 'assets');
@@ -336,15 +338,18 @@ if (TEST_MODE) {
 }
 
 async function exportTo(rel, notebook, pageIds, outFile) {
-  await atomicWrite(outFile, Buffer.from(await buildPdf(rel, notebook, pageIds)));
+  // Settings → "Export handwriting as text" (Windows' handwriting recognizer);
+  // only for exports, not when a PDF opened from disk is saved back
+  const inkTextAll = config.settings.exportInkText ? (groups) => handwriting.recognizeMany(groups, config.settings.inkRecognizer || '') : null;
+  await atomicWrite(outFile, Buffer.from(await buildPdf(rel, notebook, pageIds, undefined, inkTextAll)));
 }
 
-async function buildPdf(rel, notebook, pageIds, beforeSave) {
+async function buildPdf(rel, notebook, pageIds, beforeSave, inkTextAll = null) {
   const dir = library.abs(rel);
   const ids = await library.listPageFiles(rel);
   const pages = await library.readPages(rel, ids);
   return exportNotebook({
-    notebook, pages, pageIds, beforeSave,
+    notebook, pages, pageIds, beforeSave, inkTextAll,
     readSource: async (src) => {
       const s = notebook.sources && notebook.sources[src];
       const file = s ? s.file : src === 'main' ? 'source.pdf' : null;
@@ -580,6 +585,32 @@ async function startSession() {
 async function endSession() {
   await fsp.rm(sessionFile(), { force: true }).catch(() => {});
 }
+// Eyedropper: the colour of one screen pixel of the window (everything
+// that is visible there: PDF, ink, text, pictures).
+handle('screen:pixel', async (x, y) => {
+  if (!win) return null;
+  const img = await win.webContents.capturePage({ x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)), width: 1, height: 1 });
+  const b = img.toBitmap(); // BGRA
+  if (!b || b.length < 4) return null;
+  const hex = (v) => v.toString(16).padStart(2, '0');
+  return `#${hex(b[2])}${hex(b[1])}${hex(b[0])}`;
+});
+// ---------- handwriting → text (Windows' recognizer) ----------
+handle('ink:recognize', (strokes, recognizer) => handwriting.recognize(strokes, recognizer));
+handle('ink:recognizers', () => handwriting.recognizers());
+
+// ---------- text recognition add-on ----------
+let ocr = null;
+const getOcr = () => (ocr ||= new Ocr({
+  dir: path.join(app.getPath('userData'), 'addons', 'ocr'),
+  fetch: (...a) => net.fetch(...a),
+  baseUrl: process.env.STUDYNOTES_OCR_URL || undefined, // tests: a local copy of the release files
+}));
+handle('ocr:status', () => getOcr().status());
+handle('ocr:install', () => getOcr().install((done, total) => send('ocr:progress', done, total)));
+handle('ocr:remove', () => getOcr().remove());
+handle('ocr:recognize', (image, langs) => getOcr().recognize(image, langs));
+app.on('will-quit', () => { if (ocr) ocr.stop(); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));
 handle('app:startupReport', () => { const r = startupReport; startupReport = null; return r; });
 handle('backup:snapshotNow', () => snapshotNow());
