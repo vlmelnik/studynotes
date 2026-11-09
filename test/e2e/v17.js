@@ -33,7 +33,7 @@ async function launch() {
   const app = await electron.launch({
     executablePath: process.env.STUDYNOTES_EXE || require('electron'),
     args: [...(packaged ? [] : [root]), '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_OCR_URL: ocrUrl(), STUDYNOTES_FAKE_INK: '1', STUDYNOTES_FAKE_DRIVE: path.join(tmp, 'drive') },
+    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_OCR_URL: ocrUrl(), STUDYNOTES_FAKE_INK: '1', STUDYNOTES_FAKE_DRIVE: path.join(tmp, 'drive'), ...(process.env.SN_BUILTIN ? {} : { STUDYNOTES_NO_BUILTIN_OCR: '1' }) },
   });
   const win = await app.firstWindow();
   win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -45,10 +45,12 @@ async function launch() {
 
 
 (async () => {
-  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K').split(',');
+  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K,L').split(',');
   let { app, win, ed } = await launch();
   const rel = await ed(async () => { const r = await window.api.createNotebook('', { title: 'v17', paper: 'blank', pageCount: 4 }); await window.__app.openNotebook(r); return r; });
   await win.waitForTimeout(600);
+  // the add-on "Editable scans" is turned on once (its question is checked in J)
+  await ed(() => { window.__app.settings.editableScans = true; });
   const pageData = () => ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
   const setData = (d) => ed((d) => { const e = window.__app.active; e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [], ...d }); }, d);
   const at = async (x, y, page = 0) => {
@@ -400,6 +402,18 @@ async function launch() {
     return ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).texts.slice().sort((a, b) => a.y - b.y); });
   };
   if (sections.includes('J')) {
+    // add-on off: "Make text editable" asks to turn it on first
+    await ed(() => { window.__app.settings.editableScans = false; });
+    await picture(async (ctx, S) => { ctx.fillStyle = '#222'; ctx.font = `${20 * S}px sans-serif`; ctx.fillText('Short test line', 20 * S, 60 * S); });
+    await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
+    const ask = win.locator('.modal-actions .btn', { hasText: 'Turn on' });
+    await ask.waitFor({ timeout: 5000 }).catch(() => {});
+    check('J: the add-on "Editable scans" is offered before its first use', await ask.count() === 1);
+    if (await ask.count()) await ask.click();
+    await win.waitForTimeout(400);
+    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
+    await ed(() => window.__mk);
+    check('J: … and stays on afterwards', await ed(() => window.__app.settings.editableScans === true));
     await picture(async (ctx, S) => {
       await document.fonts.load('400 30px "SN Caveat"');
       ctx.fillStyle = '#1d2a6b';
@@ -456,6 +470,44 @@ async function launch() {
     const tr = await ed(() => [...document.querySelectorAll('.textbox.fx.warp')].map((el) => getComputedStyle(el).transform));
     check('K: shown in perspective (matrix3d) when matched', tr.length >= 2 && tr.every((v) => v.startsWith('matrix3d')), tr.join(' | '));
     await shot(win, 'perspective');
+  }
+
+  // ===================================================================== L. searchable scans (contribution #1)
+  if (sections.includes('L')) {
+    // a scanned PDF: only a picture of text, no text layer
+    const png = await ed(async () => {
+      const cv = document.createElement('canvas'); cv.width = 1240; cv.height = 1754;
+      const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+      await document.fonts.load('400 40px "SN Serif"');
+      g.fillStyle = '#111'; g.font = '400 40px "SN Serif"';
+      g.fillText('Der Mieter zahlt die Kaution für die Wohnung', 120, 300);
+      g.fillText('in drei gleichen Raten bis zum Monatsende.', 120, 370);
+      const b = await new Promise((r) => cv.toBlob(r, 'image/png'));
+      return [...new Uint8Array(await b.arrayBuffer())];
+    });
+    const { PDFDocument } = require('pdf-lib');
+    const doc = await PDFDocument.create();
+    const img = await doc.embedPng(Buffer.from(png));
+    doc.addPage([595, 842]).drawImage(img, { x: 0, y: 0, width: 595, height: 842 });
+    const pdfFile = path.join(tmp, 'Scan.pdf');
+    fs.writeFileSync(pdfFile, await doc.save());
+    const ready = await ed(async () => (await window.api.ocrStatus()).installed);
+    await ed(async (f) => { const [r] = await window.api.importFiles('', [f]); await window.__app.openNotebook(r); }, pdfFile);
+    if (ready) {
+      // recognition there (built in): the scan becomes searchable by itself
+      await win.waitForFunction(() => { const e = window.__app.active; return e.doc.ocr && e.doc.ocr.main && Object.keys(e.doc.ocr.main.pages).length > 0 && !e._ocrRun; }, null, { timeout: 60000 }).catch(() => {});
+      check('L: a scanned PDF is made searchable by itself when it is opened', await ed(() => { const e = window.__app.active; return !!(e.doc.ocr && e.doc.ocr.main && e.doc.ocr.main.pages[1]); }));
+    }
+    await win.waitForTimeout(1500);
+    await ed(() => { window.__ocrRun = window.__app.active.runOcr('main'); });
+    await win.waitForTimeout(300);
+    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
+    await ed(() => window.__ocrRun);
+    const st = await ed(() => { const e = window.__app.active; return { idx: e.doc.textIndexes.main && e.doc.textIndexes.main.pages, ocr: e.doc.ocr && e.doc.ocr.main && Object.keys(e.doc.ocr.main.pages).length, texts: e.pageData(e.pages[0].id).texts.length }; });
+    const txt = st.idx ? Object.values(st.idx).join(' ') : '';
+    check('L: scanned PDF: text recognised into the search index, the page itself unchanged', /Kaution/.test(txt) && /Monatsende/.test(txt) && st.ocr === 1 && st.texts === 0, JSON.stringify(st));
+    const rects = await ed(() => window.__app.active.findTextRects(0, 'Kaution'));
+    check('L: the recognised word can be found on the page (search highlight / selection)', Array.isArray(rects) && rects.length >= 1, JSON.stringify(rects));
   }
 
   // ===================================================================== Z. (local only) a real screenshot

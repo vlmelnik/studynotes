@@ -29,6 +29,17 @@
 - 14 widely used fonts plus 4 handwriting fonts (SIL OFL / Apache): Cambria style (Caladea), Georgia style (Gelasio), Garamond style (EB Garamond), Open Sans, Roboto, Inter, Lato, Source Sans 3, Fira Sans, Montserrat, Noto Sans, Noto Serif, PT Sans, PT Serif – each with bold and italic, ordered by how common they are.
 - The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
 
+**Text recognition built in; "Editable scans" is an add-on**
+- The language data (German, English, Russian, 7 MB) comes with the app – no download any more (older downloaded data still works).
+- "Make text editable" (scans/photos → editable text boxes in a matching look) is the add-on "Editable scans": turned on once – asked at its first use, or Settings → Add-ons.
+
+**Reading and highlighting (contribution #1 by Pedro Falbo, integrated)**
+- PDF letters drawn as smooth vector shapes (Settings → "Round PDF letters", on by default); pages sit on whole screen pixels and are shown 1:1 (also at 125 / 150 / 200 % Windows scaling); redrawn at the exact screen size after zooming; at high zoom the visible part is rendered again at full resolution.
+- Text selection keeps the columns of a page apart; the page's text is loaded in advance; I-beam cursor over PDF text.
+- Highlighter: round tip option, multiply blending (black text stays black), a free marker by default (Shift = straight line; "Always straight" and "Snap to text" are options; saved settings are moved over once).
+- Shift + wheel scrolls fast. The exact page, scroll position and zoom come back when switching notebooks.
+- Searchable scans – standard now, like in any PDF reader: when a PDF is opened, its scanned pages (no printed text) are recognised in the background by themselves (Settings key autoOcr = false turns it off; Search → "Recognize text (OCR)" runs / stops it by hand). It recognises scanned PDF pages with the text recognition add-on (German, English, Russian; the contribution used a second, bundled engine for Portuguese/English – adapted) and keeps the text as an invisible layer (ocr.json): search, search highlights, text selection and the highlighter work on the scan; the page itself is not changed (unlike "Make text editable").
+
 **Handwriting → text**
 - Select handwriting → "Copy as text" or "To text" (a text box in the ink colour). Uses the handwriting recognizer built into Windows (offline); Settings → Add-ons shows which languages Windows can read.
 - Settings → "Export handwriting as text": the exported PDF contains the recognised handwriting as invisible, searchable and copyable text.

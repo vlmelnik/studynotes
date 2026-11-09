@@ -89,7 +89,8 @@
     "publish": null,
     "asarUnpack": [
       "node_modules/onnxruntime-node/bin/**",
-      "assets/models/**"
+      "assets/models/**",
+      "assets/ocr/**"
     ],
     "linux": {
       "files": [

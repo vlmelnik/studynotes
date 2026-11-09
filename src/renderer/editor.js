@@ -10,7 +10,7 @@ import { objectsMixin } from './editor-objects.js';
 import { TextBar, sizeControl, TEXT_SIZES } from './textbar.js';
 import { loadFormFields, signatureDialog, fillBar } from './fill-sign.js';
 import { PdfDoc, isCancel, Util } from './pdfdoc.js';
-import { recognizePage, ensureOcr } from './ocr.js';
+import { recognizePage, ensureOcr, layoutFromOcr } from './ocr.js';
 import { forgetLayouts } from './pdf-text.js';
 import { normalize, fold } from '../main/search.js';
 import { round2, BOX_SHAPES, LINE_SHAPES, mapCuts, strokeHit } from '../shared/geometry.js';
@@ -1352,7 +1352,7 @@ export class Editor {
     let idx = this.doc.textIndexes[src];
     if (!idx || idx.count !== pdf.numPages) idx = { pages: {}, complete: false, count: pdf.numPages };
     this.doc.textIndexes[src] = idx;
-    if (idx.complete) return;
+    if (idx.complete) { this.autoOcr(src); return; }
     // Only index the pages this notebook actually uses.
     const used = new Set(this.pages.filter((p) => p.kind === 'pdf' && (p.src || 'main') === src).map((p) => p.pdfPage));
     let sinceSave = 0;
@@ -1371,6 +1371,7 @@ export class Editor {
       idx.complete = used.size === pdf.numPages || [...used].every((n) => idx.pages[n] !== undefined);
       await window.api.writeText(this.rel, idx, src).catch(() => {});
       this.searchPanel.indexProgress(src, pdf.numPages, pdf.numPages);
+      this.autoOcr(src);
     } else if (sinceSave) {
       await window.api.writeText(this.rel, idx, src).catch(() => {});
     }
@@ -1380,12 +1381,26 @@ export class Editor {
   // Pages that already have printed text are skipped. Results are kept in
   // ocr.json and also go into the search index, so search, text selection and
   // the highlighter work on the scan afterwards. Calling it again stops it.
-  async runOcr(src = 'main') {
-    if (this._ocrRun) { this._ocrRun.stop = true; return; }
+  // Scanned pages (no printed text) are recognised by themselves, like any
+  // PDF reader does it: search, selection and the highlighter just work.
+  async autoOcr(src = 'main') {
+    if (this.isBoard || this._ocrRun || this.destroyed || this.settings.autoOcr === false) return;
+    const idx = this.doc.textIndexes && this.doc.textIndexes[src];
+    const ocr = this.doc.ocr && this.doc.ocr[src];
+    if (!idx) return;
+    const used = [...new Set(this.pages.filter((p) => p.kind === 'pdf' && (p.src || 'main') === src).map((p) => p.pdfPage))];
+    if (!used.some((n) => idx.pages[n] !== undefined && !String(idx.pages[n]).trim() && !(ocr && ocr.pages && ocr.pages[n]))) return;
+    const st = await window.api.ocrStatus().catch(() => null);
+    if (!st || !st.installed) return; // (no recognition here: the Recognize button offers it)
+    this.runOcr(src, { auto: true });
+  }
+
+  async runOcr(src = 'main', { auto = false } = {}) {
+    if (this._ocrRun) { if (!auto) this._ocrRun.stop = true; return; }
     if (this.isBoard) return;
     const pdf = this.doc.pdfs.get(src);
-    if (!pdf) { toast('The PDF is still loading – try again in a moment'); return; }
-    if (!(await ensureOcr())) return; // the add-on (offered for download once)
+    if (!pdf) { if (!auto) toast('The PDF is still loading – try again in a moment'); return; }
+    if (!auto && !(await ensureOcr())) return; // (built in; older setups: offered for download)
     const run = { stop: false };
     this._ocrRun = run;
     this.doc.ocr = this.doc.ocr || {};
@@ -1418,7 +1433,7 @@ export class Editor {
         } catch (err) {
           if (isCancel(err)) break;
           console.error('OCR failed on page', n, err);
-          if (++failed >= 3 && !found) { toast('Text recognition is not available: ' + (err.message || err), { error: true, timeout: 7000 }); break; }
+          if (++failed >= 3 && !found) { if (!auto) toast('Text recognition is not available: ' + (err.message || err), { error: true, timeout: 7000 }); break; }
         }
         if (found && found % 5 === 0) await save();
       }
@@ -1429,8 +1444,8 @@ export class Editor {
         if (!run.stop && !failed) idx.complete = used.every((n) => idx.pages[n] !== undefined);
         if (found) await window.api.writeText(this.rel, idx, src).catch(() => {});
         this.searchPanel.ocrProgress(null);
-        if (found) toast(`Text recognised on ${found} page${found === 1 ? '' : 's'}${run.stop ? ' (stopped)' : ''}`, { timeout: 4000 });
-        else if (!failed) toast(run.stop ? 'Text recognition stopped' : 'Nothing to recognise – every page already has text', { timeout: 3000 });
+        if (found && !auto) toast(`Text recognised on ${found} page${found === 1 ? '' : 's'}${run.stop ? ' (stopped)' : ''}`, { timeout: 4000 });
+        else if (!failed && !auto) toast(run.stop ? 'Text recognition stopped' : 'Nothing to recognise – every page already has text', { timeout: 3000 });
       }
     }
   }
@@ -1444,6 +1459,19 @@ export class Editor {
     try {
       const [tc, vp] = await Promise.all([pdf.textContent(page.pdfPage), pdf.viewport(page.pdfPage, 1, page.rot || 0)]);
       const rects = [];
+      // a scan: the words found by text recognition
+      const o = this.doc.ocr && this.doc.ocr[page.src || 'main'];
+      const lay = !tc.items.some((it) => it.str && it.str.trim()) && !page.rot ? layoutFromOcr(o && o.pages && o.pages[page.pdfPage]) : null;
+      if (lay && q) {
+        for (const l of lay.lines) {
+          const s = fold(l.chars.map((c) => c.ch).join(''));
+          for (let from = s.indexOf(q); from >= 0; from = s.indexOf(q, from + q.length)) {
+            const a = l.chars[from], b = l.chars[Math.min(l.chars.length - 1, from + q.length - 1)];
+            rects.push([a.x0 - 1, l.y0 - 1, b.x1 - a.x0 + 2, l.y1 - l.y0 + 2]);
+          }
+        }
+        return rects;
+      }
       for (const it of tc.items) {
         if (!it.str) continue;
         const norm = fold(it.str);

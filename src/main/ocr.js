@@ -1,8 +1,9 @@
 'use strict';
-// Text recognition add-on (offline): Tesseract (bundled, WebAssembly) with
-// language data for English, German and Russian that the user downloads once
-// from the StudyNotes GitHub release (Settings → Add-ons). Everything runs on
-// this PC; nothing is sent anywhere.
+// Text recognition (offline): Tesseract (WebAssembly) with language data for
+// English, German and Russian. Since 1.7 the data comes with the app (scanned
+// PDFs are made searchable right away); older installs could download it from
+// the StudyNotes GitHub release into userData. Everything runs on this PC;
+// nothing is sent anywhere.
 
 const fs = require('fs');
 const fsp = fs.promises;
@@ -20,8 +21,9 @@ const FILES = [
 
 class Ocr {
   /** @param {{ dir: string, fetch: Function, baseUrl?: string }} o */
-  constructor({ dir, fetch, baseUrl }) {
+  constructor({ dir, fetch, baseUrl, bundledDir = null }) {
     this.dir = dir;
+    this.bundledDir = bundledDir; // the data that comes with the app
     this.fetch = fetch;
     this.baseUrl = baseUrl || BASE_URL;
     this.worker = null;
@@ -30,10 +32,24 @@ class Ocr {
     this.queue = Promise.resolve();
   }
 
+  /** The folder with the language data: the app's own, else the downloaded one. */
+  async dataDir() {
+    for (const d of [this.bundledDir, this.dir].filter(Boolean)) {
+      let all = true;
+      for (const f of FILES) {
+        const st = await fsp.stat(path.join(d, f.file)).catch(() => null);
+        if (!st || st.size !== f.size) { all = false; break; }
+      }
+      if (all) return d;
+    }
+    return this.dir;
+  }
+
   async installed() {
+    const dir = await this.dataDir();
     const out = [];
     for (const f of FILES) {
-      const st = await fsp.stat(path.join(this.dir, f.file)).catch(() => null);
+      const st = await fsp.stat(path.join(dir, f.file)).catch(() => null);
       if (st && st.size === f.size) out.push(f.lang);
     }
     return out;
@@ -44,6 +60,7 @@ class Ocr {
     return {
       installed: langs.length === FILES.length,
       langs,
+      builtIn: !!this.bundledDir && (await this.dataDir()) === this.bundledDir,
       files: FILES.map(({ lang, name, size }) => ({ lang, name, size })),
       size: FILES.reduce((a, f) => a + f.size, 0),
     };
@@ -93,7 +110,7 @@ class Ocr {
     const { createWorker } = require('tesseract.js');
     const cachePath = path.join(this.dir, 'cache');
     await fsp.mkdir(cachePath, { recursive: true });
-    this.worker = await createWorker(langs, 1 /* LSTM */, { langPath: this.dir, cachePath, gzip: true, logger: () => {}, errorHandler: () => {} });
+    this.worker = await createWorker(langs, 1 /* LSTM */, { langPath: await this.dataDir(), cachePath, gzip: true, logger: () => {}, errorHandler: () => {} });
     this.workerLangs = key;
     return this.worker;
   }

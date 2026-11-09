@@ -605,6 +605,8 @@ handle('ink:recognizers', () => handwriting.recognizers());
 let ocr = null;
 const getOcr = () => (ocr ||= new Ocr({
   dir: path.join(app.getPath('userData'), 'addons', 'ocr'),
+  // (unpacked from the app archive: the recognition worker reads plain files)
+  bundledDir: process.env.STUDYNOTES_NO_BUILTIN_OCR ? null : path.join(app.getAppPath(), 'assets', 'ocr').replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'),
   fetch: (...a) => net.fetch(...a),
   baseUrl: process.env.STUDYNOTES_OCR_URL || undefined, // tests: a local copy of the release files
 }));

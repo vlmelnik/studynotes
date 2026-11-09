@@ -291,7 +291,7 @@ async function launch() {
     const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
     check('H: select printed PDF text → Copy / Highlight / Underline; copy gives the text', menu.length === 3 && /quick/.test(copied) && /brown/.test(copied), `menu ${menu.join('/')} copied "${copied}"`);
     // highlighter snaps to the second line
-    await ed(() => window.__app.active.setTool('hl'));
+    await ed(() => { const e = window.__app.active; e.toolState.hl.snap = true; e.setTool('hl'); }); // (Snap to text is an option since 1.7)
     const [hx0, hy0] = await at(62, 104), [hx1, hy1] = await at(300, 108);
     await win.mouse.move(hx0, hy0); await win.mouse.down(); await win.mouse.move(hx1, hy1, { steps: 8 }); await win.mouse.up();
     await win.waitForTimeout(300);

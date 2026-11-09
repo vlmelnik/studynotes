@@ -21,6 +21,23 @@ let progressFn = null;
 let listening = false;
 
 /** True when the add-on is there (asks to download it otherwise). */
+/**
+ * The add-on "Editable scans" (this file's "Make text editable"): an extra
+ * the user turns on once (Settings → Add-ons). Text recognition itself comes
+ * with the app (searchable scans); only without it is a download offered.
+ */
+export async function ensureEditable() {
+  const app = window.__app;
+  if (app && app.settings && app.settings.editableScans) return ensureOcr();
+  const ok = await confirmDialog('Add-on: Editable scans',
+    'Turns text in scans, photos and PDFs into text boxes you can edit – in a matching font, size, colour, tilt and look; the paper is cleaned behind it. Handwriting becomes typed text. Works offline. Turn the add-on on? (Settings → Add-ons turns it off again.)',
+    { okLabel: 'Turn on' });
+  if (!ok) return false;
+  if (app && app.settings) { app.settings.editableScans = true; app.saveSettings(); }
+  return ensureOcr();
+}
+
+/** Text recognition is there (comes with the app; older setups: offered for download). */
 export async function ensureOcr() {
   const st = await window.api.ocrStatus();
   if (st.installed) return true;
@@ -519,7 +536,7 @@ async function readWithGoogle(editor, pageId, ids, crops, lang, original) {
  * units) or null for the whole page.
  */
 export async function makeTextEditable(editor, index, area = null) {
-  if (!(await ensureOcr())) return;
+  if (!(await ensureEditable())) return;
   const page = editor.pages[index];
   if (!page) return;
   let r = { x0: 0, y0: 0, x1: page.w, y1: page.h };

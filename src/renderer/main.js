@@ -485,12 +485,20 @@ class App {
       const st = await window.api.ocrStatus().catch(() => null);
       if (!st) return;
       const mb = (st.size / 1048576).toFixed(0);
-      ocrState.textContent = st.installed ? 'Installed (English, German, Russian)' : `Not installed (${mb} MB download)`;
-      ocrBtns.replaceChildren(st.installed
+      ocrState.textContent = st.builtIn ? 'Built in (English, German, Russian)' : st.installed ? 'Installed (English, German, Russian)' : `Not installed (${mb} MB download)`;
+      ocrBtns.replaceChildren(st.builtIn ? '' : st.installed
         ? h('button', { class: 'btn ghost', onclick: async () => { await window.api.ocrRemove(); refreshOcr(); } }, 'Remove')
         : h('button', { class: 'btn', onclick: async () => { ocrState.textContent = 'Downloading…'; await installOcr((d, t) => { ocrState.textContent = `Downloading… ${Math.round((d / t) * 100)} %`; }); refreshOcr(); } }, 'Download'));
     };
     refreshOcr();
+    // the add-on "Editable scans" (turned on once; the recognition itself is built in)
+    const edState = h('span', { class: 'addon-state' });
+    const edBtn = h('span', { class: 'row-btns' });
+    const refreshEd = () => {
+      edState.textContent = s.editableScans ? 'On' : 'Off';
+      edBtn.replaceChildren(h('button', { class: s.editableScans ? 'btn ghost' : 'btn', onclick: () => { s.editableScans = !s.editableScans; this.saveSettings(); refreshEd(); } }, s.editableScans ? 'Turn off' : 'Turn on'));
+    };
+    refreshEd();
     // Windows handwriting recognizers (installed with the Windows language packs)
     const recSel = h('select', { class: 'rec-select', onchange: () => { s.inkRecognizer = recSel.value; this.saveSettings(); } }, h('option', { value: '' }, 'Windows default'));
     const recState = h('small', { class: 'hint' }, '');
@@ -501,7 +509,9 @@ class App {
     }, (err) => { recSel.disabled = true; recState.textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); });
     return h('div', { class: 'field' }, h('span', {}, 'Add-ons'),
       h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Text recognition'), ocrState, ocrBtns),
-      h('small', { class: 'hint' }, 'Makes printed text of scans, photos and PDFs editable (lasso an area, or the page button in the toolbar). Works offline after the download.'),
+      h('small', { class: 'hint' }, 'Scanned PDFs become searchable by themselves: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.'),
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Editable scans'), edState, edBtn),
+      h('small', { class: 'hint' }, 'Turns text in scans, photos and PDFs into text boxes you can edit, in a matching font and look (lasso → Text area, or the page button in the toolbar). Handwriting becomes typed text.'),
       h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Handwriting'), recSel),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!s.exportInkText, onchange: (e) => { s.exportInkText = e.target.checked; this.saveSettings(); } }), 'Export handwriting as text (the PDF can be searched and copied)'),
       h('small', { class: 'hint' }, 'Select handwriting → "Copy as text" or "To text"; export can add it as copyable text. Uses the handwriting recognizer built into Windows (offline).'),
