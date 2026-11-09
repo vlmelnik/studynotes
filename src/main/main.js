@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, nativeTheme, safeStorage, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, nativeTheme, safeStorage, net, utilityProcess } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -615,6 +615,23 @@ handle('ocr:install', () => getOcr().install((done, total) => send('ocr:progress
 handle('ocr:remove', () => getOcr().remove());
 handle('ocr:recognize', (image, langs) => getOcr().recognize(image, langs));
 handle('ocr:google', (images, lang) => cloud.ocrImages(images, lang));
+// The dictionaries take a few seconds to load (and ~350 MB): in a process of
+// their own, so the app never freezes; it ends after 2 idle minutes.
+const speller = { proc: null, timer: null, seq: 0, wait: new Map() };
+function spellCheck(lines) {
+  if (!speller.proc) {
+    const proc = utilityProcess.fork(path.join(__dirname, 'spell-proc.js'), [], { serviceName: 'StudyNotes spelling' });
+    proc.on('message', ({ id, res, err }) => { const w = speller.wait.get(id); speller.wait.delete(id); if (w) (err ? w.reject(new Error(err)) : w.resolve(res)); });
+    proc.on('exit', () => { if (speller.proc === proc) speller.proc = null; for (const w of speller.wait.values()) w.reject(new Error('spelling check ended')); speller.wait.clear(); });
+    speller.proc = proc;
+  }
+  clearTimeout(speller.timer);
+  speller.timer = setTimeout(() => { if (speller.proc && !speller.wait.size) speller.proc.kill(); }, 120000);
+  const id = ++speller.seq;
+  return new Promise((resolve, reject) => { speller.wait.set(id, { resolve, reject }); speller.proc.postMessage({ id, lines }); });
+}
+handle('ocr:spell', (lines) => spellCheck(lines));
+app.on('will-quit', () => { if (speller.proc) speller.proc.kill(); });
 app.on('will-quit', () => { if (ocr) ocr.stop(); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));
 handle('app:startupReport', () => { const r = startupReport; startupReport = null; return r; });

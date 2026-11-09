@@ -13,9 +13,11 @@ export const RELEASES = [
       ['pen', 'Handwriting in photos', 'Handwritten pages and notes in photos become typed text in the handwriting font that looks most like them (or any other font). "Read better with Google" reads them once more online (optional) – better for untidy writing.'],
       ['text', 'More fonts', '14 widely used fonts: Cambria, Georgia, Garamond styles, Open Sans, Roboto, Inter, Lato, Source Sans, Fira Sans, Montserrat, Noto Sans / Serif, PT Sans / Serif, and 4 handwriting fonts. Recognised text picks the one that fits best.'],
       ['notebook', 'Sharper PDFs and better reading', 'Letters of PDFs are drawn smooth and sharp at every zoom (Settings → Round PDF letters). Highlighter with a round tip that blends like a real marker (black text stays black); Shift = straight line. Text selection keeps columns apart. Shift + wheel scrolls fast. Scanned PDFs become searchable by themselves when opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Thanks to Pedro Falbo for these ideas and code.'],
-      ['pen', 'Handwriting to text', 'Select your handwriting → "Copy as text" or "To text". Optionally the PDF export adds it as searchable, copyable text. Uses the handwriting recognizer built into Windows.'],
+      ['text', 'Smarter recognition', 'Recognised words are checked against dictionaries (Russian, English, German): Latin look-alike letters in Russian words ("Tak" → "Так") and lost spaces are corrected. Single bold words stay bold.'],
+      ['pen', 'Handwriting to text', 'Select your handwriting → "Copy as text" or "To text". Read by Windows on your PC, or by Google online (Settings → Add-ons). Optionally the PDF export adds it as searchable, copyable text.'],
+      ['settings', 'Add-ons', 'Settings → Add-ons: every add-on with its own switch and settings – searchable scans, editable scans, handwriting to text.'],
       ['pen', 'Eyedropper', 'Next to the colours (and in "More colours"): take any colour from the page. Shortcut: press I and click, or hold Alt and click.'],
-      ['notebook', 'Fixes', 'Going back from the library keeps your page and zoom. Things dragged onto the next page stay in front and move to that page.'],
+      ['notebook', 'Fixes', 'Selecting PDF text works by whole lines, also in tables; dragging on highlighted text selects the text. Double-click edits text with the lasso too. Going back from the library keeps your page and zoom. Things dragged onto the next page stay in front and move to that page.'],
     ],
   },
   {

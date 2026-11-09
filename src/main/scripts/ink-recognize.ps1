@@ -12,7 +12,9 @@ try {
   $null = [Windows.UI.Input.Inking.InkStrokeContainer, Windows.UI.Input.Inking, ContentType = WindowsRuntime]
   $null = [Windows.UI.Input.Inking.InkRecognizerContainer, Windows.UI.Input.Inking, ContentType = WindowsRuntime]
   $null = [Windows.UI.Input.Inking.InkStrokeBuilder, Windows.UI.Input.Inking, ContentType = WindowsRuntime]
-  $null = [Windows.Foundation.Point, Windows.Foundation, ContentType = WindowsRuntime]
+  # Windows.Foundation.Point comes with System.Runtime.WindowsRuntime (loaded above);
+  # loading it as a WinRT type fails on many PCs ("Unable to find type")
+  try { $null = [Windows.Foundation.Point] } catch { $null = [Windows.Foundation.Point, Windows.Foundation, ContentType = WindowsRuntime] }
   $req = [Console]::In.ReadToEnd() | ConvertFrom-Json
   $rc = New-Object Windows.UI.Input.Inking.InkRecognizerContainer
   $names = @($rc.GetRecognizers() | ForEach-Object { $_.Name })

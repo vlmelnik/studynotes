@@ -252,6 +252,33 @@ function strokeWeight(li) {
 }
 
 /**
+ * Words printed in bold inside a regular line ("the **deposit** is due"):
+ * their strokes are clearly thicker than those of the line's other words.
+ * Returns one flag per word (all false when unsure).
+ */
+export function boldWords(li, words) {
+  const ws = words.map((w) => {
+    const letters = (String(w.text || '').match(/[\p{L}\p{N}]/gu) || []).length;
+    if (!w.bbox || letters < 3) return 0;
+    const x0 = Math.max(0, Math.round(w.bbox.x0 - li.box.x0)), x1 = Math.min(li.w, Math.round(w.bbox.x1 - li.box.x0));
+    if (x1 - x0 < 4) return 0;
+    const ink = new Uint8Array((x1 - x0) * li.h);
+    for (let y = 0; y < li.h; y++) ink.set(li.ink.subarray(y * li.w + x0, y * li.w + x1), y * (x1 - x0));
+    return strokeWeight({ w: x1 - x0, h: li.h, ink });
+  });
+  const ok = ws.filter((v) => v > 0).sort((a, b) => a - b);
+  if (ok.length < 3) return words.map(() => false);
+  const med = ok[ok.length >> 1];
+  // (thin strokes of one or two pixels: too coarse to tell)
+  if (med < 1.5) return words.map(() => false);
+  const flags = ws.map((v) => v > 0 && v >= med * 1.35 && v - med >= 0.8);
+  // most of the line bold is a bold line, not bold words
+  return flags.filter(Boolean).length * 2 > ok.length ? words.map(() => false) : flags;
+}
+
+const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
  * One font for the whole text (documents use one typeface; a line may only
  * differ when it clearly fits another one better), bold / italic per line.
  * Bold only when the strokes are clearly thicker than in the other lines.
@@ -650,6 +677,12 @@ export async function makeTextEditable(editor, index, area = null) {
     });
     if (area && area.poly) lines = lines.filter((l) => pointInPolygon(...toPage(...back((l.bbox.x0 + l.bbox.x1) / 2, (l.bbox.y0 + l.bbox.y1) / 2)), area.poly));
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
+    // dictionary check: look-alike letters of the wrong script ("Tak" → "Так"),
+    // similar letters, a lost space after a preposition
+    try {
+      const fixed = await window.api.ocrSpell(lines.map((l) => ({ text: l.text, words: (l.words || []).map((w) => ({ text: w.text })) })));
+      lines = lines.map((l, k) => ({ ...l, text: fixed.lines[k].text, words: (l.words || []).map((w, i) => ({ ...w, text: fixed.lines[k].words[i].text })) }));
+    } catch (err) { console.warn('spelling check failed', err); }
 
     // 3. font (needs the ink), then clean the paper
     //    first every typeface in its regular style, then bold / italic only
@@ -823,6 +856,9 @@ export async function makeTextEditable(editor, index, area = null) {
       if (Math.abs(turn) > 0.35) t.r = Math.round(turn * 10) / 10;
       // how the scanned letters look: as soft, in the same perspective and
       // light ("Match the document" button), straight and sharp while editing
+      // single bold words in a regular line
+      const bw3 = !f.b && !f.hand && kInks[k] && l.words && l.words.length >= 3 && l.words.map((w) => w.text).join(' ') === t.text ? boldWords(kInks[k], l.words) : null;
+      if (bw3 && bw3.some(Boolean)) t.html = l.words.map((w, i) => (bw3[i] ? `<b>${escHtml(w.text)}</b>` : escHtml(w.text))).join(' ');
       if (geo.warp) Object.assign(t, geo.warp);
       if (geo.cg) t.cg = geo.cg;
       const soft = Math.round((softOfLine(k) / S) * 100) / 100;
@@ -834,7 +870,7 @@ export async function makeTextEditable(editor, index, area = null) {
     // handwriting or an unsure reading: Google reads it better (online, optional)
     const unsure = fonts.some((f) => f.hand) || lines.reduce((a, l) => a + l.conf, 0) / lines.length < 85;
     const msg = `${texts.length} ${texts.length === 1 ? 'line is' : 'lines are'} editable now – double-click to change the text`;
-    if (!unsure) { crops.forEach((c) => { c.width = c.height = 0; }); toast(msg, { timeout: 4000 }); return; }
+    if (!unsure || (window.__app && window.__app.settings && window.__app.settings.googleOcrOffer === false)) { crops.forEach((c) => { c.width = c.height = 0; }); toast(msg, { timeout: 4000 }); return; }
     // a hint for Google from the letters read (none when unsure)
     const all = lines.map((l) => l.text).join(' ');
     const nCyr = (all.match(/[\u0400-\u04ff]/g) || []).length, nLat = (all.match(/[a-zA-ZäöüÄÖÜß]/g) || []).length;

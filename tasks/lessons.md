@@ -58,3 +58,7 @@
 - Template correlation can't tell handwriting from print (print-like handwriting fits sans fonts); letter jitter vs the flat font plus reading confidence can.
 - CSS filter on a 3D-transformed (matrix3d) element can rasterise at low resolution in Electron; keep warps mild and check screenshots zoomed in.
 - A "sign in for one feature" must not reuse the sync sign-in: signing in schedules library sync.
+- Column detection must not split tables or word-by-word PDFs: join runs into pieces by word gaps first, and only call a gap a column when the text on both sides fills it (running text).
+- Text selection while dragging: the pointer beside a line (same height) means that line's end/start; returning null leaves the selection at a random earlier point ("jumps").
+- e2e positions on PDF text: compute them from the PDF font's own widths (pdf-lib widthOfTextAtSize), not from a canvas estimate.
+- Settings translations: check in e2e that no Latin-only text is left in the Russian settings (both tabs, settings opened).

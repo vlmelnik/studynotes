@@ -47,7 +47,20 @@
 **Eyedropper**
 - Eyedropper button next to the colours (tool options, selection bar, "More colours"): click anywhere on the page to take that colour. Shortcut: I, then click; or hold Alt and click. On ink it takes the ink's exact colour. No separate tool.
 
+**Recognition: dictionary check, bold words**
+- Recognised text is checked against dictionaries (offline: Russian and English Hunspell, a German word list): a Russian word read with Latin look-alike letters ("Tak" → "Так"), mixed-up similar letters and a lost space after a short preposition ("сконтакторами" → "с контакторами") are corrected; when two real words fit equally well, nothing is changed; terms and acronyms stay.
+- Single bold words inside a regular line become bold on their own (compared with the line's other words).
+
+**Settings: Add-ons tab**
+- Settings have two tabs, General and Add-ons. Each add-on has a real switch and its own settings: Searchable scans (on by default), Editable scans, Handwriting to text (always on; read with Windows offline or Google online with the user's Google account).
+- Long texts in Settings wrap instead of running off the side; the window is wider.
+
 **Fixes**
+- PDF text selection works by whole lines, like a text editor: a drag down selects the full lines in between (not pairs of words on the left); ending next to a line's end, left of its start or between two lines no longer jumps; PDFs that write every word separately join into lines first; table rows are selected across (cells separated by a tab when copied), real two-column articles still column by column.
+- Dragging on highlighted PDF text selects the text instead of a strange box with handles; a click without moving still selects the highlight.
+- Double-click on a text box edits it with the lasso too (right after "Text area").
+- "Text area" button: the icon no longer overlaps its label.
+- Windows handwriting recognizer: the "Unable to find type [Windows.Foundation.Point]" error on some PCs is fixed; if Windows still can't read handwriting, Google can be chosen.
 - Library → notebook (and switching tabs) keeps the page and zoom instead of jumping to the cover.
 - Objects dragged onto the next page no longer disappear behind it: they stay in front while dragging and move to that page (on top of what is there), one undo step.
 

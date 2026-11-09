@@ -426,10 +426,8 @@ class App {
       const input = h('input', { type: 'checkbox', checked: !!s[key], onchange: (e) => { s[key] = e.target.checked; this.saveSettings(); } });
       return h('label', { class: 'check' }, input, h('span', {}, label, hint ? h('small', {}, hint) : null));
     };
-    modal({
-      title: 'Settings',
-      width: 560,
-      body: h('div', { class: 'form' },
+    // two tabs: the app's own settings and the add-ons (each with its own settings)
+    const general = h('div', { class: 'form settings-pane' },
         h('div', { class: 'field' }, h('span', {}, 'Library folder'), libPath,
           h('div', { class: 'row' },
             h('button', { class: 'btn', onclick: async () => {
@@ -459,7 +457,6 @@ class App {
         check('Draw & hold to create shapes', 'shapeHold', 'Hold the pen still at the end of a stroke to snap it to a line, rectangle, triangle or ellipse'),
         check('Pasted text keeps formatting', 'pasteFormatting', 'Off: text is always pasted as plain text. On: bold, italic, underline and lists are kept'),
         this.tabletSettings(),
-        this.addonSettings(),
         h('div', { class: 'field' }, h('span', {}, 'Backup & moving to a new version or PC'),
           h('div', { class: 'row wrap' },
             h('button', { class: 'btn', onclick: () => this.exportSettings() }, 'Export settings…'),
@@ -471,51 +468,99 @@ class App {
         this.driveSettings(),
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => showWhatsNew(this.info.version) }, "What's new"),
           h('button', { class: 'btn', onclick: () => this.showAbout() }, 'About StudyNotes')),
-        h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when the driver uses "Windows Ink" (newer Wacom drivers: Wacom Tablet Properties → Mapping → Use Windows Ink; older Bamboo drivers do it automatically).`)),
+        h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when the driver uses "Windows Ink" (newer Wacom drivers: Wacom Tablet Properties → Mapping → Use Windows Ink; older Bamboo drivers do it automatically).`));
+    const addons = h('div', { class: 'form settings-pane', hidden: true }, this.addonSettings());
+    const tabs = [['General', general], ['Add-ons', addons]].map(([label, pane], k) => h('button', {
+      class: `settings-tab${k ? '' : ' active'}`,
+      onclick: (e) => {
+        tabs.forEach((t) => t.classList.toggle('active', t === e.currentTarget));
+        general.hidden = pane !== general; addons.hidden = pane !== addons;
+      },
+    }, label));
+    modal({
+      title: 'Settings',
+      width: 720,
+      body: h('div', { class: 'settings' }, h('div', { class: 'settings-tabs' }, ...tabs), general, addons),
       actions: [{ label: 'Done', primary: true, result: true }],
     });
   }
 
-  // ---------- add-ons: text recognition ----------
+  // ---------- add-ons ----------
+  // A list of add-ons: each with a switch and, when it has any, its settings
+  // (opened with "Settings"). New add-ons go into ADDONS below.
   addonSettings() {
     const s = this.settings;
-    const ocrState = h('span', { class: 'addon-state' }, '…');
-    const ocrBtns = h('span', { class: 'row-btns' });
+    const sw = (on, onChange, label) => {
+      const input = h('input', { type: 'checkbox', role: 'switch', checked: on, 'aria-label': label, onchange: (e) => onChange(e.target.checked) });
+      return h('label', { class: 'switch', title: label }, input, h('span', { class: 'switch-track' }));
+    };
+    const card = ({ name, about, on, setOn, state, settings }) => {
+      const body = settings ? h('div', { class: 'addon-settings', hidden: true }, ...settings) : null;
+      const more = settings ? h('button', { class: 'btn ghost small', onclick: () => { body.hidden = !body.hidden; more.classList.toggle('open', !body.hidden); } }, 'Settings') : null;
+      return h('div', { class: 'addon' },
+        h('div', { class: 'addon-head' },
+          h('div', { class: 'addon-title' }, h('b', {}, name), state || null),
+          more, setOn ? sw(on, setOn, name) : h('span', { class: 'addon-always' }, 'Always on')),
+        h('small', { class: 'hint' }, about),
+        body);
+    };
+
+    // text recognition: built in (older setups: downloaded)
+    const ocrState = h('small', { class: 'addon-state' }, '');
+    const ocrExtra = h('div', { class: 'row' });
     const refreshOcr = async () => {
       const st = await window.api.ocrStatus().catch(() => null);
       if (!st) return;
       const mb = (st.size / 1048576).toFixed(0);
-      ocrState.textContent = st.builtIn ? 'Built in (English, German, Russian)' : st.installed ? 'Installed (English, German, Russian)' : `Not installed (${mb} MB download)`;
-      ocrBtns.replaceChildren(st.builtIn ? '' : st.installed
-        ? h('button', { class: 'btn ghost', onclick: async () => { await window.api.ocrRemove(); refreshOcr(); } }, 'Remove')
-        : h('button', { class: 'btn', onclick: async () => { ocrState.textContent = 'Downloading…'; await installOcr((d, t) => { ocrState.textContent = `Downloading… ${Math.round((d / t) * 100)} %`; }); refreshOcr(); } }, 'Download'));
+      ocrState.textContent = st.builtIn ? 'Built in · English, German, Russian' : st.installed ? 'Installed · English, German, Russian' : `Language data not installed (${mb} MB)`;
+      ocrExtra.replaceChildren(st.builtIn ? '' : st.installed
+        ? h('button', { class: 'btn ghost', onclick: async () => { await window.api.ocrRemove(); refreshOcr(); } }, 'Remove language data')
+        : h('button', { class: 'btn', onclick: async () => { ocrState.textContent = 'Downloading…'; await installOcr((d, t) => { ocrState.textContent = `Downloading… ${Math.round((d / t) * 100)} %`; }); refreshOcr(); } }, 'Download language data'));
     };
     refreshOcr();
-    // the add-on "Editable scans" (turned on once; the recognition itself is built in)
-    const edState = h('span', { class: 'addon-state' });
-    const edBtn = h('span', { class: 'row-btns' });
-    const refreshEd = () => {
-      edState.textContent = s.editableScans ? 'On' : 'Off';
-      edBtn.replaceChildren(h('button', { class: s.editableScans ? 'btn ghost' : 'btn', onclick: () => { s.editableScans = !s.editableScans; this.saveSettings(); refreshEd(); } }, s.editableScans ? 'Turn off' : 'Turn on'));
-    };
-    refreshEd();
-    // Windows handwriting recognizers (installed with the Windows language packs)
+
+    // handwriting to text: Windows (offline) or Google (online)
+    const engine = s.inkEngine === 'google' ? 'google' : 'windows';
     const recSel = h('select', { class: 'rec-select', onchange: () => { s.inkRecognizer = recSel.value; this.saveSettings(); } }, h('option', { value: '' }, 'Windows default'));
     const recState = h('small', { class: 'hint' }, '');
     window.api.inkRecognizers().then((list) => {
       for (const n of list) recSel.append(h('option', { value: n, class: 'no-i18n' }, n));
       recSel.value = list.includes(s.inkRecognizer) ? s.inkRecognizer : '';
       if (!list.length) recState.textContent = 'Windows has no handwriting recognizer installed. Add one: Windows Settings → Time & language → Language → (language) → Options → Handwriting.';
-    }, (err) => { recSel.disabled = true; recState.textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); });
-    return h('div', { class: 'field' }, h('span', {}, 'Add-ons'),
-      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Text recognition'), ocrState, ocrBtns),
-      h('small', { class: 'hint' }, 'Scanned PDFs become searchable by themselves: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.'),
-      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Editable scans'), edState, edBtn),
-      h('small', { class: 'hint' }, 'Turns text in scans, photos and PDFs into text boxes you can edit, in a matching font and look (lasso → Text area, or the page button in the toolbar). Handwriting becomes typed text.'),
-      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Handwriting'), recSel),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!s.exportInkText, onchange: (e) => { s.exportInkText = e.target.checked; this.saveSettings(); } }), 'Export handwriting as text (the PDF can be searched and copied)'),
-      h('small', { class: 'hint' }, 'Select handwriting → "Copy as text" or "To text"; export can add it as copyable text. Uses the handwriting recognizer built into Windows (offline).'),
-      recState);
+    }, (err) => { recSel.disabled = true; recState.textContent = 'The Windows recognizer is not available on this PC: ' + String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') + ' – choose Google above.'; });
+    const winRow = h('div', { class: 'addon-sub', hidden: engine !== 'windows' },
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Recognizer'), recSel), recState);
+    const exportRow = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!s.exportInkText, onchange: (e) => { s.exportInkText = e.target.checked; this.saveSettings(); } }), h('span', {}, 'Export handwriting as text', h('small', {}, 'The exported PDF can be searched and copied (read by Windows, offline)')));
+    const engineRow = h('div', { class: 'row' }, ...[['windows', 'Windows (offline)'], ['google', 'Google (online)']].map(([v, label]) => h('button', {
+      class: `chip${engine === v ? ' active' : ''}`,
+      onclick: (e) => {
+        s.inkEngine = v; this.saveSettings();
+        engineRow.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === e.currentTarget));
+        winRow.hidden = v !== 'windows';
+      },
+    }, label)));
+
+    return h('div', { class: 'addons' },
+      card({
+        name: 'Searchable scans',
+        about: 'Scanned PDFs become searchable by themselves when they are opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.',
+        state: ocrState, on: s.autoOcr !== false, setOn: (v) => { s.autoOcr = v; this.saveSettings(); },
+        settings: [ocrExtra, h('small', { class: 'hint' }, 'By hand: Search → "Recognize text (OCR)".')],
+      }),
+      card({
+        name: 'Editable scans',
+        about: 'Turns text in scans, photos and PDFs into text boxes you can edit, in a matching font, size, colour, tilt and look (lasso → Text area, or the page button in the toolbar). Handwriting becomes typed text.',
+        on: !!s.editableScans, setOn: (v) => { s.editableScans = v; this.saveSettings(); },
+        settings: [
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.googleOcrOffer !== false, onchange: (e) => { s.googleOcrOffer = e.target.checked; this.saveSettings(); } }),
+            h('span', {}, 'Offer "Read better with Google"', h('small', {}, 'After recognising handwriting or an unsure reading: read it once more with Google (online, your Google account; the pictures are deleted right away)'))),
+        ],
+      }),
+      card({
+        name: 'Handwriting to text',
+        about: 'Your pen writing → text: select it → "Copy as text" or "To text". Windows reads it on this PC; Google reads it online with your Google account (better for untidy writing).',
+        settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
+      }));
   }
 
   // ---------- graphics tablet ----------

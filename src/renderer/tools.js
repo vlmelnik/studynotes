@@ -303,7 +303,13 @@ export class Tools {
       case 'erase': this.endErase(c); break;
       case 'lasso': this.endLasso(c); break;
       case 'band': this.endBand(c); break;
-      case 'ptext': if (!cancelled) this.textSel.end(e); else this.textSel.clear(); break;
+      case 'ptext':
+        if (c.hl && !cancelled && Math.hypot(e.clientX - c.from[0], e.clientY - c.from[1]) < 4) {
+          // a click on a highlight: select it (to move, recolour or delete it)
+          this.textSel.clear();
+          this.select(c.hit.index, c.hit.page.id, new Set([c.hl.id]), new Set(), new Set());
+        } else if (!cancelled) this.textSel.end(e); else this.textSel.clear();
+        break;
       case 'shape': this.endShape(c, cancelled); break;
       case 'seltransform': this.endSelTransform(c, cancelled); break;
     }
@@ -390,7 +396,14 @@ export class Tools {
   }
 
   startSelect(e, hit, view) {
-    const obj = this.objectAt(hit.page.id, hit.x, hit.y);
+    let obj = this.objectAt(hit.page.id, hit.x, hit.y);
+    // A highlight over printed text: dragging selects the text (as in any PDF
+    // reader); a click without moving selects the highlight itself.
+    let hl = null;
+    if (obj && obj.kind === 'stroke') {
+      const st = this.editor.pageData(hit.page.id).strokes.find((s) => s.id === obj.id);
+      if (st && st.t === 'hl') { hl = obj; obj = null; }
+    }
     if (obj) {
       const ids = { stroke: new Set(), text: new Set(), item: new Set() };
       ids[obj.kind].add(obj.id);
@@ -400,8 +413,13 @@ export class Tools {
     }
     // On printed PDF text: select the text (copy / highlight / underline).
     if (this.textSel.start(e, hit, view)) {
-      this.cur = { kind: 'ptext', pointerId: e.pointerId, rect: this.viewer.pageClientRect(hit.index) };
+      this.cur = { kind: 'ptext', pointerId: e.pointerId, rect: this.viewer.pageClientRect(hit.index), hl, hit, from: [e.clientX, e.clientY] };
       this.capture(e);
+      return;
+    }
+    if (hl) {
+      this.select(hit.index, hit.page.id, new Set([hl.id]), new Set(), new Set());
+      if (this.sel) this.startSelTransform(e, 'move');
       return;
     }
     // Empty spot: rubber-band selection.
@@ -445,7 +463,8 @@ export class Tools {
   }
 
   onDoubleClick(e) {
-    if (this.tool !== 'select') return;
+    // (with the lasso too: right after "Text area" the text is edited by a double-click)
+    if (this.tool !== 'select' && this.tool !== 'lasso') return;
     const hit = this.viewer.hit(e.clientX, e.clientY);
     if (!hit) return;
     const cell = this.cellAt(e.clientX, e.clientY);
@@ -574,7 +593,7 @@ export class Tools {
       const page = this.viewer.pages[c.index];
       const layout = peekLayout(this.editor, page);
       const n = st.p.length;
-      const a = charAt(layout, st.p[0], st.p[1], true), b = charAt(layout, st.p[n - 3], st.p[n - 2], true);
+      const a = charAt(layout, st.p[0], st.p[1], true, 0.6), b = charAt(layout, st.p[n - 3], st.p[n - 2], true, 0.6);
       // only a mark along the text: both ends on a text line, mostly horizontal
       const along = Math.abs(st.p[n - 3] - st.p[0]) > 2 * Math.abs(st.p[n - 2] - st.p[1]);
       if (a && b && along) {

@@ -419,10 +419,13 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .opt-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px #3b6fb6; }
 .opt-swatch.add { background: transparent; border: 2px dashed rgba(255, 255, 255, .55); color: var(--pill-ink); }
 .opt-chip {
+  display: inline-flex; align-items: center; gap: 6px;
   height: 30px; padding: 0 10px; border: 1px solid rgba(255, 255, 255, .18); border-radius: 15px; background: transparent;
   color: var(--pill-ink); cursor: pointer; white-space: nowrap; font-size: 13px; flex: none;
 }
 .opt-chip:hover { background: rgba(255, 255, 255, .08); }
+.opt-chip > span { display: inline-flex; }
+.opt-chip svg { display: block; flex: none; }
 .opt-chip.active { background: #3b6fb6; border-color: #3b6fb6; color: #fff; }
 .opt-chip.font { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .opt-size, .tb-size {
@@ -779,3 +782,27 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 
 .opt-swatch.pick, .swatch.pick { display: grid; place-items: center; color: inherit; background: transparent; }
 .lasso-svg.text-area polygon { stroke-dasharray: 6 4; fill: rgba(47, 124, 246, .08); }
+
+/* settings: tabs, wrapping hints, add-ons list */
+.modal .hint, .form .hint { white-space: normal; }
+.settings-tabs { display: flex; gap: 4px; margin: -4px 0 14px; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
+.settings-tab { border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.settings-tab.active { color: var(--ink, inherit); border-bottom-color: #3b6fb6; }
+.settings-pane[hidden] { display: none; }
+.addons { display: flex; flex-direction: column; gap: 10px; }
+.addon { border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.addon-head { display: flex; align-items: center; gap: 10px; }
+.addon-title { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.addon-title .addon-state { color: var(--muted); font-size: 12px; }
+.addon-always { color: var(--muted); font-size: 12px; }
+.addon-settings { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px dashed var(--line, rgba(127,127,127,.25)); }
+.addon-settings[hidden], .addon-sub[hidden] { display: none; }
+.addon-sub { display: flex; flex-direction: column; gap: 8px; }
+.btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; flex: none; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch-track { position: absolute; inset: 0; border-radius: 11px; background: rgba(127, 127, 127, .45); transition: background .15s; }
+.switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.switch input:checked + .switch-track { background: #3b6fb6; }
+.switch input:checked + .switch-track::after { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid #3b6fb6; outline-offset: 2px; }

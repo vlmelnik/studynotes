@@ -1,0 +1,3 @@
+MIT License
+
+an-array-of-german-words (https://github.com/hexapode/an-array-of-german-words) – German word list, license: MIT (as stated in its package.json).

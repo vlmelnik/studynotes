@@ -372,3 +372,16 @@ User answers: offline + online button (Google Drive OCR); handwriting → closes
 - [x] D. Handwriting: detect handwritten lines, handwriting fonts (Caveat, Neucha, …) closest match, straight sharp boxes; keep weaker lines
 - [x] E. "Recognise more accurately (Google)": per-line crops → Drive OCR (convert to Doc, export text, delete); fake for tests
 - [ ] F. Tests (unit + e2e + bench + local photos), review, build, re-publish 1.7.0
+
+## 1.7.0 redo #4 – user bug list (2026-11-09 01:34)
+- [x] "Text area" chip: icon over the label
+- [x] Drag on highlighted PDF text → text selection (not a box with handles); click selects the highlight
+- [x] Double-click edits text with the lasso
+- [x] Dictionary correction after OCR (nspell ru/en + German list): "Tak" → "Так", lost space after a preposition
+- [x] Settings: tabs General / Add-ons, wrapping, wider window; add-on cards with switches and own settings
+- [x] Handwriting engine: Windows (offline) or Google (online); PowerShell WinRT type fix
+- [x] "Make page editable" asks to turn on the add-on (agree / decline)
+- [x] PDF selection by whole lines: word-by-word PDFs, nearest line while dragging, tables row by row, real columns kept
+- [x] Per-word bold
+- [x] Tests: v17b (selection, highlight drag, lasso dblclick, settings + Russian coverage), v17 M, spell unit
+- [ ] Full e2e, review, Windows build, re-publish 1.7.0 (r5)

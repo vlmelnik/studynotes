@@ -45,7 +45,7 @@ async function launch() {
 
 
 (async () => {
-  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K,L').split(',');
+  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K,M,L').split(',');
   let { app, win, ed } = await launch();
   const rel = await ed(async () => { const r = await window.api.createNotebook('', { title: 'v17', paper: 'blank', pageCount: 4 }); await window.__app.openNotebook(r); return r; });
   await win.waitForTimeout(600);
@@ -473,6 +473,22 @@ async function launch() {
   }
 
   // ===================================================================== L. searchable scans (contribution #1)
+  // ===================================================================== M. bold words inside a regular line
+  if (sections.includes('M')) {
+    await picture(async (ctx, S) => {
+      await document.fonts.load('400 30px "SN Sans"'); await document.fonts.load('700 30px "SN Sans"');
+      ctx.fillStyle = '#1a1a1a';
+      const parts = [['The ', 400], ['deposit', 700], [' is paid in three equal parts', 400]];
+      let x = 20 * S;
+      for (const [w, wt] of parts) { ctx.font = `${wt} ${16 * S}px "SN Sans"`; ctx.fillText(w, x, 50 * S); x += ctx.measureText(w).width; }
+      ctx.font = `400 ${16 * S}px "SN Sans"`; ctx.fillText('before the end of the first month.', 20 * S, 90 * S);
+    });
+    const ts = await recognise();
+    const l1 = ts[0] || {}, l2 = ts[1] || {};
+    check('M: a bold word inside a regular line becomes bold on its own', !l1.b && /<b>deposit<\/b>/.test(l1.html || '') && ((l1.html || '').match(/<b>/g) || []).length === 1, JSON.stringify([l1.text, l1.html, l1.b]));
+    check('M: … a regular line stays without bold', !l2.b && !/<b>/.test(l2.html || ''), JSON.stringify([l2.text, l2.html, l2.b]));
+  }
+
   if (sections.includes('L')) {
     // a scanned PDF: only a picture of text, no text layer
     const png = await ed(async () => {

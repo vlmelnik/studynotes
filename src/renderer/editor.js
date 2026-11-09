@@ -671,7 +671,7 @@ export class Editor {
         const setMode = (m) => { ts.lasso = { ...(ts.lasso || {}), mode: m }; save(); };
         bar.append(group(
           h('button', { class: `opt-chip${mode === 'free' ? ' active' : ''}`, title: 'Select handwriting, text boxes and pictures', onclick: () => setMode('free') }, 'Lasso'),
-          h('button', { class: `opt-chip${mode === 'text' ? ' active' : ''}`, title: 'Draw a rectangle around printed text (scan, photo, PDF) to make it editable', onclick: () => setMode('text') }, h('span', { html: icon('scanText', 16) }), ' Text area')));
+          h('button', { class: `opt-chip${mode === 'text' ? ' active' : ''}`, title: 'Draw a rectangle around printed text (scan, photo, PDF) to make it editable', onclick: () => setMode('text') }, h('span', { html: icon('scanText', 16) }), 'Text area')));
         break;
       }
       default: break; // select, hand: no options → strip hidden
@@ -742,7 +742,8 @@ export class Editor {
     const busy = toast('Reading the handwriting…', { timeout: 60000 });
     let res;
     try {
-      res = await window.api.inkRecognize(strokes.map((st) => st.p.filter((_, i) => i % 3 !== 2)), this.settings.inkRecognizer || '');
+      res = this.settings.inkEngine === 'google' ? await this.readInkWithGoogle(strokes)
+        : await window.api.inkRecognize(strokes.map((st) => st.p.filter((_, i) => i % 3 !== 2)), this.settings.inkRecognizer || '');
     } catch (err) {
       busy.remove();
       toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 7000 });
@@ -771,6 +772,33 @@ export class Editor {
     this.tools.clearSelection(true);
     this.commit(sel.pageId, now, { ...now, strokes: now.strokes.filter((st) => !ids.has(st.id)), texts: now.texts.concat([text]) });
     this.tools.select(sel.index, sel.pageId, new Set(), new Set([text.id]));
+  }
+
+  // Handwriting read by Google (Settings → Add-ons → Handwriting to text →
+  // Google): the strokes drawn as a picture, read like a photo. Online.
+  async readInkWithGoogle(strokes) {
+    let b = null;
+    for (const st of strokes) for (let i = 0; i + 1 < st.p.length; i += 3) {
+      const x = st.p[i], y = st.p[i + 1];
+      b = b ? [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)] : [x, y, x, y];
+    }
+    if (!b) return { text: '' };
+    const S = Math.min(4, 2400 / Math.max(1, b[2] - b[0], b[3] - b[1])), pad = 16;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil((b[2] - b[0]) * S + pad * 2); cv.height = Math.ceil((b[3] - b[1]) * S + pad * 2);
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    g.strokeStyle = '#000'; g.lineCap = g.lineJoin = 'round';
+    for (const st of strokes) {
+      g.lineWidth = Math.max(2, (st.s || 2) * S);
+      g.beginPath();
+      for (let i = 0; i + 1 < st.p.length; i += 3) g[i ? 'lineTo' : 'moveTo']((st.p[i] - b[0]) * S + pad, (st.p[i + 1] - b[1]) * S + pad);
+      g.stroke();
+    }
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+    cv.width = cv.height = 0;
+    const [text] = await window.api.ocrGoogle([new Uint8Array(await blob.arrayBuffer())], '');
+    return { text: String(text || '').trim() };
   }
 
   // Eyedropper: the next click on the page takes a colour. Without `apply`
