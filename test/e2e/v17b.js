@@ -176,6 +176,57 @@ async function makePdf(file) {
     await win.waitForTimeout(300);
     const editing = await ed(() => { const a = document.activeElement; return !!(a && a.closest && a.closest('.textbox') && a.isContentEditable); });
     check('P: double-click on a text box with the lasso edits its text', editing);
+    // while editing: a click into the text puts the cursor there (not: deselect)
+    const tr = await ed(() => { const r = document.querySelector('.textbox[data-id="tx"]').getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; });
+    await win.mouse.click(tr.l + 3, (tr.t + tr.b) / 2);
+    await win.waitForTimeout(200);
+    const caret = await ed(() => { const s = window.getSelection(); const a = document.activeElement; return { editing: !!(a && a.closest && a.closest('.textbox') && a.isContentEditable), collapsed: s.isCollapsed, off: s.anchorOffset }; });
+    check('P: … a click into the text being edited moves the cursor there', caret.editing && caret.collapsed && caret.off <= 1, JSON.stringify(caret));
+    await win.keyboard.type('X');
+    await win.keyboard.press('Escape');
+    const [ex, ey] = await at(450, 700);
+    await win.mouse.click(ex, ey);
+    await win.waitForTimeout(300);
+    const txt = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.find((t) => t.id === 'tx').text);
+    check('P: … and typing goes there', txt === 'XMade editable', JSON.stringify(txt));
+    // the lasso: grab a text box by its frame and drag it
+    await ed(() => { const e = window.__app.active; e.setTool('lasso'); e.tools.clearSelection(); });
+    await win.waitForTimeout(200);
+    const fr = await ed(() => { const r = document.querySelector('.textbox[data-id="tx"]').getBoundingClientRect(); return { l: r.left, t: r.top, b: r.bottom }; });
+    const x0 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.find((t) => t.id === 'tx').x);
+    await win.mouse.move(fr.l - 2, (fr.t + fr.b) / 2); await win.mouse.down();
+    await win.mouse.move(fr.l + 60, (fr.t + fr.b) / 2 + 40, { steps: 8 }); await win.mouse.up();
+    await win.waitForTimeout(300);
+    const x1 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.find((t) => t.id === 'tx').x);
+    check('P: lasso: dragging a text box by its frame moves it', x1 - x0 > 20, JSON.stringify({ x0, x1 }));
+    // … also when it is selected and the frame is just outside the selection box
+    await ed(() => { const e = window.__app.active; e.tools.select(0, e.pages[0].id, new Set(), new Set(['tx'])); });
+    await win.waitForTimeout(200);
+    const sb = await ed(() => { const r = window.__app.active.tools.sel.box.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; });
+    const sx = (sb.l + sb.r) / 2;
+    await win.mouse.move(sx, sb.t - 4); await win.mouse.down();
+    await win.mouse.move(sx + 40, sb.t - 4, { steps: 6 }); await win.mouse.up();
+    await win.waitForTimeout(300);
+    const x2 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.find((t) => t.id === 'tx').x);
+    check('P: lasso: a selected text box moves when grabbed at its edge', x2 - x1 > 15, JSON.stringify({ x1, x2 }));
+
+    // ------------------------------------------------- combining text boxes
+    await ed(() => {
+      const e = window.__app.active, d = e.pageData(e.pages[0].id);
+      const t = (id, x, y, text, more = {}) => ({ id, x, y, w: 80, fs: 12, c: '#222222', ff: 'sans', text, lay: 'f', aw: true, ...more });
+      e.setPageData(e.pages[0].id, { ...d, texts: [t('a', 100, 400, 'First line'), t('b', 190, 400, 'goes on', { b: true }), t('c', 100, 418, 'second line')] });
+      e.tools.select(0, e.pages[0].id, new Set(), new Set(['a', 'b', 'c']));
+    });
+    await win.waitForTimeout(300);
+    await shot(win, 'combine');
+    await win.locator('.tb-btn.combine').click({ timeout: 5000 });
+    await win.waitForTimeout(300);
+    const cb = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.filter((t) => t.id !== 'tx'));
+    check('Combine: the text boxes become one (side by side → one line, below → next line)', cb.length === 1 && cb[0].text === 'First line goes on\nsecond line' && /<b>goes on<\/b>/.test(cb[0].html || '') && Math.abs(cb[0].lh - 1.5) < 0.01, JSON.stringify(cb));
+    await ed(() => window.__app.active.undo());
+    await win.waitForTimeout(200);
+    const un = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.length);
+    check('Combine: one undo step brings the boxes back', un === 3, String(un));
     await win.keyboard.press('Escape');
     await ed(() => window.__app.active.setTool('select'));
   }

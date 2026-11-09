@@ -97,7 +97,7 @@ function splitByGlyphs(text, fk) {
 // Rich text: per-run bold/italic/underline plus optional size, font and colour
 // (<span data-fs data-ff data-c>). Lines are as tall as their largest run, like
 // in the browser. `al` = left | center | right.
-async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, dry = false, turn = 0, soft = 0, look = {} }, map, rot, k = 1) {
+async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, lh = LINE_H, dry = false, turn = 0, soft = 0, look = {} }, map, rot, k = 1) {
   const paras = parseRich(html || plainToHtml(text || ''), { b, i, u });
   // layoutRich needs a synchronous measure: pre-load every font variant used.
   const variants = new Map();
@@ -117,7 +117,7 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
   };
   const maxW = Math.max(4, w - 1);
   const lines = layoutRich(paras, maxW, mSync);
-  if (dry) return lines.reduce((sum, line) => sum + Math.max(fs, ...line.runs.map(sizeOf), 1) * LINE_H, 0);
+  if (dry) return lines.reduce((sum, line) => sum + Math.max(fs, ...line.runs.map(sizeOf), 1) * lh, 0);
   const fb = await fonts.fallback();
   // "Match the document": soft letters like the scan. A PDF has no blur, so
   // the letters' outlines are collected into one form that is placed several
@@ -128,7 +128,7 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
   for (const line of lines) {
     // Like CSS line boxes: never smaller than the box's own font size (the strut).
     const lfs = Math.max(fs, ...line.runs.map(sizeOf), 1);
-    const lineH = lfs * LINE_H;
+    const lineH = lfs * lh;
     const lm = variants.get(vkey({})).metrics;
     const by = ly + (lineH - (lm.asc - lm.desc) * lfs) / 2 + lm.asc * lfs;
     const dx = al === 'center' ? (maxW - line.width) / 2 : al === 'right' ? maxW - line.width : 0;
@@ -420,7 +420,7 @@ async function drawObject(page, kind, o, map, rot, ctx, k) {
   const w = (o.w || 200) * (o.aw ? 1.04 : 1) + (o.aw ? 2 : 0);
   const rich = {
     html: o.html, text: o.text, ff: o.ff, b: o.b, i: o.i, u: o.u, fs: o.fs || 14, color: o.c,
-    x: o.x, y: o.y, w, al: o.al, soft: softOf(o),
+    x: o.x, y: o.y, w, al: o.al, lh: o.lh || LINE_H, soft: softOf(o),
   };
   // "Match the document": the photo's perspective and light (see shared/warp.js)
   if (rich.soft > 0) {
@@ -485,7 +485,7 @@ function contentBBox(data) {
   let b = [Infinity, Infinity, -Infinity, -Infinity];
   const add = (x0, y0, x1, y1) => { b = [Math.min(b[0], x0), Math.min(b[1], y0), Math.max(b[2], x1), Math.max(b[3], y1)]; };
   for (const st of data.strokes || []) add(...strokeBBox(st));
-  for (const t of data.texts || []) add(t.x, t.y, t.x + (t.w || 200), t.y + (t.lines || 1) * (t.fs || 14) * LINE_H);
+  for (const t of data.texts || []) add(t.x, t.y, t.x + (t.w || 200), t.y + (t.lines || 1) * (t.fs || 14) * (t.lh || LINE_H));
   for (const it of data.items || []) {
     if (it.type === 'img') add(it.x, it.y, it.x + it.w, it.y + it.h);
     else if (it.type === 'table') add(it.x, it.y, it.x + (it.cw || []).reduce((a, c) => a + c, 0), it.y + (it.rh || []).reduce((a, c) => a + c, 0));

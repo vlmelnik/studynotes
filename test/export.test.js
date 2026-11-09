@@ -202,3 +202,21 @@ test('1.7: every font exports all its letters (pdf-lib subsetting can drop glyph
   const bad = ink.map((n, r) => [ids[r >> 1] + (r & 1 ? ' bold italic' : ''), n]).filter(([, n]) => n < med * 0.45); // (thin fonts like Garamond have less ink)
   assert.deepStrictEqual(bad, [], 'fonts with missing letters');
 });
+
+test('1.7: a recognised paragraph keeps its line spacing (lh) in the PDF', async () => {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const assets = path.join(__dirname, '..', 'assets');
+  const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
+  const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 595, h: 842 }] };
+  const ys = async (lh) => {
+    const texts = [{ id: 'a', x: 50, y: 100, w: 400, fs: 10, c: '#000000', ff: 'inter', text: 'First line\nSecond line\nThird line', lh, aw: true }];
+    const bytes = await exportNotebook({ notebook, pages: { p: { strokes: [], texts, items: [] } }, readFont });
+    const js = await pdfjs.getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false, isEvalSupported: false }).promise;
+    const content = await (await js.getPage(1)).getTextContent();
+    return content.items.filter((i) => /line/.test(i.str)).map((i) => i.transform[5]);
+  };
+  const a = await ys(undefined), b = await ys(2);
+  assert.strictEqual(a.length, 3);
+  assert.ok(Math.abs((a[0] - a[1]) - 13) < 0.2, String(a));
+  assert.ok(Math.abs((b[0] - b[1]) - 20) < 0.2, String(b));
+});

@@ -1,6 +1,7 @@
 // Pointer input: select ("finger"), pen, highlighter, eraser, lasso, text,
 // shapes, panning – plus the selection (move / resize / restyle) shared by
 // the select tool, the lasso and paste.
+import { combineBoxes } from '../shared/scan-layout.js';
 import { h, showMenu } from './ui.js';
 import { icon } from './icons.js';
 import { docLook } from '../shared/textbox.js';
@@ -61,7 +62,7 @@ function penButton(e) {
 export function textBBox(t) {
   // Height comes from the line count measured on screen (kept up to date by the editor).
   const lines = Math.max(1, t.lines || String(t.text || '').split('\n').length);
-  const hh = t.h > 0 ? t.h : lines * t.fs * LINE_H;
+  const hh = t.h > 0 ? t.h : lines * t.fs * (t.lh || LINE_H);
   return turnedBox(t.x, t.y, t.w, hh, t.r);
 }
 
@@ -216,7 +217,17 @@ export class Tools {
       if (target.closest('.sel-rotate')) return this.startSelTransform(e, 'rotate');
       const handle = target.closest('.sel-handle');
       if (handle) return this.startSelTransform(e, 'scale', handle.dataset.corner);
-      if (this.selContains(e)) return this.startSelTransform(e, 'move');
+      if (this.selContains(e, 8)) return this.startSelTransform(e, 'move');
+    }
+    // lasso: grabbing a text box by its frame moves it (inside the box a new
+    // lasso can still start – a recognised page is full of text boxes)
+    if (tool === 'lasso') {
+      const tb = this.textFrameAt(e);
+      if (tb) {
+        if (this.sel) this.clearSelection();
+        this.select(tb.index, tb.pageId, new Set(), new Set([tb.id]), new Set());
+        if (this.sel) return this.startSelTransform(e, 'move');
+      }
     }
     if (this.sel) this.clearSelection();
     this.textSel.clear();
@@ -957,6 +968,8 @@ export class Tools {
         btn('rotateL', 'Rotate left 90°', () => this.rotateSelection(-90)),
         btn('rotateR', 'Rotate right 90°', () => this.rotateSelection(90)));
     }
+    // several text boxes (e.g. recognised lines) → one box
+    if (texts.length >= 2) parts.push(h('span', { class: 'sep' }), tbtn('Combine', 'Combine the text boxes into one', () => this.combineTexts()));
     const count = strokes.length + texts.length + items.length;
     const grouped = [...strokes, ...texts, ...items].some((o) => o.g);
     if (count > 1 || grouped) {
@@ -999,9 +1012,28 @@ export class Tools {
     }
   }
 
-  selContains(e) {
+  selContains(e, pad = 0) {
     const r = this.sel.box.getBoundingClientRect();
-    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    return e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad;
+  }
+
+  /** The text box whose frame (its edge, a few px in and out) is under the pointer. */
+  textFrameAt(e) {
+    const hit = this.viewer.hit(e.clientX, e.clientY);
+    if (!hit) return null;
+    const view = this.viewer.view(hit.index);
+    if (!view) return null;
+    const x = e.clientX, y = e.clientY;
+    for (const el of [...view.el.querySelectorAll('.textbox[data-id]')].reverse()) {
+      const r = el.getBoundingClientRect();
+      // (small boxes – zoomed out – have no frame to grab: a lasso can start on them)
+      if (!r.width || r.height < 16) continue;
+      const out = 5, inn = Math.min(4, r.height * 0.15);
+      if (x < r.left - out || x > r.right + out || y < r.top - out || y > r.bottom + out) continue;
+      const inside = x > r.left + inn && x < r.right - inn && y > r.top + inn && y < r.bottom - inn;
+      if (!inside) return { index: hit.index, pageId: hit.page.id, id: el.dataset.id };
+    }
+    return null;
   }
 
   startSelTransform(e, mode, corner) {
@@ -1236,7 +1268,7 @@ export class Tools {
       }),
       texts: before.texts.map((t) => {
         if (!sel.textIds.has(t.id)) return t;
-        const hh = t.h || t.fs * LINE_H;
+        const hh = t.h || t.fs * (t.lh || LINE_H);
         const [nx, ny] = rotPt(t.x + t.w / 2, t.y + hh / 2, cx, cy, deg);
         return setR({ ...t, x: round2(nx - t.w / 2), y: round2(ny - hh / 2) }, turn(t.r));
       }),
@@ -1250,6 +1282,24 @@ export class Tools {
   }
 
   // Group / ungroup what is selected (grouped objects are selected together).
+  /** The selected text boxes become one (see shared/scan-layout.js). */
+  combineTexts() {
+    const sel = this.sel;
+    if (!sel || sel.textIds.size < 2) return;
+    const before = this.editor.pageData(sel.pageId);
+    const ts = before.texts.filter((t) => sel.textIds.has(t.id));
+    const box = combineBoxes(ts);
+    if (!box) return;
+    box.id = uid();
+    // (in the place of the topmost box in the stacking order)
+    box.z = Math.max(...ts.map((t) => t.z || 0)) || box.z;
+    const after = { ...before, texts: before.texts.filter((t) => !sel.textIds.has(t.id)).concat([box]) };
+    const { index, pageId } = sel;
+    this.clearSelection();
+    this.editor.commit(pageId, before, after);
+    this.select(index, pageId, new Set(), new Set([box.id]), new Set());
+  }
+
   group(on = true) {
     const sel = this.sel;
     if (!sel) return;

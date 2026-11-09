@@ -62,3 +62,5 @@
 - Text selection while dragging: the pointer beside a line (same height) means that line's end/start; returning null leaves the selection at a random earlier point ("jumps").
 - e2e positions on PDF text: compute them from the PDF font's own widths (pdf-lib widthOfTextAtSize), not from a canvas estimate.
 - Settings translations: check in e2e that no Latin-only text is left in the Russian settings (both tabs, settings opened).
+- Font-fit correlation cannot tell decorative fonts from real ones on real screenshots (real text scored 0.42–0.73, poster fonts 0.46–0.66): don't drop lines by fit score. Test heuristics on the real example images (Z section) before trusting synthetic tests.
+- A "graphic mark" detector sees big heading letters as marks: exclude components inside normal words of their line.

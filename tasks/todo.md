@@ -385,3 +385,12 @@ User answers: offline + online button (Google Drive OCR); handwriting → closes
 - [x] Per-word bold
 - [x] Tests: v17b (selection, highlight drag, lasso dblclick, settings + Russian coverage), v17 M, spell unit
 - [ ] Full e2e, review, Windows build, re-publish 1.7.0 (r5)
+
+## 1.7.0 redo #5 – layout round (2026-11-09 20:34)
+- [x] Paragraphs / centred titles → one box with line spacing (t.lh), alignment
+- [x] Combine selected text boxes (selection bar + text bar)
+- [x] Underlined words / lines (not ruled lines), cleaned from the scan
+- [x] Logos (text beside a solid sign) stay as picture; decorative fonts: not reliable → not done
+- [x] Lasso: click into edited text moves the cursor; drag box by frame; handles work
+- [x] Google OCR: "____" separator taken as text → fixed (drive.js + googleLine)
+- [ ] Full tests, build, re-publish 1.7.0 (r6)

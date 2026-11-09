@@ -598,7 +598,9 @@ class DriveRemote {
     const { id } = await this._json(`${UPLOAD_API}/files?${q}`, { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body, tries: 1 });
     try {
       const res = await this._request(`${API}/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain`);
-      return (await res.text()).replace(/^\uFEFF/, '').replace(/\r/g, '').trim();
+      // (Google's export starts with a separator line "________________"
+      // under the picture: not text that was read)
+      return (await res.text()).replace(/^\uFEFF/, '').replace(/\r/g, '').replace(/^(\s*_{4,}\s*\n)+/, '').trim();
     } finally {
       await this._request(`${API}/files/${encodeURIComponent(id)}`, { method: 'DELETE', okStatuses: [404] }).catch(() => {});
     }

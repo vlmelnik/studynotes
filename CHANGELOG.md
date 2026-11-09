@@ -47,6 +47,13 @@
 **Eyedropper**
 - Eyedropper button next to the colours (tool options, selection bar, "More colours"): click anywhere on the page to take that colour. Shortcut: I, then click; or hold Alt and click. On ink it takes the ink's exact colour. No separate tool.
 
+**Recognition: paragraphs, underline, logos**
+- Lines that belong together become one text box: a paragraph with its line breaks and the scan's line spacing, a centred or right-aligned title of several lines. Same font, size and colour, evenly spaced and aligned; lines in perspective, tilted or handwritten stay one box per line.
+- Underlined words and lines are recognised (a thin line of ink under the letters, not descenders); the scan's underline is cleaned away.
+- Logos stay as they are: text next to a solid sign (a logo's mark) is not turned into a text box.
+- "Combine": select several text boxes → one box (side by side → one line, one under the other → lines; bold, size, font and colour kept per part). Also in the text toolbar.
+- "Read better with Google": Google's export starts with a separator line "________________" – it was taken as the text. Now the separator is ignored and of several lines the one most like ours is used.
+
 **Recognition: dictionary check, bold words**
 - Recognised text is checked against dictionaries (offline: Russian and English Hunspell, a German word list): a Russian word read with Latin look-alike letters ("Tak" → "Так"), mixed-up similar letters and a lost space after a short preposition ("сконтакторами" → "с контакторами") are corrected; when two real words fit equally well, nothing is changed; terms and acronyms stay.
 - Single bold words inside a regular line become bold on their own (compared with the line's other words).
@@ -58,7 +65,8 @@
 **Fixes**
 - PDF text selection works by whole lines, like a text editor: a drag down selects the full lines in between (not pairs of words on the left); ending next to a line's end, left of its start or between two lines no longer jumps; PDFs that write every word separately join into lines first; table rows are selected across (cells separated by a tab when copied), real two-column articles still column by column.
 - Dragging on highlighted PDF text selects the text instead of a strange box with handles; a click without moving still selects the highlight.
-- Double-click on a text box edits it with the lasso too (right after "Text area").
+- Double-click on a text box edits it with the lasso too (right after "Text area"); then a click into the text puts the cursor there (it used to end editing).
+- Lasso: a text box can be dragged by its frame; a selected box moves when grabbed at its edge, its blue handles change its width.
 - "Text area" button: the icon no longer overlaps its label.
 - Windows handwriting recognizer: the "Unable to find type [Windows.Foundation.Point]" error on some PCs is fixed; if Windows still can't read handwriting, Google can be chosen.
 - Library → notebook (and switching tabs) keeps the page and zoom instead of jumping to the cover.

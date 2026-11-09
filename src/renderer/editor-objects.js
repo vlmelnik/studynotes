@@ -293,7 +293,7 @@ export const objectsMixin = {
           const t = d && d.texts.find((q) => q.id === info.id);
           if (!t) continue;
           const hgt = round2(el.offsetHeight);
-          const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * LINE_H)));
+          const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * (t.lh || LINE_H))));
           if (Math.abs((t.h || 0) - hgt) < 0.5 && (t.lines || 1) === lines) continue;
           this.doc.pages[info.pageId] = { ...d, texts: d.texts.map((q) => (q.id === t.id ? { ...q, h: hgt, lines } : q)) };
           touched.add(info.pageId);
@@ -312,6 +312,8 @@ export const objectsMixin = {
         width: t.w + 'px', fontSize: t.fs + 'px', color: t.c, fontFamily: fontCss(t.ff),
         fontWeight: t.b ? '700' : '400', fontStyle: t.i ? 'italic' : 'normal', textDecoration: t.u ? 'underline' : 'none',
         textAlign: t.al || 'left',
+        // (recognised paragraphs keep the scan's line spacing)
+        ...(t.lh ? { lineHeight: String(t.lh), minHeight: t.lh + 'em' } : {}),
       },
     });
     if (t.html) el.innerHTML = safeHtml(t.html); else el.textContent = t.text;
@@ -445,7 +447,7 @@ export const objectsMixin = {
     });
     // Move / resize with the handles (text tool, or select tool on a selected box).
     const drag = (handle, mode) => handle.addEventListener('pointerdown', (e) => {
-      if (this.toolState.tool !== 'text' && this.toolState.tool !== 'select') return;
+      if (this.toolState.tool !== 'text' && this.toolState.tool !== 'select' && this.toolState.tool !== 'lasso') return;
       if (this.tools.sel) this.tools.clearSelection(true);
       e.preventDefault(); e.stopPropagation();
       handle.setPointerCapture(e.pointerId);
@@ -489,7 +491,7 @@ export const objectsMixin = {
     const html = sanitizeHtml(el.innerHTML);
     const rich = hasFormatting(html);
     const text = rich ? richToPlain(html) : (el.innerText || '').replace(/\n$/, '');
-    const lines = Math.max(1, Math.round(el.offsetHeight / (t0.fs * LINE_H)));
+    const lines = Math.max(1, Math.round(el.offsetHeight / (t0.fs * (t0.lh || LINE_H))));
     const hgt = round2(el.offsetHeight);
     const texts = d.texts.map((t) => {
       if (t.id !== id) return t;
@@ -848,7 +850,7 @@ export const objectsMixin = {
       const texts = d.texts.map((t) => {
         const el = view.el.querySelector(`.textbox[data-id="${t.id}"]`);
         if (!el || !el.offsetHeight || t.h > 0) return t;
-        const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * LINE_H)));
+        const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * (t.lh || LINE_H))));
         if (lines === (t.lines || 1)) return t;
         changed = true;
         return { ...t, lines };

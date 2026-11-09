@@ -156,6 +156,8 @@ export class TextBar {
       btn('matchDoc', v.fx ? 'Matched to the document (soft like the scan) – click for sharp text' : 'Match the document: make the text as soft as the scan around it', () => apply({ fx: !v.fx }), v.fx),
       h('button', { class: 'tb-btn tb-box' + (v.box ? ' active' : ''), title: 'Text box style', 'aria-label': 'Text box style', onclick: (e) => this.boxMenu(e.currentTarget, v.box, (box) => apply({ box })) }, swatch(v.box)),
       sep(),
+      // several boxes selected (e.g. recognised lines): make them one
+      ...(this.target && this.target.ids.length > 1 ? [btn('combine', 'Combine into one text box', () => this.boxAction('combine'), false, 'combine')] : []),
       btn('cut', 'Cut', () => this.boxAction('cut')),
       btn('duplicate', 'Duplicate', () => this.boxAction('duplicate')),
       btn('trash', 'Delete', () => this.boxAction('delete'), false, 'danger'),
@@ -275,6 +277,7 @@ export class TextBar {
     else if (what === 'delete') tools.deleteSelection();
     else if (what === 'front') tools.order(1);
     else if (what === 'back') tools.order(-1);
+    else if (what === 'combine') tools.combineTexts();
     this.update();
   }
 }

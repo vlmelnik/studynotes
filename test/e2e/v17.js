@@ -45,7 +45,7 @@ async function launch() {
 
 
 (async () => {
-  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K,M,L').split(',');
+  const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I,J,K,M,X,Y,U,L').split(',');
   let { app, win, ed } = await launch();
   const rel = await ed(async () => { const r = await window.api.createNotebook('', { title: 'v17', paper: 'blank', pageCount: 4 }); await window.__app.openNotebook(r); return r; });
   await win.waitForTimeout(600);
@@ -208,13 +208,14 @@ async function launch() {
     const d = await pageData();
     const texts = d.texts.map((t) => ({ text: t.text, ff: t.ff, b: !!t.b, c: t.c, fs: t.fs, x: t.x, y: t.y }));
     const patch = d.items.find((it) => it.id !== 'scan');
-    const want = ['Rental Agreement', 'The tenant agrees to pay the monthly rent of 650 euros', 'before the third working day of each month.', 'Der Mieter zahlt die Kaution in drei Raten.', 'Арендатор обязуется бережно относиться к квартире.'];
+    // (the two lines of the English paragraph are one box)
+    const want = ['Rental Agreement', 'The tenant agrees to pay the monthly rent of 650 euros\nbefore the third working day of each month.', 'Der Mieter zahlt die Kaution in drei Raten.', 'Арендатор обязуется бережно относиться к квартире.'];
     const okText = want.every((w, k) => texts[k] && texts[k].text === w);
-    const okFont = texts.length === 5 && texts[0].ff === 'sans' && texts[0].b && texts[1].ff === 'serif' && texts[3].ff === 'sans';
+    const okFont = texts.length === 4 && texts[0].ff === 'sans' && texts[0].b && texts[1].ff === 'serif' && texts[2].ff === 'sans';
     const hex = (c) => [1, 3, 5].map((k) => parseInt(c.slice(k, k + 2), 16));
     const near = (a, b) => hex(a).every((v, k) => Math.abs(v - hex(b)[k]) < 40);
-    const okColor = texts.length === 5 && near(texts[3].c, '#123a8a') && near(texts[1].c, '#222222');
-    const okSize = texts.length === 5 && Math.abs(texts[0].fs - 22) < 2.5 && Math.abs(texts[1].fs - 14) < 1.6;
+    const okColor = texts.length === 4 && near(texts[2].c, '#123a8a') && near(texts[1].c, '#222222');
+    const okSize = texts.length === 4 && Math.abs(texts[0].fs - 22) < 2.5 && Math.abs(texts[1].fs - 14) < 1.6;
     // where the text was, the cleaned picture is paper now
     const darkest = patch ? await ed(async (it) => {
       const e = window.__app.active;
@@ -344,9 +345,9 @@ async function launch() {
     await ed(() => window.__mk);
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
     const t = d.texts.slice().sort((a, b) => a.y - b.y);
-    const want = ['Grundlagen pn-Übergang', '(a) Zeichen Sie für einen pn-Übergang die Raumladung', 'und den Feldstärkeverlauf bei thermischem Gleichgewicht.', 'Wo lässt sich an den Diagrammen die Spannung ablesen?'];
+    const want = ['Grundlagen pn-Übergang', '(a) Zeichen Sie für einen pn-Übergang die Raumladung\nund den Feldstärkeverlauf bei thermischem Gleichgewicht.\nWo lässt sich an den Diagrammen die Spannung ablesen?'];
     check('H: big screenshot text with umlauts is read exactly', want.every((w, k) => t[k] && t[k].text === w), JSON.stringify(t.map((q) => q.text)));
-    check('H: one typeface for all lines, only the heading bold', t.length === 4 && t.every((q) => q.ff === t[0].ff) && t[0].ff === 'sans' && !!t[0].b && t.slice(1).every((q) => !q.b && !q.i),
+    check('H: one typeface for all lines, only the heading bold', t.length === 2 && t.every((q) => q.ff === t[0].ff) && t[0].ff === 'sans' && !!t[0].b && t.slice(1).every((q) => !q.b && !q.i),
       JSON.stringify(t.map((q) => [q.ff, !!q.b, !!q.i, q.fs])));
   }
 
@@ -380,9 +381,9 @@ async function launch() {
   }
 
   // ===================================================================== J. handwriting
-  const picture = (draw) => ed(async (code) => {
+  const picture = (draw, W = 520, H = 170) => ed(async ([code, W, H]) => {
     const e = window.__app.active;
-    const S = 4, W = 520, H = 170;
+    const S = 4;
     const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
     const ctx = cv.getContext('2d');
     ctx.fillStyle = '#f7f6f2'; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -391,7 +392,16 @@ async function launch() {
     const src = await window.api.writeAsset(e.rel, new Uint8Array(await blob.arrayBuffer()), 'png');
     e.viewer.fitWidth(); e.viewer.scrollToPage(0);
     e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'pic', type: 'img', x: 30, y: 60, w: W, h: H, src }] });
-  }, draw.toString());
+  }, [draw.toString(), W, H]);
+  // test fonts (decorative / comic: OFL, test/fixtures/fonts)
+  const loadTestFonts = () => ed(async (list) => {
+    for (const [name, b64] of list) {
+      if ([...document.fonts].some((f) => f.family === name)) continue;
+      const bin = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+      const ff = new FontFace(name, bin.buffer); await ff.load(); document.fonts.add(ff);
+    }
+  }, [['TLobster', 'lobster-latin-400-normal'], ['TBangers', 'bangers-latin-400-normal'], ['TComic', 'comic-neue-latin-400-normal']]
+    .map(([n, f]) => [n, fs.readFileSync(path.join(root, 'test', 'fixtures', 'fonts', f + '.woff')).toString('base64')]));
   const recognise = async () => {
     await win.waitForTimeout(300);
     await ed(() => { window.__ocrDebug = []; window.__mk = window.__app.active.makePageEditable(0); });
@@ -489,6 +499,88 @@ async function launch() {
     check('M: … a regular line stays without bold', !l2.b && !/<b>/.test(l2.html || ''), JSON.stringify([l2.text, l2.html, l2.b]));
   }
 
+  // ===================================================================== X. logos stay as they are
+  if (sections.includes('X')) {
+    await loadTestFonts();
+    await picture(async (ctx, S) => {
+      await document.fonts.load('400 30px "SN Sans"');
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = `400 ${15 * S}px "SN Sans"`;
+      ctx.fillText('The tenant pays the deposit in three parts.', 20 * S, 40 * S);
+      ctx.fillText('Every part is due at the end of a month.', 20 * S, 62 * S);
+      ctx.font = `400 ${22 * S}px TLobster`; ctx.fillText('Summer Festival', 20 * S, 110 * S);
+      ctx.font = `400 ${22 * S}px TBangers`; ctx.fillText('BIG SALE TODAY', 260 * S, 110 * S);
+      // a logo: a solid green mark with the name next to it
+      ctx.fillStyle = '#84b817';
+      ctx.fillRect(20 * S, 140 * S, 9 * S, 46 * S); ctx.fillRect(12 * S, 150 * S, 26 * S, 8 * S);
+      ctx.fillRect(44 * S, 150 * S, 8 * S, 30 * S); ctx.fillRect(66 * S, 150 * S, 8 * S, 36 * S); ctx.fillRect(44 * S, 178 * S, 30 * S, 8 * S);
+      ctx.fillStyle = '#222'; ctx.font = `400 ${13 * S}px "SN Sans"`;
+      ctx.fillText('technische universität', 84 * S, 160 * S); ctx.fillText('dortmund', 84 * S, 178 * S);
+      ctx.font = `400 ${15 * S}px TComic`; ctx.fillStyle = '#1a1a1a'; ctx.fillText('See you at the party tonight!', 260 * S, 170 * S);
+    }, 520, 210);
+    const ts = await recognise();
+    if (process.env.DBG) console.log(JSON.stringify(await ed(() => [window.__ocrDebug.raw, window.__ocrDebug.best, window.__ocrDebug.wf])), JSON.stringify(ts.map((t) => [t.text, t.ff])));
+    const all = ts.map((t) => t.text).join('\n');
+    check('X: normal text is made editable', /tenant pays the deposit/.test(all) && /end of a month/.test(all), JSON.stringify(all));
+    check('X: a logo (name next to its sign) stays as it is', !/technische|dortmund/i.test(all), JSON.stringify(all));
+  }
+
+  // ===================================================================== Y. paragraphs, centred titles, spacing
+  if (sections.includes('Y')) {
+    await picture(async (ctx, S) => {
+      await document.fonts.load('400 30px "SN Sans"'); await document.fonts.load('700 30px "SN Sans"');
+      ctx.fillStyle = '#1a1a1a'; ctx.textAlign = 'center';
+      ctx.font = `700 ${18 * S}px "SN Sans"`;
+      ctx.fillText('Rental agreement', 260 * S, 34 * S); ctx.fillText('for the flat', 260 * S, 58 * S);
+      ctx.textAlign = 'left'; ctx.font = `400 ${13 * S}px "SN Sans"`;
+      const p1 = ['The tenant pays the deposit in three equal', 'parts. Every part is due at the end of a', 'month, starting with the first month.'];
+      p1.forEach((l, k) => ctx.fillText(l, 20 * S, (100 + k * 20) * S));
+      const p2 = ['Pets are allowed after asking the landlord', 'in writing.'];
+      p2.forEach((l, k) => ctx.fillText(l, 20 * S, (185 + k * 20) * S));
+    }, 520, 240);
+    const ts = await recognise();
+    const title = ts.find((t) => /Rental/.test(t.text)) || {}, para = ts.find((t) => /tenant/.test(t.text)) || {}, p2 = ts.find((t) => /Pets/.test(t.text)) || {};
+    check('Y: a centred title of two lines is one centred box', title.text === 'Rental agreement\nfor the flat' && title.al === 'center' && title.b, JSON.stringify([title.text, title.al, title.b]));
+    check('Y: a paragraph is one box with its lines and spacing', (para.text || '').split('\n').length === 3 && Math.abs((para.lh || 0) * para.fs - 20) < 1.2, JSON.stringify([para.text, para.lh, para.fs]));
+    check('Y: the gap between paragraphs keeps them apart', (p2.text || '').split('\n').length === 2 && p2.id !== para.id && ts.length === 3, JSON.stringify(ts.map((t) => t.text)));
+    // the box's lines sit where the scan's lines were (first and last line)
+    const pos = await ed(() => {
+      const el = document.querySelector('.textbox-wrap .textbox');
+      const boxes = [...document.querySelectorAll('.textbox')].filter((x) => /tenant/.test(x.textContent));
+      const r = boxes[0].getBoundingClientRect(), z = window.__app.active.viewer.zoom, pr = window.__app.active.viewer.pageClientRect(0);
+      void el;
+      return { top: (r.top - pr.top) / z, bottom: (r.bottom - pr.top) / z };
+    });
+    // lines' centres: 60 + (100 + 40 - 13*0.35)·… (the picture is at y 60, scale 1): first line top ≈ 60+100-13·1.05, last line bottom ≈ 60+140+13·0.35
+    check('Y: the paragraph box covers the lines of the scan', pos.top > 60 + 100 - 22 && pos.top < 60 + 100 - 6 && pos.bottom > 60 + 140 && pos.bottom < 60 + 140 + 14, JSON.stringify(pos));
+    await win.screenshot({ path: path.join(out, 'v17-Y-paragraphs.png') });
+  }
+
+  // ===================================================================== U. underlined words
+  if (sections.includes('U')) {
+    await picture(async (ctx, S) => {
+      await document.fonts.load('400 30px "SN Sans"');
+      ctx.fillStyle = '#1a1a1a'; ctx.font = `400 ${15 * S}px "SN Sans"`;
+      const y = 50 * S;
+      const parts = ['Please sign ', 'before Friday', ' and send it back.'];
+      let x = 20 * S, ux = 0, uw = 0;
+      parts.forEach((w, k) => { const ww = ctx.measureText(w).width; if (k === 1) { ux = x; uw = ww; } ctx.fillText(w, x, y); x += ww; });
+      ctx.fillRect(ux, y + 3 * S, uw, 1.2 * S);
+      ctx.fillText('The whole next line is underlined.', 20 * S, 100 * S);
+      ctx.fillRect(20 * S, 103 * S, ctx.measureText('The whole next line is underlined.').width, 1.2 * S);
+      ctx.fillText('A line with descenders: going, jumping, pygmy.', 20 * S, 150 * S);
+    }, 520, 180);
+    const ts = await recognise();
+    if (process.env.DBG) console.log(JSON.stringify([ts.map((t) => t.text), await ed(() => [window.__ocrDebug.raw, window.__ocrDebug.best, window.__ocrDebug.wf])]));
+    const a = ts.find((t) => /sign/.test(t.text)) || {}, b = ts.find((t) => /whole/.test(t.text)) || {}, c = ts.find((t) => /descenders/.test(t.text)) || {};
+    check('U: underlined words in a line are underlined', /<u>before Friday<\/u>/.test(a.html || '') && !a.u, JSON.stringify([a.text, a.html]));
+    check('U: a fully underlined line is underlined', b.u === true, JSON.stringify([b.text, b.u, b.html]));
+    check('U: descenders are not an underline', c.text && !c.u && !/<u>/.test(c.html || ''), JSON.stringify([c.text, c.u, c.html]));
+    // the underline of the scan is cleaned away (no double line under the text)
+    const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).items.length; });
+    check('U: the scan is cleaned under the text', d === 2);
+  }
+
   if (sections.includes('L')) {
     // a scanned PDF: only a picture of text, no text layer
     const png = await ed(async () => {
@@ -551,7 +643,7 @@ async function launch() {
     if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
-    if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ hand: window.__ocrDebug.hand }))));
+    if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ best: window.__ocrDebug.best, wf: window.__ocrDebug.wf, deco: window.__ocrDebug.deco, marks: window.__ocrDebug.marks }))));
     console.log(`time ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     for (const q of d.texts) console.log(JSON.stringify([q.text, q.ff, !!q.b, !!q.i, q.fs, q.c, q.r || 0, q.fx || 0]));
     if (process.env.SN_CSS) await ed((css) => { const st = document.createElement('style'); st.textContent = css; document.head.append(st); }, process.env.SN_CSS);

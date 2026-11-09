@@ -2,6 +2,8 @@
 // recognised offline (add-on), the paper is painted back over it, and the
 // lines come back as normal text boxes in the closest font, size and colour.
 // Works for a lasso area or the whole page.
+import { googleLine } from '../shared/ocr-text.js';
+import { graphicMarks, besideMark, underlinedWords, paragraphs } from '../shared/scan-layout.js';
 import { toast, confirmDialog } from './ui.js';
 import { uid } from './tools.js';
 import { stacked } from '../shared/stacking.js';
@@ -540,14 +542,22 @@ async function readWithGoogle(editor, pageId, ids, crops, lang, original) {
     const before = editor.pageData(pageId);
     if (!before) return;
     let changed = 0;
+    // ids: for every line read, its box and its line in that box ({ id, j })
     const texts = before.texts.map((t) => {
-      const k = ids.indexOf(t.id);
-      // (Google may see bits of the neighbouring lines: its longest line is this one)
-      const text = k >= 0 ? String(got[k] || '').split('\n').map((s) => s.trim()).sort((a, b) => b.length - a.length)[0] || '' : '';
-      // (a line edited meanwhile stays as the user wrote it)
-      if (!text || text === t.text || t.html || t.text !== original[k]) return t;
-      changed++;
-      return { ...t, text };
+      const mine = ids.map((m, k) => (m.id === t.id ? k : -1)).filter((k) => k >= 0);
+      if (!mine.length || t.html) return t;
+      const rows = t.text.split('\n');
+      // (a box edited meanwhile stays as the user wrote it)
+      if (mine.some((k) => rows[ids[k].j] !== original[k])) return t;
+      let n = 0;
+      for (const k of mine) {
+        // (Google may see bits of the neighbouring lines: the line most like ours is this one)
+        const text = googleLine(got[k], original[k]);
+        if (text && text !== rows[ids[k].j]) { rows[ids[k].j] = text; n++; }
+      }
+      if (!n) return t;
+      changed += n;
+      return { ...t, text: rows.join('\n') };
     });
     if (changed) editor.commit(pageId, before, { ...before, texts });
     toast(changed ? `Google changed ${changed} ${changed === 1 ? 'line' : 'lines'}` : 'Google read the same text', { timeout: 3500 });
@@ -555,6 +565,52 @@ async function readWithGoogle(editor, pageId, ids, crops, lang, original) {
     busy.remove();
     toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
   }
+}
+
+/**
+ * Lines → text boxes: lines that belong together (see shared/scan-layout.js)
+ * become one box with the lines one under the other, in the scan's spacing
+ * and alignment. Returns the boxes and, for every line, its box and row.
+ */
+function joinParagraphs(texts, lines, fonts, r, S) {
+  const items = texts.map((t, k) => ({
+    x0: r.x0 + lines[k].bbox.x0 / S, x1: r.x0 + lines[k].bbox.x1 / S, cy: t.y + (t.fs * LINE_H) / 2,
+    fs: t.fs, ff: t.ff, c: t.c, hand: !!fonts[k].hand, warp: !!(t.q || t.r || t.cg),
+  }));
+  const groups = paragraphs(items);
+  const boxes = [], lineOf = texts.map((t) => ({ id: t.id, j: 0 }));
+  for (const g of groups) {
+    const ts = g.idx.map((k) => texts[k]);
+    if (ts.length === 1) { boxes.push(ts[0]); continue; }
+    const first = ts[0];
+    const lh = Math.round((g.pitch / first.fs) * 100) / 100;
+    // bold / italic / underlined: for the box when all its lines are, else per line
+    const all = (key) => ts.every((t) => t[key]);
+    const base = { b: all('b'), i: all('i'), u: all('u') };
+    const rich = ts.some((t) => t.html || ['b', 'i', 'u'].some((key) => !!t[key] !== base[key]));
+    const row = (t) => {
+      let x = t.html || escHtml(t.text);
+      if (t.b && !base.b) x = `<b>${x}</b>`;
+      if (t.i && !base.i) x = `<i>${x}</i>`;
+      if (t.u && !base.u) x = `<u>${x}</u>`;
+      return x;
+    };
+    const x0 = Math.min(...ts.map((t) => t.x)), x1 = Math.max(...g.idx.map((k) => items[k].x1)) + first.fs * 0.2;
+    const box = { ...first, y: round2(items[g.idx[0]].cy - (lh * first.fs) / 2), text: ts.map((t) => t.text).join('\n'), lh, b: base.b || undefined, i: base.i || undefined, u: base.u || undefined };
+    if (rich) box.html = ts.map(row).join('\n'); else delete box.html;
+    // the blur of the scan: the box's lines' typical value
+    const looks = ts.map((t) => t.look || 0).sort((p, q) => p - q);
+    if (looks[looks.length >> 1] > 0) { box.look = looks[looks.length >> 1]; box.fx = box.look; } else { delete box.look; delete box.fx; }
+    if (g.al === 'left') { box.x = round2(x0); box.aw = true; box.w = round2(x1 - x0 + first.fs); } else {
+      // centred / right: a fixed width (a little wider: our font may be wider)
+      const slack = (x1 - x0) * 0.06 + first.fs;
+      box.al = g.al; delete box.aw;
+      box.x = round2(g.al === 'center' ? x0 - slack / 2 : x0 - slack); box.w = round2(x1 - x0 + slack);
+    }
+    boxes.push(box);
+    g.idx.forEach((k, j) => { lineOf[k] = { id: box.id, j }; });
+  }
+  return { boxes, lineOf };
 }
 
 // ---------- main ----------
@@ -675,6 +731,23 @@ export async function makeTextEditable(editor, index, area = null) {
       if (n <= 3 && l.conf < 80) return false;
       return !(lines.length >= 3 && l.bbox.y1 - l.bbox.y0 > medH * 2.5 && (l.conf < 85 || n < 4));
     });
+    // a logo: its name next to a solid sign stays as it is (a logo is a picture)
+    if (lines.length) {
+      // (the letters' height from the words: a logo's sign makes its line's box tall)
+      const wh = lines.flatMap((l) => (l.words || []).filter((w) => w.bbox && /[\p{L}\p{N}]{2}/u.test(w.text)).map((w) => w.bbox.y1 - w.bbox.y0)).sort((x, y) => x - y);
+      const textH = wh.length ? wh[wh.length >> 1] : medH;
+      // (big letters of a heading are no sign: a sign read as a "word" is
+      // much taller than the real words of its line)
+      const letterOf = (m) => lines.some((l) => {
+        const hs = (l.words || []).filter((w) => w.bbox && (String(w.text).match(/[\p{L}\p{N}]/gu) || []).length >= 3).map((w) => w.bbox.y1 - w.bbox.y0);
+        const ref = hs.length ? Math.min(...hs) : Infinity;
+        const cx = (m.x0 + m.x1) / 2, cy = (m.y0 + m.y1) / 2;
+        return (l.words || []).some((w) => w.bbox && cx > w.bbox.x0 && cx < w.bbox.x1 && cy > w.bbox.y0 && cy < w.bbox.y1 && w.bbox.y1 - w.bbox.y0 <= ref * 1.5);
+      });
+      const marks = graphicMarks(norm, textH).filter((m) => !letterOf(m));
+      if (window.__ocrDebug) window.__ocrDebug.marks = marks;
+      if (marks.length) lines = lines.filter((l) => !besideMark(l.bbox, marks, textH, (l.words || []).length || 1));
+    }
     if (area && area.poly) lines = lines.filter((l) => pointInPolygon(...toPage(...back((l.bbox.x0 + l.bbox.x1) / 2, (l.bbox.y0 + l.bbox.y1) / 2)), area.poly));
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
     // dictionary check: look-alike letters of the wrong script ("Tak" → "Так"),
@@ -699,6 +772,7 @@ export async function makeTextEditable(editor, index, area = null) {
       weights.push(ok ? strokeWeight(li) : 0);
       await new Promise((res) => setTimeout(res)); // keep the window responsive
     }
+    if (window.__ocrDebug) window.__ocrDebug.best = scores.map((sc) => +Math.max(0, ...sc.filter((c) => FONTS[c.ff].kind !== 'hand').map((c) => c.score)).toFixed(3));
     const sum = (ff) => scores.reduce((a, sc) => { const c = sc.find((q) => q.ff === ff); return a + (c ? c.score + c.prior : 0); }, 0);
     const ranked = fams.slice().sort((x, y) => sum(y) - sum(x));
     // the 3 best, plus the best of each other kind (a serif heading in a sans text)
@@ -758,6 +832,15 @@ export async function makeTextEditable(editor, index, area = null) {
       kAll.forEach((sc, k) => { const hc = kHand[k] && (bestOf(sc, hf, (c) => !c.b && !c.i) || bestOf(sc, hf)); if (hc) fonts[k] = { ...hc, hand: true }; });
     }
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
+    // underlined words: a thin line of ink under the letters
+    const unders = lines.map((l, k) => {
+      if (fonts[k].hand || !l.words || !l.words.length || !l.baseline) return null;
+      const hgt = l.bbox.y1 - l.bbox.y0, base = Math.max(l.baseline.y0, l.baseline.y1);
+      const li = lineInk(norm, { x0: l.bbox.x0 - hgt * 1.3, y0: l.bbox.y0, x1: l.bbox.x1 + hgt * 1.3, y1: base + hgt * 0.5 });
+      if (!(li.w > 0 && li.h > 0)) return null;
+      const f = underlinedWords(li, l.words, base, hgt, l.bbox);
+      return f.some(Boolean) ? f : null;
+    });
     // perspective and light of every line (before the paper is cleaned)
     const measured = lines.map((l, k) => {
       if (!kInks[k] || fonts[k].hand) return null; // (handwriting becomes plain text: no look)
@@ -782,7 +865,7 @@ export async function makeTextEditable(editor, index, area = null) {
       c.getContext('2d').putImageData(im, 0, 0);
       return c;
     });
-    const looks = cleanLines(work, lines, norm);
+    const looks = cleanLines(work, lines.map((l, k) => (unders[k] ? { ...l, bbox: { ...l.bbox, y1: Math.max(l.bbox.y1, Math.max(l.baseline.y0, l.baseline.y1) + (l.bbox.y1 - l.bbox.y0) * 0.45) } } : l)), norm);
     if (dark) {
       invert(work);
       if (work !== orig) invert(orig);
@@ -857,26 +940,40 @@ export async function makeTextEditable(editor, index, area = null) {
       // how the scanned letters look: as soft, in the same perspective and
       // light ("Match the document" button), straight and sharp while editing
       // single bold words in a regular line
-      const bw3 = !f.b && !f.hand && kInks[k] && l.words && l.words.length >= 3 && l.words.map((w) => w.text).join(' ') === t.text ? boldWords(kInks[k], l.words) : null;
-      if (bw3 && bw3.some(Boolean)) t.html = l.words.map((w, i) => (bw3[i] ? `<b>${escHtml(w.text)}</b>` : escHtml(w.text))).join(' ');
+      const wordsOk = l.words && l.words.map((w) => w.text).join(' ') === t.text;
+      const bw3 = !f.b && !f.hand && kInks[k] && wordsOk && l.words.length >= 3 ? boldWords(kInks[k], l.words) : null;
+      // (underlined: the whole line, or single words)
+      const ul = wordsOk ? unders[k] : null;
+      if (ul && ul.every(Boolean)) t.u = true;
+      const ulw = ul && !ul.every(Boolean) ? ul : null;
+      if ((bw3 && bw3.some(Boolean)) || ulw) {
+        t.html = l.words.map((w, i) => {
+          let x = escHtml(w.text);
+          if (bw3 && bw3[i]) x = `<b>${x}</b>`;
+          return ulw && ulw[i] ? `<u>${x}</u>` : x;
+        }).join(' ').replace(/<\/u> <u>/g, ' ');
+      }
       if (geo.warp) Object.assign(t, geo.warp);
       if (geo.cg) t.cg = geo.cg;
       const soft = Math.round((softOfLine(k) / S) * 100) / 100;
       if (!f.hand && (soft >= 0.05 || geo.warp || geo.cg)) { t.look = Math.max(soft, 0.02); t.fx = t.look; }
       return t;
     });
-    editor.commit(page.id, before, { ...before, items: before.items.concat([item]), texts: before.texts.concat(texts) });
+    // lines that belong together become one box (a paragraph, a centred title
+    // of several lines): same font, size and colour, evenly spaced, aligned
+    const { boxes, lineOf } = joinParagraphs(texts, lines, fonts, r, S);
+    editor.commit(page.id, before, { ...before, items: before.items.concat([item]), texts: before.texts.concat(boxes) });
     busy.remove();
     // handwriting or an unsure reading: Google reads it better (online, optional)
     const unsure = fonts.some((f) => f.hand) || lines.reduce((a, l) => a + l.conf, 0) / lines.length < 85;
-    const msg = `${texts.length} ${texts.length === 1 ? 'line is' : 'lines are'} editable now – double-click to change the text`;
+    const msg = `${boxes.length} ${boxes.length === 1 ? 'text is' : 'texts are'} editable now – double-click to change the text`;
     if (!unsure || (window.__app && window.__app.settings && window.__app.settings.googleOcrOffer === false)) { crops.forEach((c) => { c.width = c.height = 0; }); toast(msg, { timeout: 4000 }); return; }
     // a hint for Google from the letters read (none when unsure)
     const all = lines.map((l) => l.text).join(' ');
     const nCyr = (all.match(/[\u0400-\u04ff]/g) || []).length, nLat = (all.match(/[a-zA-ZäöüÄÖÜß]/g) || []).length;
     const lang = nCyr > (nCyr + nLat) * 0.6 ? 'ru' : nLat > (nCyr + nLat) * 0.9 ? (/[äöüÄÖÜß]|\b(und|der|die|das|ich|Sie)\b/.test(all) ? 'de' : 'en') : '';
     setTimeout(() => crops.forEach((c) => { c.width = c.height = 0; }), 30000);
-    toast(msg, { timeout: 15000, action: { label: 'Read better with Google', onClick: () => readWithGoogle(editor, page.id, texts.map((t) => t.id), crops, lang, texts.map((t) => t.text)) } });
+    toast(msg, { timeout: 15000, action: { label: 'Read better with Google', onClick: () => readWithGoogle(editor, page.id, lineOf, crops, lang, texts.map((t) => t.text)) } });
   } catch (err) {
     busy.remove();
     toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });

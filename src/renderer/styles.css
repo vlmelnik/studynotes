@@ -339,8 +339,9 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .textbox.fx:focus { filter: none; }
 .textbox.fx.warp:focus { transform: translate(50%, 50%) rotate(var(--rot, 0deg)) translate(-50%, -50%) !important; }
 .textbox.fx.grad:focus { color: var(--c) !important; background-image: none !important; }
-.editor[data-tool="select"] .textbox[contenteditable] { box-shadow: 0 0 0 1px var(--accent); background: rgba(255, 255, 255, .7); }
-.editor[data-tool="select"] .textbox-wrap:has(.textbox[contenteditable]) { pointer-events: auto; }
+.editor:is([data-tool="select"], [data-tool="lasso"]) .textbox[contenteditable] { box-shadow: 0 0 0 1px var(--accent); background: rgba(255, 255, 255, .7); }
+/* (a click into the text being edited puts the cursor there – with the lasso too) */
+.editor:is([data-tool="select"], [data-tool="lasso"]) .textbox-wrap:has(.textbox[contenteditable]) { pointer-events: auto; }
 .viewer-host.drop-target::after { content: "Drop pictures or PDFs to insert them"; position: absolute; inset: 10px; border: 2px dashed var(--accent); border-radius: 14px; background: rgba(229, 237, 248, .75); display: grid; place-items: center; font-size: 18px; color: var(--accent); pointer-events: none; z-index: 5; }
 
 /* boards */
@@ -467,7 +468,7 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 
 /* ---------- GoodNotes-like text box ---------- */
 .textbox-wrap.selected, .textbox-wrap.editing { outline: 1px solid #8f99a8; outline-offset: 4px; }
-.editor[data-tool="text"] .textbox, .editor[data-tool="text"] .textbox:focus, .editor[data-tool="select"] .textbox[contenteditable] { box-shadow: none; background: transparent; }
+.editor[data-tool="text"] .textbox, .editor[data-tool="text"] .textbox:focus, .editor:is([data-tool="select"], [data-tool="lasso"]) .textbox[contenteditable] { box-shadow: none; background: transparent; }
 .editor[data-tool="text"] .textbox-wrap:not(.editing):hover { outline: 1px dashed rgba(143, 153, 168, .7); outline-offset: 4px; }
 .textbox-wrap[data-bx="border"] .textbox { box-shadow: 0 0 0 1px #6f7785 !important; padding: 4px 6px; }
 .textbox-wrap[data-bx="fill"] .textbox { background: #fff6c8 !important; padding: 4px 6px; border-radius: 3px; }
