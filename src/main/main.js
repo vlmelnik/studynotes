@@ -626,9 +626,20 @@ function spellCheck(lines) {
     speller.proc = proc;
   }
   clearTimeout(speller.timer);
-  speller.timer = setTimeout(() => { if (speller.proc && !speller.wait.size) speller.proc.kill(); }, 120000);
+  // (forgotten at once when ended: a request in the moment before the
+  // process is gone starts a new one instead of being lost with it)
+  speller.timer = setTimeout(() => { const p = speller.proc; if (p && !speller.wait.size) { speller.proc = null; p.kill(); } }, 120000);
   const id = ++speller.seq;
-  return new Promise((resolve, reject) => { speller.wait.set(id, { resolve, reject }); speller.proc.postMessage({ id, lines }); });
+  return new Promise((resolve, reject) => {
+    // a stuck check never holds up the text recognition: the reading is used as it is
+    const t = setTimeout(() => {
+      if (!speller.wait.delete(id)) return;
+      reject(new Error('spelling check timed out'));
+      const p = speller.proc; speller.proc = null; if (p) p.kill();
+    }, 60000);
+    speller.wait.set(id, { resolve: (v) => { clearTimeout(t); resolve(v); }, reject: (e) => { clearTimeout(t); reject(e); } });
+    speller.proc.postMessage({ id, lines });
+  });
 }
 handle('ocr:spell', (lines) => spellCheck(lines));
 app.on('will-quit', () => { if (speller.proc) speller.proc.kill(); });

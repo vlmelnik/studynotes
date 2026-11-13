@@ -85,3 +85,13 @@ test('combineBoxes: a box of several lines keeps its spacing when another one is
   assert.strictEqual(out.lh, 1.6);
   assert.strictEqual(out.y, 0);
 });
+
+test('underlinedWords: a ruled line cut off by the selection on both sides is no underline', () => {
+  // the lasso ends right at the text: nothing beyond it to look at
+  const li = mask(130, 40, (r) => { r(5, 5, 60, 25); r(70, 5, 125, 25); r(0, 28, 130, 30); });
+  const words = [{ bbox: { x0: 5, x1: 60 } }, { bbox: { x0: 70, x1: 125 } }];
+  assert.deepStrictEqual(underlinedWords(li, words, 25, 20, { x0: 5, x1: 125 }), [false, false]);
+  // with room on one side and no ink there, a real underline is still found
+  const li2 = mask(200, 40, (r) => { r(5, 5, 60, 25); r(70, 5, 125, 25); r(0, 28, 127, 30); });
+  assert.deepStrictEqual(underlinedWords(li2, words, 25, 20, { x0: 5, x1: 125 }), [true, true]);
+});

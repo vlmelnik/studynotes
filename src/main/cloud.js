@@ -190,7 +190,15 @@ class CloudSync {
   }
 
   /** Text of pictures read by Google (signs in first if needed). images: [Uint8Array] (PNG). */
-  async ocrImages(images, lang = '') {
+  ocrImages(images, lang = '') {
+    // one call at a time: the clean-up at the start of a call would delete
+    // the temporary docs of a call still running
+    const run = (this._ocrQueue || Promise.resolve()).catch(() => {}).then(() => this._ocrImages(images, lang));
+    this._ocrQueue = run;
+    return run;
+  }
+
+  async _ocrImages(images, lang) {
     const remote = await this.ocrRemote();
     // temporary docs a broken connection may have left behind last time
     if (remote.ocrCleanup) await remote.ocrCleanup().catch(() => {});

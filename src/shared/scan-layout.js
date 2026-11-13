@@ -103,15 +103,19 @@ function besideMark(bbox, marks, textH, words = 1) {
  */
 function underlinedWords(li, words, base, hgt, line = null) {
   const yA = Math.max(0, Math.round(base - li.box.y0 + 1)), yB = Math.min(li.h - 1, Math.round(base - li.box.y0 + hgt * 0.45));
-  // a ruled line or table border runs on past the text: no underline
+  // a ruled line or table border runs on past the text: no underline.
+  // (null: nothing to look at there – the selection ends at the text)
   if (line) {
     const span = (xa, xb) => {
       xa = Math.max(0, Math.round(xa - li.box.x0)); xb = Math.min(li.w, Math.round(xb - li.box.x0));
-      if (xb - xa < 3) return false;
+      if (xb - xa < 3) return null;
       for (let y = yA; y <= yB; y++) { let n = 0; for (let x = xa; x < xb; x++) n += li.ink[y * li.w + x]; if (n >= (xb - xa) * 0.6) return true; }
       return false;
     };
-    if (span(line.x1 + hgt * 0.5, line.x1 + hgt * 1.2) || span(line.x0 - hgt * 1.2, line.x0 - hgt * 0.5)) return words.map(() => false);
+    const right = span(line.x1 + hgt * 0.5, line.x1 + hgt * 1.2), left = span(line.x0 - hgt * 1.2, line.x0 - hgt * 0.5);
+    // a rule on either side, or no side to check at all: unsure, so no
+    // underline (it is then kept in the picture rather than erased)
+    if (right || left || (right === null && left === null)) return words.map(() => false);
   }
   return words.map((w) => {
     if (!w.bbox) return false;

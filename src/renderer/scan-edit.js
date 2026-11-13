@@ -142,7 +142,10 @@ async function fontScores(li, line, gray, cands) {
   const D = new Float32Array(w * h);
   let dm = 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const g = gray.data[((li.box.y0 + y) * gray.width + li.box.x0 + x) * 4] / 255;
+    const o = ((li.box.y0 + y) * gray.width + li.box.x0 + x) * 4;
+    // (luminance: on an evenly lit page this is the colour original, and red
+    // or orange letters have almost no contrast in the red channel alone)
+    const g = (0.299 * gray.data[o] + 0.587 * gray.data[o + 1] + 0.114 * gray.data[o + 2]) / 255;
     const v = li.light ? g : 1 - g; // (light letters on a dark label: the light is the ink)
     D[y * w + x] = v; dm += v;
   }
@@ -347,6 +350,17 @@ const LANGS = ['deu', 'eng', 'rus'];
 const TARGET_H = 34; // line height (px) Tesseract reads best
 const HEAD_H = 28; // headings: big bold letters lose umlaut dots when larger // German first: umlauts (ü, ä, ß) are read right, English and Russian too
 
+
+// canvas → PNG blob; a canvas too large for the browser gives null instead
+// of a picture, which would end in an unclear error further on
+async function pngBlob(c) {
+  const b = await new Promise((res) => c.toBlob(res, 'image/png'));
+  if (!b) throw new Error('The area is too large to read – select a smaller part of the page');
+  return b;
+}
+// (an enlarged copy for reading stays below this many pixels)
+const MAX_READ_PIXELS = 20e6;
+
 /**
  * Tesseract reads best when letters are about 25–40 px high. Very large text
  * (screenshots, zoomed scans) loses umlaut dots; very small text loses
@@ -354,14 +368,14 @@ const HEAD_H = 28; // headings: big bold letters lose umlaut dots when larger //
  */
 export async function recognizeSized(canvas, blob, langs = LANGS) {
   const scaled = async (src, f) => {
+    f = Math.min(f, Math.sqrt(MAX_READ_PIXELS / Math.max(1, src.width * src.height)));
     const c2 = document.createElement('canvas');
     c2.width = Math.max(1, Math.round(src.width * f)); c2.height = Math.max(1, Math.round(src.height * f));
     const g = c2.getContext('2d');
     g.imageSmoothingQuality = 'high';
     g.drawImage(src, 0, 0, c2.width, c2.height);
-    const b2 = await new Promise((res) => c2.toBlob(res, 'image/png'));
-    c2.width = c2.height = 0;
-    return b2;
+    // (the factor actually used: the coordinates are mapped back with it)
+    try { return [await pngBlob(c2), f]; } finally { c2.width = c2.height = 0; }
   };
   const read = async (bl, f, dx = 0, dy = 0) => {
     const got = await window.api.ocrRecognize(new Uint8Array(await bl.arrayBuffer()), langs);
@@ -371,7 +385,7 @@ export async function recognizeSized(canvas, blob, langs = LANGS) {
   let lines = await read(blob, 1);
   const hs = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
   const med = hs.length ? hs[hs.length >> 1] : 0;
-  if (med && (med < 22 || med > 48)) lines = await read(await scaled(canvas, Math.max(0.2, Math.min(3, TARGET_H / med))), Math.max(0.2, Math.min(3, TARGET_H / med)));
+  if (med && (med < 22 || med > 48)) lines = await read(...(await scaled(canvas, Math.max(0.2, Math.min(3, TARGET_H / med)))));
   // lines much taller than the rest (headings) are read once more on their
   // own at the best size; the better reading wins
   const hs2 = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
@@ -386,7 +400,7 @@ export async function recognizeSized(canvas, blob, langs = LANGS) {
     crop.width = x1 - x0; crop.height = y1 - y0;
     crop.getContext('2d').drawImage(canvas, -x0, -y0);
     const f = Math.max(0.2, Math.min(3, HEAD_H / h));
-    const again = (await read(await scaled(crop, f), f, x0, y0)).filter((q) => q.text.trim());
+    const again = (await read(...(await scaled(crop, f)), x0, y0)).filter((q) => q.text.trim());
     crop.width = crop.height = 0;
     // (the same letters but with umlaut dots read: the dots were seen, take it)
     const plain = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -533,7 +547,7 @@ async function readWithGoogle(editor, pageId, ids, crops, lang, original) {
   const busy = toast('Reading with Google…', { timeout: 300000 });
   try {
     const bytes = await Promise.all(crops.map(async (c) => {
-      const bl = await new Promise((res) => c.toBlob(res, 'image/png'));
+      const bl = await pngBlob(c);
       return new Uint8Array(await bl.arrayBuffer());
     }));
     const got = await window.api.ocrGoogle(bytes, lang);
@@ -618,10 +632,27 @@ function joinParagraphs(texts, lines, fonts, r, S) {
  * Makes the printed text in `area` editable. area: { poly } (lasso, page
  * units) or null for the whole page.
  */
+// pages being recognised right now (a second click on the same page waits
+// for the first instead of adding a second set of text boxes)
+const running = new Set();
+
 export async function makeTextEditable(editor, index, area = null) {
-  if (!(await ensureEditable())) return;
   const page = editor.pages[index];
   if (!page) return;
+  const key = `${editor.rel}\n${page.id}`;
+  if (running.has(key)) { toast('Text recognition is already running on this page', { timeout: 3000 }); return; }
+  running.add(key);
+  try {
+    if (!(await ensureEditable())) return;
+    await editableRun(editor, index, page, area);
+  } catch (err) {
+    toast(String((err && err.message) || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
+  } finally {
+    running.delete(key);
+  }
+}
+
+async function editableRun(editor, index, page, area) {
   let r = { x0: 0, y0: 0, x1: page.w, y1: page.h };
   if (area && area.poly) {
     const xs = area.poly.map((p) => p[0]), ys = area.poly.map((p) => p[1]);
@@ -654,7 +685,7 @@ export async function makeTextEditable(editor, index, area = null) {
     // even light (scan, screenshot, PDF): read the original, it keeps fine
     // details like umlaut dots; photos: the light-corrected version
     if (!norm.uneven) norm = orig;
-    const pngOf = async (im) => { const c = imageCanvas(im); const bl = await new Promise((res) => c.toBlob(res, 'image/png')); return { c, bl }; };
+    const pngOf = async (im) => { const c = imageCanvas(im); const bl = await pngBlob(c); return { c, bl }; };
     let n0 = await pngOf(norm);
     let lines = await recognizeSized(n0.c, n0.bl);
     const langs = narrowLangs(lines) || LANGS;
@@ -835,6 +866,9 @@ export async function makeTextEditable(editor, index, area = null) {
     // underlined words: a thin line of ink under the letters
     const unders = lines.map((l, k) => {
       if (fonts[k].hand || !l.words || !l.words.length || !l.baseline) return null;
+      // (only when the words match the line's text: otherwise the underline
+      // could not be put on the text box and must not be erased either)
+      if (l.words.map((w) => w.text).join(' ') !== l.text.trim()) return null;
       const hgt = l.bbox.y1 - l.bbox.y0, base = Math.max(l.baseline.y0, l.baseline.y1);
       const li = lineInk(norm, { x0: l.bbox.x0 - hgt * 1.3, y0: l.bbox.y0, x1: l.bbox.x1 + hgt * 1.3, y1: base + hgt * 0.5 });
       if (!(li.w > 0 && li.h > 0)) return null;

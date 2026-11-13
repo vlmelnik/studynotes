@@ -134,3 +134,15 @@ test('search folding keeps indices aligned with the original text', () => {
   const i = fold(sn).indexOf('bandlucke');
   assert.strictEqual(sn.slice(i, i + 9), 'Bandlücke');
 });
+
+test('search: a word made editable from the scan is found once (the old text under the patch is not a second hit)', () => {
+  const { searchNotebook } = require('../src/main/search');
+  const nb = { pages: [{ id: 'a', kind: 'pdf', pdfPage: 1 }, { id: 'b', kind: 'pdf', pdfPage: 2 }] };
+  const idx = { pages: { 1: 'Der Mieter zahlt die Kaution', 2: 'Kaution in Raten' } };
+  const pages = {
+    a: { texts: [{ text: 'Der Mieter zahlt die Kaution' }], items: [{ type: 'img', scan: 1 }] }, // made editable
+    b: { texts: [{ text: 'Kaution nicht vergessen' }], items: [] }, // a normal note on a PDF page
+  };
+  const hits = searchNotebook(nb, idx, pages, 'kaution');
+  assert.deepStrictEqual(hits.map((h) => `${h.pageId}:${h.source}`), ['a:note', 'b:pdf', 'b:note']);
+});

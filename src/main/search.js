@@ -57,6 +57,7 @@ function searchNotebook(notebook, textIndex, pageData, query, limit = 200) {
     }
     const d = pageData && pageData[pg.id];
     if (d && d.texts) {
+      const before = hits.length;
       const tables = (d.items || []).filter((it) => it.type === 'table')
         .map((it) => ({ text: (it.cells || []).map((row) => row.map((c) => c.t || '').join(' ')).join(' ') }));
       for (const tb of d.texts.concat(tables)) {
@@ -64,6 +65,11 @@ function searchNotebook(notebook, textIndex, pageData, query, limit = 200) {
         const idx = fold(raw).indexOf(q);
         if (idx >= 0) {
           hits.push({ pageId: pg.id, pageIndex: i, source: 'note', snippet: snippet(raw, idx, q.length) });
+          // text made editable from the page itself ("Make text editable"):
+          // the page's own text under the cleaned patch is the same words, so
+          // it is not listed a second time
+          const prev = hits[before - 1];
+          if (prev && prev.pageId === pg.id && prev.source === 'pdf' && (d.items || []).some((it) => it.scan)) hits.splice(before - 1, 1);
           break;
         }
       }

@@ -250,6 +250,16 @@ async function launch() {
     const r = await ed(() => window.__app.active.viewer.pageClientRect(0));
     const z = await ed(() => window.__app.active.viewer.zoom);
     await win.screenshot({ path: path.join(out, 'v17-scan.png'), clip: { x: r.left + 30 * z, y: r.top + 50 * z, width: 520 * z, height: 280 * z } });
+    // the exported PDF wraps the text like the screen (the paragraph stays two lines)
+    {
+      await ed(() => window.__app.active.flush());
+      const exp = path.join(tmp, 'v17-scan.pdf');
+      await ed(([a, b]) => window.api.exportTo(a, null, b), [rel, exp]);
+      const txt = require('child_process').execFileSync('pdftotext', ['-layout', '-f', '1', '-l', '1', exp, '-']).toString();
+      const rows = txt.split('\n').map((x) => x.trim()).filter(Boolean);
+      const first = rows.find((x) => x.includes('The tenant agrees')) || '';
+      check('D: export wraps like the screen (paragraph line 1 complete in the PDF)', /650 euros$/.test(first) && rows.some((x) => x.startsWith('before the third working day')), JSON.stringify(rows.slice(0, 6)));
+    }
     // undo removes everything in one step
     await ed(() => window.__app.active.undo());
     const u = await pageData();
