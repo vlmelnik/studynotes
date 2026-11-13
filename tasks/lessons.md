@@ -64,3 +64,10 @@
 - Settings translations: check in e2e that no Latin-only text is left in the Russian settings (both tabs, settings opened).
 - Font-fit correlation cannot tell decorative fonts from real ones on real screenshots (real text scored 0.42–0.73, poster fonts 0.46–0.66): don't drop lines by fit score. Test heuristics on the real example images (Z section) before trusting synthetic tests.
 - A "graphic mark" detector sees big heading letters as marks: exclude components inside normal words of their line.
+
+## 1.7.0 r7 (2026-11-13)
+- `npm ci` here: onnxruntime-node's install script downloads extra binaries and fails behind the proxy; `ONNXRUNTIME_NODE_INSTALL=skip npm ci` works (the CPU binary ships in the package).
+- Dictionary correction must not touch symbols: two-letter tokens (tf, lc, dt, eV) and lone Latin letters in Russian sentences are variables far more often than misreads. Pass word confidence; correct single letters only at a sentence start or when unsure.
+- A cleaned patch must be transparent outside the painted pixels, otherwise everything around the text is replaced by a re-encoded copy.
+- `canvas.toBlob` returns null for canvases the browser can't encode: always check it; when an enlarged copy is capped, map coordinates back with the factor actually used.
+- Green e2e suites only prove the happy path on synthetic pages: the review found real bugs in code they covered. Add a failing test for each finding first.

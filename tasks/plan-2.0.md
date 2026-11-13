@@ -43,7 +43,7 @@ reading the code but **not yet reproduced in the running app** – reproduce eac
 with a failing test first, then fix.
 
 ### P1 – wrong results for the user
-- [ ] `[Opus]` **1.1 Dictionary correction rewrites formula symbols.** `src/main/spell.js`
+- [x] `[Opus]` **1.1 Dictionary correction rewrites formula symbols.** `src/main/spell.js` — done 2026-11-13
       (`fix`, `single`, ~l.48/101/128). Reproduced: "die Zeit tf" → "ft",
       "der Wert lc" → "Ie", "поле B равно" → "В", "пусть a равно" → "а".
       It also changes the searchable-scan layer (`src/renderer/ocr.js:42`).
@@ -53,7 +53,7 @@ with a failing test first, then fix.
       Test: extend `test/spell.test.js` with the cases above + a list of
       symbols/units (Ic, Uce, tf, fT, Rth, dt, eV, pn, SiC, GaN) that must stay,
       and the existing wins ("Tak" → "Так", "fhe" → "the") that must still work.
-- [ ] `[Opus]` **1.2 Patch covers the whole bounding box of all lines.**
+- [x] `[Opus]` **1.2 Patch covers the whole bounding box of all lines.** — done
       `src/renderer/scan-edit.js:889-903`. A full page becomes one 300-dpi JPEG
       over the PDF/photo: figures and formulas that were never touched get
       re-encoded, exports grow. Fix: always use the alpha-masked patch that the
@@ -69,21 +69,21 @@ with a failing test first, then fix.
       synthetic table cell and a ruled form line – borders survive.
 
 ### P2 – robustness
-- [ ] `[Opus]` 1.4 No re-entrancy guard (`editor.js:730`, `scan-edit.js:621`): second
+- [x] `[Opus]` 1.4 No re-entrancy guard (`editor.js:730`, `scan-edit.js:621`): second — done
       click during a long run → duplicate boxes and two patches. Per-page set of
       running jobs + disabled button. e2e: double click → one result.
-- [ ] `[Opus]` 1.5 Font matching reads only the red channel (`scan-edit.js:145`):
+- [x] `[Opus]` 1.5 Font matching reads only the red channel (`scan-edit.js:145`): — done
       red/orange text gets an arbitrary font. Use `lum()`.
-- [ ] `[Opus]` 1.6 `toBlob` may return null on huge canvases (`scan-edit.js:362/657/902`)
+- [x] `[Opus]` 1.6 `toBlob` may return null on huge canvases (`scan-edit.js:362/657/902`) — done
       → toast "Cannot read properties of null". Null-check; cap rescaled area
       (~20 MP).
-- [ ] `[Opus]` 1.7 Scale ignores the picture's native resolution (`scan-edit.js:641`):
+- [ ] `[Fable]` 1.7 (mitigated by 1.2: only letter pixels are patched; the blur measured on resampled pixels remains → with 1.10) Scale ignores the picture's native resolution (`scan-edit.js:641`):
       a 12 MP photo gets a softer patch. Derive scale from natural size.
-- [ ] `[Opus]` 1.8 Paragraph boxes: first line's size used for all lines; export wraps at
+- [x] `[Opus]` 1.8 Paragraph boxes: first line's size used for all lines; export wraps at — not reproduced; export-wrap check added to v17 D
       `w*1.04+2` (`export.js:420`) while the screen uses max-content → a last
       word can wrap only in the PDF. Median size; store measured width.
       (Suspected – reproduce first.)
-- [ ] `[Opus]` 1.9 Old text stays under the patch: original PDF text / `ocr.json` words
+- [x] `[Opus]` 1.9 Old text stays under the patch: original PDF text / `ocr.json` words — search lists the word once; the exported PDF still carries the old text layer under the patch (would need redaction) – known limitation
       are still found by search, selection and in the exported PDF after
       "replacement". (Suspected.) Decide: suppress the text layer under
       `scan:1` items, or document it.
@@ -93,16 +93,16 @@ with a failing test first, then fix.
       re-read at ≥ 1.6×, move scoring to a worker.
 
 ### P3 – small
-- [ ] `[Opus]` 1.11 Ruled line at the crop edge counted as underline and erased
+- [x] `[Opus]` 1.11 Ruled line at the crop edge counted as underline and erased — done
       (`scan-layout.js:107-114`).
-- [ ] `[Opus]` 1.12 Underline erased from the scan even when it is not re-applied
+- [x] `[Opus]` 1.12 Underline erased from the scan even when it is not re-applied — done
       (`scan-edit.js:868` vs `:943`).
-- [ ] `[Opus]` 1.13 Google OCR: cleanup at the start of a call deletes temp docs of a
+- [x] `[Opus]` 1.13 Google OCR: cleanup at the start of a call deletes temp docs of a — done
       parallel call (`cloud.js:196`) → serialise.
-- [ ] `[Opus]` 1.14 Spell process: no request timeout, no respawn (`main.js:621-631`).
-- [ ] `[Opus]` 1.15 Tilted auto-width box rotates around a slightly different centre in
+- [x] `[Opus]` 1.14 Spell process: no request timeout, no respawn (`main.js:621-631`). — done
+- [x] `[Opus]` 1.15 Tilted auto-width box rotates around a slightly different centre in — checked, < 1 pt, left as is
       export (`export.js:439`, < 1 pt).
-- [ ] `[Opus]` 1.16 Code before the `try` in `makeTextEditable` (`scan-edit.js:622-641`)
+- [x] `[Opus]` 1.16 Code before the `try` in `makeTextEditable` (`scan-edit.js:622-641`) — done
       → unhandled rejection from the lasso pointer-up.
 
 ### Heuristics to pin down with real cases (add to the golden corpus, Phase 2)   `[Fable]`
@@ -206,8 +206,9 @@ One commit per bullet, `npm test` + smoke after each, no behaviour change.
       `escHtml` (3), median helpers (6+), `dilateMask` vs `dilate`, the
       "Error invoking remote method" regex (4), word mapping in `handwriting.js`.
 - [ ] 3.4 `ocr-bench.js`: remove the copied `v17.js` header and `v17-` prefix.
-- [ ] 3.5 Old add-on download path: **user agreed to remove it** (2026-11-13),
-      done in Phase 1 by `[Opus]` because it touches `src/main/ocr.js`.
+- [x] 3.5 Old add-on download path removed in Phase 1 (2026-11-13): data only
+      built in; early-1.7 downloads in userData are deleted once. The GitHub
+      release `ocr-data-1` is no longer used by the app (can be deleted later).
 - [ ] 3.6 `tasks/todo.md` (28 KB, v1.0–v1.7): move finished versions to
       `tasks/archive/`, keep open items + this plan. Tick or delete the stale
       unchecked v1.5 / v1.6 boxes that were in fact shipped.

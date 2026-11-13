@@ -19,21 +19,12 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-ocrb-'));
 const errors = [];
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v17-${name}.png`) });
 
-// The text recognition add-on is "downloaded" from a local copy of the release files.
-function ocrUrl() {
-  const dir = path.join(tmp, 'ocr-release');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    for (const l of ['eng', 'deu', 'rus']) fs.copyFileSync(require.resolve(`@tesseract.js-data/${l}/4.0.0_best_int/${l}.traineddata.gz`), path.join(dir, `${l}.traineddata.gz`));
-  }
-  return require('url').pathToFileURL(dir).href + '/';
-}
 
 async function launch() {
   const app = await electron.launch({
     executablePath: process.env.STUDYNOTES_EXE || require('electron'),
     args: [...(packaged ? [] : [root]), '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_OCR_URL: ocrUrl(), STUDYNOTES_FAKE_INK: '1' },
+    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_FAKE_INK: '1' },
   });
   const win = await app.firstWindow();
   win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -110,7 +101,6 @@ function lev(a, b) {
       await ed(() => { window.__ocrDebug = []; window.__mk = window.__app.active.makePageEditable(0); });
       if (first) {
         await win.waitForTimeout(400);
-        if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
         first = false;
       }
       await ed(() => window.__mk);

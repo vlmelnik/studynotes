@@ -19,21 +19,11 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v17-'));
 const errors = [];
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v17-${name}.png`) });
 
-// The text recognition add-on is "downloaded" from a local copy of the release files.
-function ocrUrl() {
-  const dir = path.join(tmp, 'ocr-release');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    for (const l of ['eng', 'deu', 'rus']) fs.copyFileSync(require.resolve(`@tesseract.js-data/${l}/4.0.0_best_int/${l}.traineddata.gz`), path.join(dir, `${l}.traineddata.gz`));
-  }
-  return require('url').pathToFileURL(dir).href + '/';
-}
-
 async function launch() {
   const app = await electron.launch({
     executablePath: process.env.STUDYNOTES_EXE || require('electron'),
     args: [...(packaged ? [] : [root]), '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_OCR_URL: ocrUrl(), STUDYNOTES_FAKE_INK: '1', STUDYNOTES_FAKE_DRIVE: path.join(tmp, 'drive'), ...(process.env.SN_BUILTIN ? {} : { STUDYNOTES_NO_BUILTIN_OCR: '1' }) },
+    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_FAKE_INK: '1', STUDYNOTES_FAKE_DRIVE: path.join(tmp, 'drive') },
   });
   const win = await app.firstWindow();
   win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -203,7 +193,6 @@ async function launch() {
     await win.screenshot({ path: path.join(out, `v17-${tag}-before.png`), clip: clipZ });
     const t0 = Date.now();
     await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
-    await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     const d = await pageData();
     const texts = d.texts.map((t) => ({ text: t.text, ff: t.ff, b: !!t.b, c: t.c, fs: t.fs, x: t.x, y: t.y }));
@@ -311,7 +300,6 @@ async function launch() {
     const offered = await ed(() => window.__app.toolState.lasso.mode === 'text' ? 1 : 0);
     await draw([[55, 170], [470, 215]], { steps: 6 });
     await win.waitForTimeout(400);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await win.waitForFunction(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.length > 0, null, { timeout: 60000 }).catch(() => {});
     const d = await pageData();
     check('F: lasso option "Text area": rectangle on a scan converts only that line', offered > 0 && d.texts.length === 1 && d.texts[0].text === 'Second line becomes text',
@@ -336,7 +324,6 @@ async function launch() {
     await draw([[50, 55], [330, 90]], { steps: 6 });
     const offered = 1;
     await win.waitForTimeout(300);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await win.waitForFunction(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.length > 0, null, { timeout: 60000 }).catch(() => {});
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
     check('G: PDF page: text-area rectangle → that line becomes a serif text box at its place',
@@ -367,7 +354,6 @@ async function launch() {
     await win.waitForTimeout(400);
     await ed(() => { window.__mk = window.__app.active.makePageEditable(0, { poly: [[25, 55], [560, 55], [560, 185], [25, 185]] }); });
     await win.waitForTimeout(300);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
     const t = d.texts.slice().sort((a, b) => a.y - b.y);
@@ -432,7 +418,6 @@ async function launch() {
     await win.waitForTimeout(300);
     await ed(() => { window.__ocrDebug = []; window.__mk = window.__app.active.makePageEditable(0); });
     await win.waitForTimeout(300);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ hand: window.__ocrDebug.hand, lightDbg: window.__ocrDebug.light }))));
     return ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).texts.slice().sort((a, b) => a.y - b.y); });
@@ -447,7 +432,6 @@ async function launch() {
     check('J: the add-on "Editable scans" is offered before its first use', await ask.count() === 1);
     if (await ask.count()) await ask.click();
     await win.waitForTimeout(400);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     check('J: … and stays on afterwards', await ed(() => window.__app.settings.editableScans === true));
     await picture(async (ctx, S) => {
@@ -635,7 +619,6 @@ async function launch() {
     await win.waitForTimeout(1500);
     await ed(() => { window.__ocrRun = window.__app.active.runOcr('main'); });
     await win.waitForTimeout(300);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__ocrRun);
     const st = await ed(() => { const e = window.__app.active; return { idx: e.doc.textIndexes.main && e.doc.textIndexes.main.pages, ocr: e.doc.ocr && e.doc.ocr.main && Object.keys(e.doc.ocr.main.pages).length, texts: e.pageData(e.pages[0].id).texts.length }; });
     const txt = st.idx ? Object.values(st.idx).join(' ') : '';
@@ -666,7 +649,6 @@ async function launch() {
     const t0 = Date.now();
     await ed(() => { window.__ocrDebug = []; window.__mk = window.__app.active.makePageEditable(0); });
     await win.waitForTimeout(300);
-    if (await win.locator('.modal-actions .btn', { hasText: 'Download' }).count()) await win.locator('.modal-actions .btn', { hasText: 'Download' }).click();
     await ed(() => window.__mk);
     const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
     if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ best: window.__ocrDebug.best, wf: window.__ocrDebug.wf, deco: window.__ocrDebug.deco, marks: window.__ocrDebug.marks }))));

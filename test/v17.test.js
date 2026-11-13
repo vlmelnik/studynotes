@@ -4,7 +4,6 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
 
 test('1.7: scan cleaning removes dark text and keeps the paper colour', () => {
   const { cleanLines } = require('../src/shared/scan-clean');
@@ -27,19 +26,20 @@ test('1.7: handwriting words are put in reading order', () => {
   assert.strictEqual(wordsToText([w('world', 60, 10), w('second', 10, 40), w('hello', 10, 12), w('line', 70, 41)]), 'hello world\nsecond line');
 });
 
-test('1.7: the OCR add-on refuses damaged downloads and installs good ones', async () => {
+test('1.7: text recognition data comes with the app (complete, no download)', async () => {
   const { Ocr, FILES } = require('../src/main/ocr');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-ocr-'));
-  const real = (f) => fs.readFileSync(require.resolve(`@tesseract.js-data/${f.lang}/4.0.0_best_int/${f.file}`));
-  const body = (buf) => ({ ok: true, body: { getReader() { let done = false; return { read: async () => (done ? { done: true } : ((done = true), { done: false, value: new Uint8Array(buf) })) }; } } });
-  const bad = new Ocr({ dir, fetch: async () => body(Buffer.from('nope')) });
-  await assert.rejects(() => bad.install(), /damaged/);
-  assert.strictEqual((await bad.status()).installed, false);
-  const good = new Ocr({ dir, fetch: async (url) => body(real(FILES.find((f) => url.endsWith(f.file)))) });
-  for (const f of FILES) assert.strictEqual(crypto.createHash('sha256').update(real(f)).digest('hex'), f.sha256, f.file);
-  const st = await good.install();
+  const ocr = new Ocr({ dir, bundledDir: path.join(__dirname, '..', 'assets', 'ocr') });
+  const st = await ocr.status();
   assert.strictEqual(st.installed, true);
-  assert.deepStrictEqual(st.langs, ['eng', 'deu', 'rus']);
-  assert.strictEqual((await good.remove()).installed, false);
+  assert.deepStrictEqual(st.langs, FILES.map((f) => f.lang));
+  // language data an early 1.7 build downloaded into the app data is removed
+  for (const f of FILES) fs.writeFileSync(path.join(dir, f.file), 'old');
+  await ocr.forgetDownloaded();
+  assert.deepStrictEqual(fs.readdirSync(dir), []);
+  // a damaged install says so instead of failing somewhere later
+  const broken = new Ocr({ dir, bundledDir: path.join(dir, 'missing') });
+  assert.strictEqual((await broken.status()).installed, false);
+  await assert.rejects(() => broken.recognize(Buffer.alloc(1), ['eng']), /reinstall/);
   fs.rmSync(dir, { recursive: true, force: true });
 });

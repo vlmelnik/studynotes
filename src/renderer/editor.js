@@ -1428,7 +1428,7 @@ export class Editor {
     if (this.isBoard) return;
     const pdf = this.doc.pdfs.get(src);
     if (!pdf) { if (!auto) toast('The PDF is still loading – try again in a moment'); return; }
-    if (!auto && !(await ensureOcr())) return; // (built in; older setups: offered for download)
+    if (!auto && !(await ensureOcr())) return; // (built in; missing only in a damaged install)
     const run = { stop: false };
     this._ocrRun = run;
     this.doc.ocr = this.doc.ocr || {};

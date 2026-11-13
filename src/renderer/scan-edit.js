@@ -18,15 +18,10 @@ const MAX_SIDE = 4200;
 const MAX_PIXELS = 16e6;
 
 // ---------- add-on ----------
-let installing = null;
-let progressFn = null;
-let listening = false;
-
-/** True when the add-on is there (asks to download it otherwise). */
 /**
  * The add-on "Editable scans" (this file's "Make text editable"): an extra
  * the user turns on once (Settings → Add-ons). Text recognition itself comes
- * with the app (searchable scans); only without it is a download offered.
+ * with the app (searchable scans).
  */
 export async function ensureEditable() {
   const app = window.__app;
@@ -39,39 +34,12 @@ export async function ensureEditable() {
   return ensureOcr();
 }
 
-/** Text recognition is there (comes with the app; older setups: offered for download). */
+/** Text recognition is there (it comes with the app; missing only in a damaged install). */
 export async function ensureOcr() {
   const st = await window.api.ocrStatus();
   if (st.installed) return true;
-  const mb = (st.size / 1048576).toFixed(0);
-  const ok = await confirmDialog('Text recognition add-on',
-    `Recognising text needs the language data for English, German and Russian (${mb} MB, from the StudyNotes page on GitHub). After the download it works offline. Download now?`,
-    { okLabel: 'Download' });
-  if (!ok) return false;
-  return installOcr();
-}
-
-export async function installOcr(onProgress) {
-  if (!installing) {
-    const t = toast('Downloading text recognition… 0 %', { timeout: 600000 });
-    const span = t.querySelector('span');
-    progressFn = (done, total) => {
-      const pct = Math.round((done / total) * 100);
-      if (span) span.textContent = `Downloading text recognition… ${pct} %`;
-      if (onProgress) onProgress(done, total);
-    };
-    if (!listening) { listening = true; window.api.onOcrProgress((d, tt) => { if (progressFn) progressFn(d, tt); }); }
-    installing = window.api.ocrInstall().then(() => {
-      t.remove();
-      toast('Text recognition installed');
-      return true;
-    }, (err) => {
-      t.remove();
-      toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
-      return false;
-    }).finally(() => { installing = null; });
-  }
-  return installing;
+  toast('The text recognition data is missing – please reinstall StudyNotes', { error: true, timeout: 7000 });
+  return false;
 }
 
 // ---------- page → picture ----------

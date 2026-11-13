@@ -1,6 +1,5 @@
 // App shell: tabs (Library + open notebooks), notebook loading, settings.
 import { h, toast, modal, debounce, confirmDialog, shortcutKey, keySignature, describeKey } from './ui.js';
-import { installOcr } from './scan-edit.js';
 import { icon } from './icons.js';
 import { LibraryView } from './library-view.js';
 import { Editor, defaultToolState } from './editor.js';
@@ -505,19 +504,11 @@ class App {
         body);
     };
 
-    // text recognition: built in (older setups: downloaded)
+    // text recognition: built in
     const ocrState = h('small', { class: 'addon-state' }, '');
-    const ocrExtra = h('div', { class: 'row' });
-    const refreshOcr = async () => {
-      const st = await window.api.ocrStatus().catch(() => null);
-      if (!st) return;
-      const mb = (st.size / 1048576).toFixed(0);
-      ocrState.textContent = st.builtIn ? 'Built in · English, German, Russian' : st.installed ? 'Installed · English, German, Russian' : `Language data not installed (${mb} MB)`;
-      ocrExtra.replaceChildren(st.builtIn ? '' : st.installed
-        ? h('button', { class: 'btn ghost', onclick: async () => { await window.api.ocrRemove(); refreshOcr(); } }, 'Remove language data')
-        : h('button', { class: 'btn', onclick: async () => { ocrState.textContent = 'Downloading…'; await installOcr((d, t) => { ocrState.textContent = `Downloading… ${Math.round((d / t) * 100)} %`; }); refreshOcr(); } }, 'Download language data'));
-    };
-    refreshOcr();
+    window.api.ocrStatus().then((st) => {
+      ocrState.textContent = st.installed ? 'Built in · English, German, Russian' : 'Language data missing – please reinstall StudyNotes';
+    }, () => {});
 
     // handwriting to text: Windows (offline) or Google (online)
     const engine = s.inkEngine === 'google' ? 'google' : 'windows';
@@ -545,7 +536,7 @@ class App {
         name: 'Searchable scans',
         about: 'Scanned PDFs become searchable by themselves when they are opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.',
         state: ocrState, on: s.autoOcr !== false, setOn: (v) => { s.autoOcr = v; this.saveSettings(); },
-        settings: [ocrExtra, h('small', { class: 'hint' }, 'By hand: Search → "Recognize text (OCR)".')],
+        settings: [h('small', { class: 'hint' }, 'By hand: Search → "Recognize text (OCR)".')],
       }),
       card({
         name: 'Editable scans',

@@ -603,16 +603,17 @@ handle('ink:recognizers', () => handwriting.recognizers());
 
 // ---------- text recognition add-on ----------
 let ocr = null;
-const getOcr = () => (ocr ||= new Ocr({
-  dir: path.join(app.getPath('userData'), 'addons', 'ocr'),
-  // (unpacked from the app archive: the recognition worker reads plain files)
-  bundledDir: process.env.STUDYNOTES_NO_BUILTIN_OCR ? null : path.join(app.getAppPath(), 'assets', 'ocr').replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'),
-  fetch: (...a) => net.fetch(...a),
-  baseUrl: process.env.STUDYNOTES_OCR_URL || undefined, // tests: a local copy of the release files
-}));
+const getOcr = () => {
+  if (ocr) return ocr;
+  ocr = new Ocr({
+    dir: path.join(app.getPath('userData'), 'addons', 'ocr'),
+    // (unpacked from the app archive: the recognition worker reads plain files)
+    bundledDir: path.join(app.getAppPath(), 'assets', 'ocr').replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'),
+  });
+  ocr.forgetDownloaded();
+  return ocr;
+};
 handle('ocr:status', () => getOcr().status());
-handle('ocr:install', () => getOcr().install((done, total) => send('ocr:progress', done, total)));
-handle('ocr:remove', () => getOcr().remove());
 handle('ocr:recognize', (image, langs) => getOcr().recognize(image, langs));
 handle('ocr:google', (images, lang) => cloud.ocrImages(images, lang));
 // The dictionaries take a few seconds to load (and ~350 MB): in a process of
