@@ -394,3 +394,13 @@ User answers: offline + online button (Google Drive OCR); handwriting → closes
 - [x] Lasso: click into edited text moves the cursor; drag box by frame; handles work
 - [x] Google OCR: "____" separator taken as text → fixed (drive.js + googleLine)
 - [ ] Full tests, build, re-publish 1.7.0 (r6)
+
+# Road to 2.0 – plan (2026-11-13)
+Full plan in [`tasks/plan-2.0.md`](plan-2.0.md): fix round 1.7.0 r7 (OCR / text
+replacement), test architecture, cleanup, GitHub page, Android (2.0).
+Status: plan only, waiting for the user's approval and answers.
+- [ ] Phase 1 – fix round, re-publish 1.7.0 (r7)
+- [ ] Phase 2 – test architecture
+- [ ] Phase 3 – cleanup
+- [ ] Phase 4 – GitHub page redesign
+- [ ] Phase 5 – Android (2.0)
