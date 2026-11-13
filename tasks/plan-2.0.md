@@ -1,12 +1,19 @@
 # StudyNotes – road to 2.0 (plan, 2026-11-13)
 
-Status: **PLAN ONLY – nothing below is implemented or approved yet.**
-Written so that each phase can be handed to a smaller/cheaper model: every task
-names the files, the change and the check that proves it. Phases marked
-`[strong model]` need design judgement; `[cheap model]` are mechanical.
+Status: **approved by the user 2026-11-13; Phase 1 in progress.**
+Written so that each task can be handed to the right model: every task names
+the files, the change and the check that proves it.
+
+Model labels (per task, the phase label is the default):
+- `[Fable]` – Claude Fable 5.2: hardest judgement – image-processing
+  heuristics without ground truth, native low-latency ink, sync data safety.
+- `[Opus]` – Claude Opus 5.5: normal design + code work with tests.
+- `[Sonnet]` – mechanical, well-specified work (moves, cleanup, CI yaml, docs).
+- `[Haiku]` – trivial edits only (renames, deleting listed files).
 
 Order: 0 baseline → 1 fix round (1.7.0 r7) → 2 tests → 3 cleanup → 4 GitHub page
 → 5 Android (2.0). Phases 2–4 do not change app behaviour.
+Phase 4 is **deferred** by the user (reference pictures later).
 
 Rules that still apply (from the handoff): plan/lessons in `tasks/`, verify
 before "done", never commit `src/main/google-client.local.js`, run
@@ -28,7 +35,7 @@ locally only, repo examples neutral and in English, releases upload exe + zip on
 
 ---
 
-## Phase 1 – Fix round, re-publish as 1.7.0 (r7)   `[strong model]`
+## Phase 1 – Fix round, re-publish as 1.7.0 (r7)   `[Opus]`
 
 Source: independent code review of the OCR / text-replacement path. Finding 1
 was reproduced by running `src/main/spell.js`; the others are confirmed by
@@ -36,7 +43,7 @@ reading the code but **not yet reproduced in the running app** – reproduce eac
 with a failing test first, then fix.
 
 ### P1 – wrong results for the user
-- [ ] **1.1 Dictionary correction rewrites formula symbols.** `src/main/spell.js`
+- [ ] `[Opus]` **1.1 Dictionary correction rewrites formula symbols.** `src/main/spell.js`
       (`fix`, `single`, ~l.48/101/128). Reproduced: "die Zeit tf" → "ft",
       "der Wert lc" → "Ie", "поле B равно" → "В", "пусть a равно" → "а".
       It also changes the searchable-scan layer (`src/renderer/ocr.js:42`).
@@ -46,7 +53,7 @@ with a failing test first, then fix.
       Test: extend `test/spell.test.js` with the cases above + a list of
       symbols/units (Ic, Uce, tf, fT, Rth, dt, eV, pn, SiC, GaN) that must stay,
       and the existing wins ("Tak" → "Так", "fhe" → "the") that must still work.
-- [ ] **1.2 Patch covers the whole bounding box of all lines.**
+- [ ] `[Opus]` **1.2 Patch covers the whole bounding box of all lines.**
       `src/renderer/scan-edit.js:889-903`. A full page becomes one 300-dpi JPEG
       over the PDF/photo: figures and formulas that were never touched get
       re-encoded, exports grow. Fix: always use the alpha-masked patch that the
@@ -54,7 +61,7 @@ with a failing test first, then fix.
       `looks.fill`. Test: e2e – a page with text + a figure; after "Make page
       editable" the pixels of the figure region are identical; exported PDF size
       stays within a limit.
-- [ ] **1.3 Cleaning erases everything dark near a line.**
+- [ ] `[Fable]` **1.3 Cleaning erases everything dark near a line.**
       `src/shared/scan-clean.js:176-180` (`cleanLines`). Table borders, form
       rules and neighbouring-column ink within ~0.5 line height are painted out.
       Fix: mask = ink components that touch the line's word boxes, minus long
@@ -62,43 +69,43 @@ with a failing test first, then fix.
       synthetic table cell and a ruled form line – borders survive.
 
 ### P2 – robustness
-- [ ] 1.4 No re-entrancy guard (`editor.js:730`, `scan-edit.js:621`): second
+- [ ] `[Opus]` 1.4 No re-entrancy guard (`editor.js:730`, `scan-edit.js:621`): second
       click during a long run → duplicate boxes and two patches. Per-page set of
       running jobs + disabled button. e2e: double click → one result.
-- [ ] 1.5 Font matching reads only the red channel (`scan-edit.js:145`):
+- [ ] `[Opus]` 1.5 Font matching reads only the red channel (`scan-edit.js:145`):
       red/orange text gets an arbitrary font. Use `lum()`.
-- [ ] 1.6 `toBlob` may return null on huge canvases (`scan-edit.js:362/657/902`)
+- [ ] `[Opus]` 1.6 `toBlob` may return null on huge canvases (`scan-edit.js:362/657/902`)
       → toast "Cannot read properties of null". Null-check; cap rescaled area
       (~20 MP).
-- [ ] 1.7 Scale ignores the picture's native resolution (`scan-edit.js:641`):
+- [ ] `[Opus]` 1.7 Scale ignores the picture's native resolution (`scan-edit.js:641`):
       a 12 MP photo gets a softer patch. Derive scale from natural size.
-- [ ] 1.8 Paragraph boxes: first line's size used for all lines; export wraps at
+- [ ] `[Opus]` 1.8 Paragraph boxes: first line's size used for all lines; export wraps at
       `w*1.04+2` (`export.js:420`) while the screen uses max-content → a last
       word can wrap only in the PDF. Median size; store measured width.
       (Suspected – reproduce first.)
-- [ ] 1.9 Old text stays under the patch: original PDF text / `ocr.json` words
+- [ ] `[Opus]` 1.9 Old text stays under the patch: original PDF text / `ocr.json` words
       are still found by search, selection and in the exported PDF after
       "replacement". (Suspected.) Decide: suppress the text layer under
       `scan:1` items, or document it.
-- [ ] 1.10 Speed: ~30 fonts × 4 blur renders × `getImageData` per line on the UI
+- [ ] `[Fable]` 1.10 Speed: ~30 fonts × 4 blur renders × `getImageData` per line on the UI
       thread; lines only 1.2× taller than the median are re-read. Measure first
       (timings were not taken), then: blur ladder for the top 5 fonts only,
       re-read at ≥ 1.6×, move scoring to a worker.
 
 ### P3 – small
-- [ ] 1.11 Ruled line at the crop edge counted as underline and erased
+- [ ] `[Opus]` 1.11 Ruled line at the crop edge counted as underline and erased
       (`scan-layout.js:107-114`).
-- [ ] 1.12 Underline erased from the scan even when it is not re-applied
+- [ ] `[Opus]` 1.12 Underline erased from the scan even when it is not re-applied
       (`scan-edit.js:868` vs `:943`).
-- [ ] 1.13 Google OCR: cleanup at the start of a call deletes temp docs of a
+- [ ] `[Opus]` 1.13 Google OCR: cleanup at the start of a call deletes temp docs of a
       parallel call (`cloud.js:196`) → serialise.
-- [ ] 1.14 Spell process: no request timeout, no respawn (`main.js:621-631`).
-- [ ] 1.15 Tilted auto-width box rotates around a slightly different centre in
+- [ ] `[Opus]` 1.14 Spell process: no request timeout, no respawn (`main.js:621-631`).
+- [ ] `[Opus]` 1.15 Tilted auto-width box rotates around a slightly different centre in
       export (`export.js:439`, < 1 pt).
-- [ ] 1.16 Code before the `try` in `makeTextEditable` (`scan-edit.js:622-641`)
+- [ ] `[Opus]` 1.16 Code before the `try` in `makeTextEditable` (`scan-edit.js:622-641`)
       → unhandled rejection from the lasso pointer-up.
 
-### Heuristics to pin down with real cases (add to the golden corpus, Phase 2)
+### Heuristics to pin down with real cases (add to the golden corpus, Phase 2)   `[Fable]`
 - Paragraph merge joins form labels / table columns (`scan-layout.js:153-166`).
 - Logo detection keeps short captions beside any solid blob as picture.
 - Language narrowing re-reads a few Russian words on a German page as Latin.
@@ -108,7 +115,8 @@ with a failing test first, then fix.
 ### Left over from 1.7.0 (handoff + unchecked boxes in todo.md)
 - [ ] Verify on the user's Windows PC: "Read better with Google" (only tested
       against a fake), Windows handwriting recognizer (PowerShell/WinRT fix).
-- [ ] Decorative / comic fonts are still recognised as text – no reliable method
+      Status 2026-11-13: **not tested by the user yet** – ask after r7.
+- [ ] `[Fable]` Decorative / comic fonts are still recognised as text – no reliable method
       yet (font-fit score rejected). Keep open; try stroke-width variance +
       reading confidence on the corpus, no promise.
 - [ ] Width / size / letter fit on photos – measure on the corpus first.
@@ -123,7 +131,7 @@ with a failing test first, then fix.
 
 ---
 
-## Phase 2 – Test architecture   `[strong model for 2.5–2.7, cheap for the rest]`
+## Phase 2 – Test architecture   `[Sonnet]` unless marked
 
 Findings (audit, by reading the code):
 - Suites are organised by release (`v11…v17b`), not by feature; `check()` is
@@ -162,11 +170,11 @@ Steps (each keeps everything green):
       by module; fix the glob in package.json.
 - [ ] 2.4 (M) `npm run test:e2e:smoke` (boot, stroke, save/reopen, export,
       one OCR case; < 3 min) + `test:e2e`, `test:ocr`, `test:all`; smoke in CI.
-- [ ] 2.5 (M) Extract the pure functions from `scan-edit.js`, `scan-geo.js`,
+- [ ] `[Opus]` 2.5 (M) Extract the pure functions from `scan-edit.js`, `scan-geo.js`,
       `pdf-text.js`, `ocr.js` into `src/shared/` (`scan-fonts.js`,
       `text-layout.js`); unit tests; guard test: `src/shared` must not require
       fs/electron/path.
-- [ ] 2.6 (M) OCR golden corpus, two levels: (a) PNG cases → CER, font family,
+- [ ] `[Opus]` 2.6 (M) OCR golden corpus, two levels: (a) PNG cases → CER, font family,
       angle, line count vs `baseline.json` with tolerances, `UPDATE_GOLDEN=1`;
       (b) stored raw Tesseract output as JSON → heuristics tested in
       milliseconds without Tesseract. Neutral English/German/Russian samples
@@ -175,7 +183,7 @@ Steps (each keeps everything green):
       (one launch per file, fresh notebook per test, `waitIdle()` instead of sleeps).
 - [ ] 2.8 (S) Gate releases: `publish-prebuilt.yml` requires a green `ci.yml`
       for that commit; packaged smoke via `STUDYNOTES_EXE` in `release.yml`.
-- [ ] 2.9 (later, with Phase 5a) in-memory fake of `window.api` so renderer
+- [ ] `[Opus]` 2.9 (later, with Phase 5a) in-memory fake of `window.api` so renderer
       specs run in plain Chromium – the same specs then cover the Android build.
 
 Budgets: unit < 30 s, smoke < 3 min, full e2e < 15 min.
@@ -183,7 +191,7 @@ Not measured yet: real run times of all suites, flakiness, Windows e2e.
 
 ---
 
-## Phase 3 – Cleanup   `[cheap model]`  (checklist; do after Phase 2.3 so moves don't collide)
+## Phase 3 – Cleanup   `[Sonnet]` (3.1, 3.4, 3.7 `[Haiku]`)  (checklist; do after Phase 2.3 so moves don't collide)
 
 One commit per bullet, `npm test` + smoke after each, no behaviour change.
 - [ ] 3.1 `graphify-out/`: delete the dated snapshot folders `2026-10-31/`,
@@ -198,10 +206,8 @@ One commit per bullet, `npm test` + smoke after each, no behaviour change.
       `escHtml` (3), median helpers (6+), `dilateMask` vs `dilate`, the
       "Error invoking remote method" regex (4), word mapping in `handwriting.js`.
 - [ ] 3.4 `ocr-bench.js`: remove the copied `v17.js` header and `v17-` prefix.
-- [ ] 3.5 Old add-on download path: the language data now ships with the app –
-      check whether the downloader in `src/main/ocr.js` + release `ocr-data-1`
-      are still needed ("older downloaded data still works"); remove only if
-      the user agrees.
+- [ ] 3.5 Old add-on download path: **user agreed to remove it** (2026-11-13),
+      done in Phase 1 by `[Opus]` because it touches `src/main/ocr.js`.
 - [ ] 3.6 `tasks/todo.md` (28 KB, v1.0–v1.7): move finished versions to
       `tasks/archive/`, keep open items + this plan. Tick or delete the stale
       unchecked v1.5 / v1.6 boxes that were in fact shipped.
@@ -218,7 +224,7 @@ One commit per bullet, `npm test` + smoke after each, no behaviour change.
 
 ---
 
-## Phase 4 – GitHub page redesign   `[cheap model, design reviewed by user]`
+## Phase 4 – GitHub page redesign   `[Sonnet]`, design reviewed by user — **DEFERRED** (user, 2026-11-13)
 
 The reference pictures the user mentioned did **not arrive in this chat** –
 this section is based on the current README and must be adjusted to them.
@@ -253,7 +259,7 @@ Plan:
 
 ---
 
-## Phase 5 – Android (version 2.0: tablets and phones)   `[strong model]`
+## Phase 5 – Android (version 2.0: tablets and phones)   `[Opus]` unless marked
 
 ### Recommendation
 **Capacitor 8 shell that reuses the existing renderer**, thin Kotlin plugins
@@ -282,7 +288,7 @@ behaves. So the first step is a measurement, not a port.
       today `pointerType === 'touch'` only pans (`tools.js:189`), there is no
       pinch zoom and `styles.css` has no layout breakpoints at all.
 
-### 5b – Latency spike (go / no-go, ~1–2 days, needs the user's real devices)
+### 5b – Latency spike (go / no-go, ~1–2 days, needs the user's real devices)   `[Fable]`
 - [ ] Bare Capacitor app with only the ink canvas. Add `getPredictedEvents`
       and a `desynchronized` canvas context (neither is used today;
       `getCoalescedEvents` is). Film at 240 fps next to Samsung Notes.
@@ -306,6 +312,13 @@ behaves. So the first step is a measurement, not a port.
       verify in 5b), "draw with finger" switch.
 - [ ] PDF export through pdf-lib in the WebView (already JS).
 
+### Target devices (user, 2026-11-13): mainly Samsung with S Pen
+Test classes (most common S Pen devices; exact models to confirm with the user):
+- Tablets: Galaxy Tab S9 / S10 / S11 series incl. FE (S Pen in the box).
+- Phones: Galaxy S Ultra (S23–S25 Ultra); the S25 Ultra pen has no Bluetooth,
+  so only hover, pressure, tilt and the side button are used (no Air actions).
+- One non-Samsung device without pen (finger only) in the emulator.
+
 ### 5d – Phone layout and adaptive UI
 Principles taken from current apps (Samsung Notes: reorderable toolbar;
 Noteshelf 3: floating mini toolbar that docks to an edge; Material 3 floating
@@ -327,7 +340,7 @@ medium 600–840 dp, expanded ≥ 840 dp; touch targets ≥ 48 dp):
       are ignored on large screens from Android 16/17).
 - [ ] Clickable HTML mock-up of the three layouts for the user **before** coding.
 
-### 5e – Google sign-in and sync
+### 5e – Google sign-in and sync   `[Fable]` (data safety)
 - [ ] Android OAuth client (package name + signing SHA-1) in the **same**
       Google Cloud project as the desktop client; scope stays `drive.file`
       (non-sensitive). Android authorisation API instead of the desktop
@@ -349,13 +362,13 @@ medium 600–840 dp, expanded ≥ 840 dp; touch targets ≥ 48 dp):
 - [ ] Background removal: onnxruntime-web (WASM) first; native ONNX only if
       too slow (native libs must be 16 KB-page aligned for target SDK 35+).
 
-### 5g – Versions, build, publishing
+### 5g – Versions, build, publishing   `[Sonnet]`
 - **minSdk 29 (Android 10), target/compile SDK 36.** Capacitor 8 itself needs
   min 24 / target 36; Android 10 is the floor for the native low-latency ink
   fallback and covers roughly 90 % of devices (figures from late 2025/2026
   press reports, not an official dashboard).
-- **Publishing (recommended): signed APK on GitHub Releases**, updates through
-  Obtainium, built by GitHub Actions with one release key kept in repo secrets
+- **Publishing (decided by the user): signed APK on GitHub Releases**; Google Play later.
+  Updates through Obtainium, built by GitHub Actions with one release key kept in repo secrets
   + an offline backup (a lost key cannot be replaced).
 - Google Play: $25 once, but a new personal account must run a closed test
   with 12 testers for 14 days before production – out of proportion for two
@@ -408,10 +421,17 @@ beta2 = sync + recognition (5e, 5f) · 2.0 = publishing (5g) + Phase 4.7.
 
 ---
 
-## Questions for the user (block the start of the marked phases)
-1. Phase 4: the reference pictures did not arrive – please send them again.
-2. Phase 1: any bug list from testing 1.7.0 (r6) on your PC? Do "Read better
-   with Google" and Windows handwriting work now?
-3. Phase 5b: which Android devices (model, pen?) will you and your friend use?
-4. Phase 5g: GitHub APK (recommended) or Google Play from the start?
-5. Phase 3.5: may the old OCR add-on download path be removed?
+## Future ideas (optional, not scheduled)
+- **Ink → neat text:** write by hand, then the handwriting is converted into
+  clean typed text in place (same position, size and colour), optionally
+  automatically after a pause (like Samsung Notes / Nebo). Builds on the
+  existing "To text" (Windows recognizer) and on ML Kit Digital Ink for
+  Android (Phase 5f). Off by default, a setting.
+
+## Answers from the user (2026-11-13)
+1. Phase 4 pictures: postponed.
+2. Google OCR / Windows handwriting: not tested yet.
+3. Android devices: mainly Samsung with S Pen, the popular models.
+4. Publishing: GitHub APK; Google Play later.
+5. Old OCR add-on download path: remove if that is the better design.
+6. Start with the `[Opus]` tasks; label `[Fable]` where Fable 5.2 is needed.
