@@ -224,12 +224,28 @@ async function launch() {
       const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
       const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
       let min = 255;
-      for (let i = 0; i < px.length; i += 4) min = Math.min(min, 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
+      // (only the painted pixels: the rest of the patch is transparent)
+      for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 128) min = Math.min(min, 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
       return Math.round(min);
     }, patch) : 0;
+    // the patch covers only the letters: paper next to a line (right of the
+    // title) stays the original picture, nothing is re-encoded
+    const clear = patch ? await ed(async ([it, P]) => {
+      const e = window.__app.active;
+      const img = await createImageBitmap(await (await fetch(e.assetUrl(it.src))).blob());
+      const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      let n0 = 0;
+      for (let i = 3; i < px.length; i += 4) if (px[i] === 0) n0++;
+      const x = Math.round(((P[0] - it.x) / it.w) * img.width), y = Math.round(((P[1] - it.y) / it.h) * img.height);
+      const inside = x >= 0 && y >= 0 && x < img.width && y < img.height;
+      return { png: /\.png$/.test(it.src), share: n0 / (px.length / 4), inside, alphaAt: inside ? px[(y * img.width + x) * 4 + 3] : -1 };
+    }, [patch, [40 + 330, 60 + 30]]) : null;
     check('D: scan → text: all lines recognised (EN, DE, RU)', okText, JSON.stringify(texts.map((t) => t.text)));
     check('D: scan → text: matching font, size and colour', okFont && okSize && okColor, JSON.stringify(texts.map((t) => [t.ff, t.b, t.fs, t.c])));
     check('D: scan → text: the printed text is gone from the picture (no dark leftovers)', !!patch && darkest > 150, `darkest ${darkest}`);
+    check('D: scan → text: the cleaned patch is transparent outside the letters (PNG, paper beside a line untouched)', !!clear && clear.png && clear.share > 0.5 && clear.inside && clear.alphaAt === 0, JSON.stringify(clear));
     await win.waitForTimeout(500);
     const r = await ed(() => window.__app.active.viewer.pageClientRect(0));
     const z = await ed(() => window.__app.active.viewer.zoom);

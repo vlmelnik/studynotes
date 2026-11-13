@@ -753,7 +753,7 @@ export async function makeTextEditable(editor, index, area = null) {
     // dictionary check: look-alike letters of the wrong script ("Tak" → "Так"),
     // similar letters, a lost space after a preposition
     try {
-      const fixed = await window.api.ocrSpell(lines.map((l) => ({ text: l.text, words: (l.words || []).map((w) => ({ text: w.text })) })));
+      const fixed = await window.api.ocrSpell(lines.map((l) => ({ text: l.text, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf })) })));
       lines = lines.map((l, k) => ({ ...l, text: fixed.lines[k].text, words: (l.words || []).map((w, i) => ({ ...w, text: fixed.lines[k].words[i].text })) }));
     } catch (err) { console.warn('spelling check failed', err); }
 
@@ -873,19 +873,20 @@ export async function makeTextEditable(editor, index, area = null) {
     }
     n0.c.width = n0.c.height = 0;
 
-    // 4. the cleaned paper as a picture over the area of the lines (in the
-    //    original tilt: only the painted pixels are turned back)
-    let cleaned;
-    if (work === orig) cleaned = imageCanvas(orig);
-    else {
-      const over = new ImageData(new Uint8ClampedArray(work.data), W, H);
-      const grown = dilateMask(looks.fill, W, H, 2);
-      for (let i = 0; i < W * H; i++) if (!grown[i]) over.data[i * 4 + 3] = 0;
-      cleaned = imageCanvas(orig);
-      const g = cleaned.getContext('2d');
-      g.translate(cx, cy); g.rotate(rad); g.translate(-cx, -cy);
-      g.drawImage(imageCanvas(over), 0, 0);
-    }
+    // 4. the cleaned paper as a picture over the area of the lines: only the
+    //    painted pixels, transparent everywhere else (figures, formulas and
+    //    the PDF around the text stay the original, not a re-encoded copy);
+    //    in the original tilt the painted pixels are turned back
+    const over = new ImageData(new Uint8ClampedArray(work.data), W, H);
+    const grown = dilateMask(looks.fill, W, H, 2);
+    for (let i = 0; i < W * H; i++) if (!grown[i]) over.data[i * 4 + 3] = 0;
+    const cleaned = document.createElement('canvas');
+    cleaned.width = W; cleaned.height = H;
+    const g = cleaned.getContext('2d');
+    if (work !== orig) { g.translate(cx, cy); g.rotate(rad); g.translate(-cx, -cy); }
+    const overC = imageCanvas(over);
+    g.drawImage(overC, 0, 0);
+    overC.width = overC.height = 0;
     let u = null;
     for (const l of lines) {
       const hgt = l.bbox.y1 - l.bbox.y0, pad = Math.round(hgt * 0.3) + 2, padX = Math.round(hgt * 0.6) + 2;
@@ -898,9 +899,10 @@ export async function makeTextEditable(editor, index, area = null) {
     const patch = document.createElement('canvas');
     patch.width = u[2] - u[0]; patch.height = u[3] - u[1];
     patch.getContext('2d').drawImage(cleaned, -u[0], -u[1]);
-    const big = patch.width * patch.height > 1.5e6;
-    const pblob = await new Promise((res) => patch.toBlob(res, big ? 'image/jpeg' : 'image/png', 0.93));
-    const src = await window.api.writeAsset(editor.rel, new Uint8Array(await pblob.arrayBuffer()), big ? 'jpg' : 'png');
+    // (PNG: it needs the transparency; mostly empty, so it stays small)
+    const pblob = await new Promise((res) => patch.toBlob(res, 'image/png'));
+    if (!pblob) throw new Error('The area is too large to clean – select a smaller part of the page');
+    const src = await window.api.writeAsset(editor.rel, new Uint8Array(await pblob.arrayBuffer()), 'png');
     canvas.width = canvas.height = patch.width = patch.height = cleaned.width = cleaned.height = 0;
     if (editor.destroyed) { busy.remove(); return; }
 

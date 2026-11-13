@@ -39,7 +39,7 @@ export async function recognizePage(pdf, pdfPage, { signal } = {}) {
     let got = await recognizeSized(canvas, blob);
     // dictionary check of the words (look-alike letters, lost spaces)
     try {
-      const fixed = await window.api.ocrSpell(got.map((l) => ({ text: l.text, words: (l.words || []).map((w) => ({ text: w.text })) })));
+      const fixed = await window.api.ocrSpell(got.map((l) => ({ text: l.text, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf })) })));
       got = got.map((l, k) => ({ ...l, words: (l.words || []).map((w, i) => ({ ...w, text: fixed.lines[k].words[i].text })) }));
     } catch { /* keep the reading as it is */ }
     const lines = linesFrom(got, scale);

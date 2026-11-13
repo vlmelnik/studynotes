@@ -26,6 +26,9 @@ function load() {
 }
 
 const CYR = /[Ѐ-ӿ]/, LAT = /[a-zA-ZäöüÄÖÜß]/;
+// below this recognition confidence a lone small Latin letter in Russian text
+// counts as a misread Russian word
+const UNSURE = 85;
 
 function known(word, script) {
   const d = load();
@@ -74,7 +77,8 @@ function variants(w, table, max = 2, limit = 800) {
 }
 
 /**
- * Corrects the words of recognised lines. lines: [{ text, words: [{ text, conf }] }].
+ * Corrects the words of recognised lines. lines: [{ text, words: [{ text, conf? }] }]
+ * (conf: the reader's confidence 0–100, optional).
  * Returns the lines with corrected text (and words), plus how many words changed.
  */
 function correctLines(lines) {
@@ -90,6 +94,18 @@ function correctLines(lines) {
       const [, pre, w, post] = m;
       if (w.length < 2 || /\d/.test(w.replace(/[03]/g, '')) && !/[Ѐ-ӿ]/.test(w)) return raw; // numbers, codes
       const hasC = CYR.test(w), hasL = LAT.test(w);
+      // two letters: a symbol or unit far more often than a misread word
+      // ("tf", "lc", "dt", "eV"); only a whole Latin look-alike of a short
+      // Russian word in a Russian line is taken ("no" → "по")
+      if (w.length <= 2) {
+        if (script !== 'cyr' || hasC || !hasL) return raw;
+        const v = [...w].map((ch) => TO_CYR[ch] && TO_CYR[ch][0]);
+        if (v.some((ch) => !ch)) return raw;
+        const c = v.join('');
+        if (!known(c, 'cyr') || known(w, 'lat')) return raw;
+        if (count) changed++;
+        return pre + c + post;
+      }
       // hyphenated: each part on its own
       if (w.includes('-')) return pre + w.split('-').map((p) => fix(p, count)).join('-') + post;
       // acronyms and terms in capitals (TCP, RS) and words already right stay
@@ -124,20 +140,35 @@ function correctLines(lines) {
       return pre + best + post;
     };
     // a one-letter Russian word read in Latin ("K сожалению" → "К сожалению"):
-    // only before a Russian word, only letters that are Russian words
-    const single = (part, next, count) => {
+    // only before a Russian word, only letters that are Russian words. Inside
+    // a sentence a Latin letter is usually a variable ("поле B равно",
+    // "пусть a равно"), so a capital is taken only at the start of a
+    // sentence, a small letter only when the reader was unsure about it.
+    const single = (part, next, prev, conf) => {
       if (script !== 'cyr' || !/^[A-Za-z]$/.test(part) || !next || !/^[Ѐ-ӿ]/.test(next) || /^(и|или|а|но|да)$/i.test(next)) return null; // ("точка A и B": a label)
       const c = TO_CYR[part] && TO_CYR[part][0];
       if (!c || !/^[авкосуяиАВКОСУЯИ]$/.test(c)) return null;
-      if (count) changed++;
+      const starts = !prev || /[.!?…:]["»)]*$/.test(prev);
+      if (part === part.toUpperCase() ? !starts : !(conf != null && conf < UNSURE)) return null;
       return c;
     };
-    const words = (l.words || []).map((wd, i, all) => {
+    const ws = l.words || [];
+    const words = ws.map((wd, i) => {
       const t = String(wd.text || '');
-      return { ...wd, text: single(t, all[i + 1] && String(all[i + 1].text || ''), false) || fix(t) };
+      return { ...wd, text: single(t, ws[i + 1] && String(ws[i + 1].text || ''), ws[i - 1] && String(ws[i - 1].text || ''), wd.conf) || fix(t) };
     });
     const parts = text.split(/(\s+)/);
-    const fixed = parts.map((part, i) => (/^\s+$/.test(part) || !part ? part : single(part, parts[i + 2], true) || fix(part, true))).join('');
+    // the words' confidence, when the text splits into the same words
+    const toks = parts.filter((p) => p && !/^\s+$/.test(p));
+    const confOf = toks.length === ws.length ? (k) => ws[k].conf : () => undefined;
+    let k = -1;
+    const fixed = parts.map((part, i) => {
+      if (/^\s+$/.test(part) || !part) return part;
+      k++;
+      const s1 = single(part, parts[i + 2], parts[i - 2], confOf(k));
+      if (s1) { changed++; return s1; }
+      return fix(part, true);
+    }).join('');
     return { ...l, text: fixed, words };
   });
   return { lines: out, changed };
