@@ -125,6 +125,14 @@ with a failing test first, then fix.
       with this round.
 - [ ] PR #1 still open on GitHub (user closes it himself).
 
+### Review of the fix round (2026-11-13)
+- [x] Independent review: 2 regressions in the new spell rule (mixed-letter and
+      English-look-alike short words no longer fixed), spell-process exit race,
+      line start taken as sentence start, missing Russian strings, stale
+      CHANGELOG, search dropping a real hit, unguarded cleanup → all fixed with tests.
+- [x] All e2e suites green after the round: run 30, v11 24, v12 22, v13 32,
+      v14 23, v15 17, v16 20, v161 11, v17 46, v17b 22; unit 127.
+
 ### Release
 - [ ] All unit + all e2e suites, independent review, `npm run dist:win`,
       packaged e2e (`STUDYNOTES_EXE`), publish as `upload/v1.7.0-r7`.

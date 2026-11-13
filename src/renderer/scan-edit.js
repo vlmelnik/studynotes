@@ -929,9 +929,10 @@ async function editableRun(editor, index, page, area) {
       // … turned back around its centre (a text box rotates around its centre)
       const [ccx, ccy] = back(x0 + bw / 2, top + bh / 2);
       const [px, py] = toPage(ccx - bw / 2, ccy - bh / 2);
+      // (sc: made from the page's own text – search lists it instead of the text under the patch)
       const t = {
         id: uid(), x: round2(px), y: round2(py), w: round2(bw / S + f.px / S), fs: round2(f.px / S),
-        c: looks[k].color, ff: f.ff, b: f.b || undefined, i: f.i || undefined, aw: true, text: l.text.trim(), lay: 'f', z: zf++,
+        c: looks[k].color, ff: f.ff, b: f.b || undefined, i: f.i || undefined, aw: true, text: l.text.trim(), sc: 1, lay: 'f', z: zf++,
       };
       // a photo taken at a slant (perspective): lines tilt a little
       // differently, each box gets its own line's tilt

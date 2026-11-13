@@ -49,6 +49,8 @@ class Ocr {
    * so it no longer takes room in the app data.
    */
   async forgetDownloaded() {
+    if (path.resolve(this.dir) === path.resolve(this.bundledDir)) return; // (never the app's own data)
+    for (const f of FILES) await fsp.rm(path.join(this.dir, f.file + '.part'), { force: true }).catch(() => {});
     for (const f of FILES) await fsp.rm(path.join(this.dir, f.file), { force: true }).catch(() => {});
   }
 

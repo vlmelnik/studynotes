@@ -610,7 +610,7 @@ const getOcr = () => {
     // (unpacked from the app archive: the recognition worker reads plain files)
     bundledDir: path.join(app.getAppPath(), 'assets', 'ocr').replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'),
   });
-  ocr.forgetDownloaded();
+  ocr.forgetDownloaded().catch(() => {});
   return ocr;
 };
 handle('ocr:status', () => getOcr().status());
@@ -623,7 +623,8 @@ function spellCheck(lines) {
   if (!speller.proc) {
     const proc = utilityProcess.fork(path.join(__dirname, 'spell-proc.js'), [], { serviceName: 'StudyNotes spelling' });
     proc.on('message', ({ id, res, err }) => { const w = speller.wait.get(id); speller.wait.delete(id); if (w) (err ? w.reject(new Error(err)) : w.resolve(res)); });
-    proc.on('exit', () => { if (speller.proc === proc) speller.proc = null; for (const w of speller.wait.values()) w.reject(new Error('spelling check ended')); speller.wait.clear(); });
+    // (only the requests sent to this process: a new one may already be running)
+    proc.on('exit', () => { if (speller.proc === proc) speller.proc = null; for (const [id, w] of speller.wait) if (w.proc === proc) { speller.wait.delete(id); w.reject(new Error('spelling check ended')); } });
     speller.proc = proc;
   }
   clearTimeout(speller.timer);
@@ -638,7 +639,7 @@ function spellCheck(lines) {
       reject(new Error('spelling check timed out'));
       const p = speller.proc; speller.proc = null; if (p) p.kill();
     }, 60000);
-    speller.wait.set(id, { resolve: (v) => { clearTimeout(t); resolve(v); }, reject: (e) => { clearTimeout(t); reject(e); } });
+    speller.wait.set(id, { proc: speller.proc, resolve: (v) => { clearTimeout(t); resolve(v); }, reject: (e) => { clearTimeout(t); reject(e); } });
     speller.proc.postMessage({ id, lines });
   });
 }

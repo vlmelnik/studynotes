@@ -137,12 +137,13 @@ test('search folding keeps indices aligned with the original text', () => {
 
 test('search: a word made editable from the scan is found once (the old text under the patch is not a second hit)', () => {
   const { searchNotebook } = require('../src/main/search');
-  const nb = { pages: [{ id: 'a', kind: 'pdf', pdfPage: 1 }, { id: 'b', kind: 'pdf', pdfPage: 2 }] };
-  const idx = { pages: { 1: 'Der Mieter zahlt die Kaution', 2: 'Kaution in Raten' } };
+  const nb = { pages: [{ id: 'a', kind: 'pdf', pdfPage: 1 }, { id: 'b', kind: 'pdf', pdfPage: 2 }, { id: 'c', kind: 'pdf', pdfPage: 3 }] };
+  const idx = { pages: { 1: 'Der Mieter zahlt die Kaution', 2: 'Kaution in Raten', 3: 'Die Kaution steht unten' } };
   const pages = {
-    a: { texts: [{ text: 'Der Mieter zahlt die Kaution' }], items: [{ type: 'img', scan: 1 }] }, // made editable
+    a: { texts: [{ text: 'Der Mieter zahlt die Kaution', sc: 1 }], items: [{ type: 'img', scan: 1 }] }, // made editable
+    c: { texts: [{ text: 'Kaution prüfen' }], items: [{ type: 'img', scan: 1 }] }, // a typed note beside a small patch
     b: { texts: [{ text: 'Kaution nicht vergessen' }], items: [] }, // a normal note on a PDF page
   };
   const hits = searchNotebook(nb, idx, pages, 'kaution');
-  assert.deepStrictEqual(hits.map((h) => `${h.pageId}:${h.source}`), ['a:note', 'b:pdf', 'b:note']);
+  assert.deepStrictEqual(hits.map((h) => `${h.pageId}:${h.source}`), ['a:note', 'b:pdf', 'b:note', 'c:pdf', 'c:note']);
 });

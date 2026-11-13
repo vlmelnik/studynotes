@@ -4,7 +4,7 @@
 
 **Scans and PDFs: make printed text editable**
 - Lasso tool → option "Text area": draw a rectangle around printed text on a scan, photo or PDF page; or use the new page button in the toolbar (also in the page menu) for the whole page. The normal lasso stays as it was.
-- Text is recognised offline (Tesseract, German first so umlauts are right, English, Russian; very large or small text is rescaled for a second pass); the language data (7 MB) is downloaded once from the StudyNotes GitHub release (Settings → Add-ons, checked with SHA-256).
+- Text is recognised offline (Tesseract, German first so umlauts are right, English, Russian; very large or small text is rescaled for a second pass); the language data (7 MB) comes with the app.
 - Photos: uneven light, shadows and glare are evened out before reading; tilted text (crooked scan or photo) is straightened for reading and the text boxes get the same tilt; headings are read once more at their best size.
 - One typeface for the whole text, matched by drawing every font of the app (regular first, then bold / italic of the best few) and comparing them with the scan; the classic office fonts win ties; Cyrillic text only gets fonts with Cyrillic letters; bold and italic only where clearly different from the other lines; size and colour from the scan.
 - Light text on a dark background (dark-mode screenshots, menus, signs) is read on the negative; colours stay light.
@@ -30,7 +30,7 @@
 - The paper is painted back where the text was (with the grain of the surrounding paper), as a picture over that area; the lines become normal text boxes on top. One undo step.
 
 **Text recognition built in; "Editable scans" is an add-on**
-- The language data (German, English, Russian, 7 MB) comes with the app – no download any more (older downloaded data still works).
+- The language data (German, English, Russian, 7 MB) comes with the app – no download any more (data downloaded by early 1.7 builds is removed).
 - "Make text editable" (scans/photos → editable text boxes in a matching look) is the add-on "Editable scans": turned on once – asked at its first use, or Settings → Add-ons.
 
 **Reading and highlighting (contribution #1 by Pedro Falbo, integrated)**

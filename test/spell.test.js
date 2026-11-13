@@ -57,3 +57,21 @@ test('spell: longer misreads are still corrected', () => {
   assert.strictEqual(fixC('fhe tenant pays').text, 'the tenant pays');
   assert.strictEqual(fixC('Tak начинается глава', [40, 95, 95]).text, 'Так начинается глава');
 });
+
+test('spell: short Russian words read with Latin look-alikes are still fixed', () => {
+  // mixed letters are never a unit
+  assert.strictEqual(fixC('нa столе').text, 'на столе');
+  assert.strictEqual(fixC('дo вечера').text, 'до вечера');
+  // Latin look-alikes that are English words, between Russian words
+  assert.strictEqual(fixC('работа no плану').text, 'работа по плану');
+  assert.strictEqual(fixC('он he знает').text, 'он не знает');
+  assert.strictEqual(fixC('Ha столе лежит').text, 'На столе лежит');
+});
+
+test('spell: the start of a line is not the start of a sentence', () => {
+  const r = correctLines([{ text: 'поле равно', words: words('поле равно') }, { text: 'B равно нулю', words: words('B равно нулю') }]);
+  assert.strictEqual(r.lines[1].text, 'B равно нулю');
+  assert.strictEqual(r.lines[1].words[0].text, 'B');
+  const r2 = correctLines([{ text: 'Это так.', words: words('Это так.') }, { text: 'K сожалению нет', words: words('K сожалению нет') }]);
+  assert.strictEqual(r2.lines[1].text, 'К сожалению нет');
+});

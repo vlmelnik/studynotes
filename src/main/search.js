@@ -69,7 +69,7 @@ function searchNotebook(notebook, textIndex, pageData, query, limit = 200) {
           // the page's own text under the cleaned patch is the same words, so
           // it is not listed a second time
           const prev = hits[before - 1];
-          if (prev && prev.pageId === pg.id && prev.source === 'pdf' && (d.items || []).some((it) => it.scan)) hits.splice(before - 1, 1);
+          if (tb.sc && prev && prev.pageId === pg.id && prev.source === 'pdf') hits.splice(before - 1, 1);
           break;
         }
       }
