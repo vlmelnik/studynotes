@@ -4,14 +4,14 @@ import { h, toast, modal, encodeRel, promptDialog, parseRange } from './ui.js';
 import { uid, textBBox, itemBBox } from './tools.js';
 import { PdfDoc } from './pdfdoc.js';
 import { round2 } from '../shared/geometry.js';
-import { richToPlain, escapeHtml } from '../shared/richtext.js';
+import { richToPlain } from '../shared/richtext.js';
+import { LINE_H, escHtml } from '../shared/util.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
 import { stacked } from '../shared/stacking.js';
 import { boxWarp, cssMatrix3d, validStops } from '../shared/warp.js';
 import { boxStyle, docLook, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
 import { renderFormFields } from './fill-sign.js';
 
-const LINE_H = 1.3;
 const MARKER = '⁣StudyNotes-clip:';
 const MAX_IMAGE_SIDE = 3200;
 
@@ -137,7 +137,7 @@ export function sanitizeHtml(html, external = false) {
   const out = [];
   const walk = (node) => {
     if (node.nodeType === 3) {
-      out.push(external ? escapeHtml(node.nodeValue.replace(/[\r\n]+/g, ' ')) : node.nodeValue.replace(/\r/g, '').split('\n').map(escapeHtml).join('<br>'));
+      out.push(external ? escHtml(node.nodeValue.replace(/[\r\n]+/g, ' ')) : node.nodeValue.replace(/\r/g, '').split('\n').map(escHtml).join('<br>'));
       return;
     }
     if (node.nodeType !== 1) return;

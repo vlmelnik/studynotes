@@ -5,6 +5,8 @@
 // colour of single words (the renderer sanitises to this subset), so it can
 // be parsed here without a DOM – also in the main process for the PDF export.
 
+const { escHtml } = require('./util');
+
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' ' };
 
 function decode(s) {
@@ -15,10 +17,6 @@ function decode(s) {
     }
     return ENTITIES[e.toLowerCase()] ?? m;
   });
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function spanStyle(attrs) {
@@ -104,7 +102,7 @@ function richToPlain(html) {
 }
 
 function plainToHtml(text) {
-  return String(text).split('\n').map((l) => escapeHtml(l)).join('<br>');
+  return String(text).split('\n').map((l) => escHtml(l)).join('<br>');
 }
 
 /**
@@ -152,4 +150,4 @@ function layoutRich(paras, maxWidth, measure) {
   return lines;
 }
 
-module.exports = { parseRich, richToPlain, plainToHtml, plainFromParas, layoutRich, escapeHtml, decode };
+module.exports = { parseRich, richToPlain, plainToHtml, plainFromParas, layoutRich, decode };

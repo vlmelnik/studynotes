@@ -19,9 +19,9 @@ import { placeAt } from './fill-sign.js';
 import { TextSelection, peekLayout } from './pdf-text.js';
 import { charAt, spanBetween, highlightStrokes } from '../shared/pdf-text-layout.js';
 import { PenFilter } from '../shared/pen-filter.js';
+import { LINE_H } from '../shared/util.js';
 
 const HOLD_MS = 550;
-const LINE_H = 1.3;
 let idCounter = 0;
 export function uid() {
   return Date.now().toString(36) + (idCounter++).toString(36) + Math.random().toString(36).slice(2, 6);

@@ -171,6 +171,11 @@ export function toast(message, { error = false, timeout = 3200, action } = {}) {
   return t;
 }
 
+/** The message of an error from an IPC call, without Electron's "Error invoking remote method '…': " prefix. */
+export function errorText(err) {
+  return String((err && err.message) || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+}
+
 export function formatDate(ms) {
   if (!ms) return '';
   const d = new Date(ms);

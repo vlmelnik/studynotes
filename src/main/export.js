@@ -15,8 +15,8 @@ const { stacked } = require('../shared/stacking');
 const { parseRich, plainToHtml, layoutRich } = require('../shared/richtext');
 const { fontFile } = require('../shared/fonts');
 const { strokeBBox, capsulePolygon } = require('../shared/geometry');
+const { LINE_H } = require('../shared/util');
 
-const LINE_H = 1.3;
 const CELL_PAD = 4;
 const MAX_PDF_SIDE = 14400; // PDF page size limit (200 inches)
 

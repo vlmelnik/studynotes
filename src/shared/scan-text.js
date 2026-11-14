@@ -7,8 +7,7 @@
 const { FONTS } = require('./fonts');
 const { round2 } = require('./geometry');
 const { paragraphs } = require('./scan-layout');
-// line height of a text box (× font size), as in the editor
-const LINE_H = 1.3;
+const { LINE_H, escHtml, median } = require('./util');
 
 // ---------- font ----------
 // Every typeface with a kind can be matched. The classic office fonts are
@@ -91,8 +90,6 @@ function boldWords(li, words) {
   return flags.filter(Boolean).length * 2 > ok.length ? words.map(() => false) : flags;
 }
 
-const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
 /**
  * One font for the whole text (documents use one typeface; a line may only
  * differ when it clearly fits another one better), bold / italic per line.
@@ -117,8 +114,7 @@ function mainFamily(all) {
 function boldLines(qs, sizes) {
   const ok = qs.map((q, k) => (q > 0 && sizes[k] > 0 ? k : -1)).filter((k) => k >= 0);
   if (!ok.length) return qs.map(() => null);
-  const med = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
-  const mq = med(ok.map((k) => qs[k])), ms = med(ok.map((k) => sizes[k]));
+  const mq = median(ok.map((k) => qs[k])), ms = median(ok.map((k) => sizes[k]));
   return qs.map((q, k) => {
     if (!(q > 0) || !(sizes[k] > 0)) return null;
     if (ok.length < 3) return q > 1.45; // nothing to compare with: only clearly bold
@@ -329,4 +325,4 @@ function joinParagraphs(texts, lines, fonts, r, S) {
   return { boxes, lineOf };
 }
 
-module.exports = { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, escHtml, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };
+module.exports = { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };

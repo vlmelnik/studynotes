@@ -3,6 +3,8 @@
 // underlined words, and lines that belong together (paragraphs).
 // Pure functions on pictures (RGBA ImageData-like) and boxes: unit-tested.
 
+const { LINE_H, escHtml } = require('./util');
+
 const lum = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
 
 /**
@@ -195,9 +197,7 @@ function paragraphs(items) {
   return groups.map((g) => ({ idx: g.idx, al: g.al || 'left', pitch: g.pitch }));
 }
 
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const r2 = (v) => Math.round(v * 100) / 100;
-const LINE_H = 1.3;
 
 /**
  * Several text boxes → one ("Combine"): boxes side by side become one line
@@ -222,7 +222,7 @@ function combineBoxes(texts) {
   const base = { b: ts.every((t) => t.b), i: ts.every((t) => t.i), u: ts.every((t) => t.u), fs: first.fs, ff: first.ff, c: first.c };
   let rich = false;
   const part = (t) => {
-    let x = t.html || esc(t.text || '');
+    let x = t.html || escHtml(t.text || '');
     const span = [];
     if (Math.abs(t.fs - base.fs) > 0.05) span.push(`data-fs="${r2(t.fs)}"`);
     if (t.ff && t.ff !== base.ff && /^[a-z0-9-]+$/i.test(t.ff)) span.push(`data-ff="${t.ff}"`);
@@ -231,7 +231,7 @@ function combineBoxes(texts) {
     if (t.i && !base.i) x = `<i>${x}</i>`;
     if (t.u && !base.u) x = `<u>${x}</u>`;
     if (span.length) x = `<span ${span.join(' ')}>${x}</span>`;
-    if (x !== esc(t.text || '')) rich = true;
+    if (x !== escHtml(t.text || '')) rich = true;
     return x;
   };
   const html = rows.map((r) => r.map(part).join(' ')).join('\n');

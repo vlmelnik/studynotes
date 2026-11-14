@@ -4,16 +4,16 @@
 // Works for a lasso area or the whole page.
 import { googleLine } from '../shared/ocr-text.js';
 import { graphicMarks, besideMark, underlinedWords } from '../shared/scan-layout.js';
-import { toast, confirmDialog } from './ui.js';
+import { toast, confirmDialog, errorText } from './ui.js';
 import { uid } from './tools.js';
 import { stacked } from '../shared/stacking.js';
 import { FONTS } from '../shared/fonts.js';
 import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
-import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, escHtml, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
+import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
+import { LINE_H, escHtml, medianOr0 } from '../shared/util.js';
 
-const LINE_H = 1.3;
 const DPI_SCALE = 300 / 72; // page units are points: render at 300 dpi
 const MAX_SIDE = 4200;
 const MAX_PIXELS = 16e6;
@@ -310,7 +310,7 @@ async function readWithGoogle(editor, pageId, ids, crops, lang, original) {
     toast(changed ? `Google changed ${changed} ${changed === 1 ? 'line' : 'lines'}` : 'Google read the same text', { timeout: 3500 });
   } catch (err) {
     busy.remove();
-    toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
+    toast(errorText(err), { error: true, timeout: 6000 });
   }
 }
 
@@ -333,7 +333,7 @@ export async function makeTextEditable(editor, index, area = null) {
     if (!(await ensureEditable())) return;
     await editableRun(editor, index, page, area);
   } catch (err) {
-    toast(String((err && err.message) || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
+    toast(errorText(err), { error: true, timeout: 6000 });
   } finally {
     running.delete(key);
   }
@@ -532,7 +532,6 @@ async function editableRun(editor, index, page, area) {
     // sure. A whole handwritten page, or single lines (a filled-in form).
     const isHand = (c) => FONTS[c.ff].kind === 'hand';
     const boxOf = (l, f) => ({ x0: l.bbox.x0 + f.left, top: f.baseY - ((LINE_H * f.px - (f.asc + f.desc)) / 2 + f.asc), bw: l.bbox.x1 - l.bbox.x0, bh: LINE_H * f.px });
-    const medOf = (a) => { const c = a.slice().sort((p, q) => p - q); return c.length ? c[c.length >> 1] : 0; };
     const jitter = lines.map((l, k) => {
       const pb = scores[k].filter((c) => !isHand(c)).sort((p, q) => q.score - p.score)[0];
       if (!inks[k] || !pb) return null;
@@ -543,7 +542,7 @@ async function editableRun(editor, index, page, area) {
     // (from the surely read lines: noise read weakly jitters a lot)
     const sure = lines.map((l, k) => !l.weak && jitter[k] !== null);
     const js = jitter.filter((_, k) => sure[k]);
-    const handPage = js.length >= 2 && (medOf(js) > 0.25 || (medOf(lines.filter((l, k) => sure[k]).map((l) => l.conf)) < 80 && medOf(js) > 0.15));
+    const handPage = js.length >= 2 && (medianOr0(js) > 0.25 || (medianOr0(lines.filter((l, k) => sure[k]).map((l) => l.conf)) < 80 && medianOr0(js) > 0.15));
     const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3)));
     if (window.__ocrDebug) window.__ocrDebug.hand = lines.map((l, k) => [jitter[k] === null ? null : +jitter[k].toFixed(2), Math.round(l.conf), handLine[k]]);
     const keep = scores.map((sc, k) => sc.length > 0 && (!lines[k].weak || handLine[k]));
@@ -730,6 +729,6 @@ async function editableRun(editor, index, page, area) {
     toast(msg, { timeout: 15000, action: { label: 'Read better with Google', onClick: () => readWithGoogle(editor, page.id, lineOf, crops, lang, texts.map((t) => t.text)) } });
   } catch (err) {
     busy.remove();
-    toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 6000 });
+    toast(errorText(err), { error: true, timeout: 6000 });
   }
 }

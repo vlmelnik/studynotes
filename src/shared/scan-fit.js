@@ -3,6 +3,8 @@
 // the line's own ink. Pure functions on ink masks: unit-tested.
 // (moved unchanged from src/renderer/scan-geo.js)
 
+const { median } = require('./util');
+
 /**
  * Upper and lower edge of the letters' body (the rows most letters cover)
  * along the line, as straight lines y = a + b·x (local pixels).
@@ -19,7 +21,6 @@ function bandFit(ink, w, h) {
   if (x1 - x0 < h) return null;
   const nSeg = Math.max(3, Math.min(14, Math.round((x1 - x0) / (h * 0.8))));
   const segs = [];
-  const median = (a) => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
   for (let s = 0; s < nSeg; s++) {
     const sa = Math.round(x0 + ((x1 - x0 + 1) * s) / nSeg), sb = Math.round(x0 + ((x1 - x0 + 1) * (s + 1)) / nSeg);
     const tops = [], bots = [];

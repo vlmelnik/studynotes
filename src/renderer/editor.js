@@ -1,7 +1,7 @@
 // Notebook editor: toolbar, options bar, page sidebar, viewer, tools,
 // undo/redo, autosave. Text boxes, pictures, tables, paste and insert live in
 // editor-objects.js; thumbnails and search in editor-panels.js.
-import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, debounce, parseRange, shortcutKey, sameKey } from './ui.js';
+import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, errorText, debounce, parseRange, shortcutKey, sameKey } from './ui.js';
 import { icon } from './icons.js';
 import { Viewer, MIN_ZOOM, MAX_ZOOM } from './viewer.js';
 import { Tools, uid, textBBox, itemBBox } from './tools.js';
@@ -746,7 +746,7 @@ export class Editor {
         : await window.api.inkRecognize(strokes.map((st) => st.p.filter((_, i) => i % 3 !== 2)), this.settings.inkRecognizer || '');
     } catch (err) {
       busy.remove();
-      toast(String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { error: true, timeout: 7000 });
+      toast(errorText(err), { error: true, timeout: 7000 });
       return;
     }
     busy.remove();

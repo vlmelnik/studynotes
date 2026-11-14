@@ -1,5 +1,5 @@
 // App shell: tabs (Library + open notebooks), notebook loading, settings.
-import { h, toast, modal, debounce, confirmDialog, shortcutKey, keySignature, describeKey } from './ui.js';
+import { h, toast, errorText, modal, debounce, confirmDialog, shortcutKey, keySignature, describeKey } from './ui.js';
 import { icon } from './icons.js';
 import { LibraryView } from './library-view.js';
 import { Editor, defaultToolState } from './editor.js';
@@ -518,7 +518,7 @@ class App {
       for (const n of list) recSel.append(h('option', { value: n, class: 'no-i18n' }, n));
       recSel.value = list.includes(s.inkRecognizer) ? s.inkRecognizer : '';
       if (!list.length) recState.textContent = 'Windows has no handwriting recognizer installed. Add one: Windows Settings → Time & language → Language → (language) → Options → Handwriting.';
-    }, (err) => { recSel.disabled = true; recState.textContent = 'The Windows recognizer is not available on this PC: ' + String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') + ' – choose Google above.'; });
+    }, (err) => { recSel.disabled = true; recState.textContent = 'The Windows recognizer is not available on this PC: ' + errorText(err) + ' – choose Google above.'; });
     const winRow = h('div', { class: 'addon-sub', hidden: engine !== 'windows' },
       h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Recognizer'), recSel), recState);
     const exportRow = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!s.exportInkText, onchange: (e) => { s.exportInkText = e.target.checked; this.saveSettings(); } }), h('span', {}, 'Export handwriting as text', h('small', {}, 'The exported PDF can be searched and copied (read by Windows, offline)')));

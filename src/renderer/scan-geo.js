@@ -6,6 +6,7 @@
 import { homography, applyH } from '../shared/warp.js';
 import { inkColor } from '../shared/scan-clean.js';
 import { bandFit, shearOf, ownInk } from '../shared/scan-fit.js';
+import { median, medianOr0 } from '../shared/util.js';
 
 /** The candidate font drawn flat at its place in the line, as an ink mask. */
 function renderMask(c, line, li, cssFont) {
@@ -35,7 +36,6 @@ export function lineWarp({ li, line, f, cssFont, box, S, bw, bh }) {
   const x0 = Math.max(real.x0, flat.x0), x1 = Math.min(real.x1, flat.x1), lh = flat.at(flat.bot, (x0 + x1) / 2) - flat.at(flat.top, (x0 + x1) / 2);
   if (!(lh > 3) || x1 - x0 < lh * 3) return null;
   const nSeg = Math.max(4, Math.min(14, Math.round((x1 - x0) / (lh * 1.2))));
-  const median = (a) => { const c = a.slice().sort((p, q) => p - q); return c[c.length >> 1]; };
   const stats = (m, xa, xb) => {
     const tops = [], bots = [];
     for (let x = xa; x < xb; x++) {
@@ -89,10 +89,9 @@ export function lineWarp({ li, line, f, cssFont, box, S, bw, bh }) {
  */
 export function pageWarps(ms, S) {
   const ok = ms.filter((m) => m && m.kMed > 0.7 && m.kMed < 1.45 && Math.abs(m.lean) < 0.3);
-  const med = (a) => { const c = a.slice().sort((p, q) => p - q); return c.length ? c[c.length >> 1] : 0; };
   // weights by length: long lines say more about the size change
-  const g = ok.length >= 2 ? med(ok.flatMap((m) => Array(Math.max(1, Math.round((m.x1 - m.x0) / 200))).fill(m.dlnk))) : 0;
-  const lean = ok.length >= 2 ? med(ok.map((m) => m.lean)) : 0;
+  const g = ok.length >= 2 ? medianOr0(ok.flatMap((m) => Array(Math.max(1, Math.round((m.x1 - m.x0) / 200))).fill(m.dlnk))) : 0;
+  const lean = ok.length >= 2 ? medianOr0(ok.map((m) => m.lean)) : 0;
   if (window.__ocrDebug) window.__ocrDebug.page = { g, lean, n: ok.length };
   return ms.map((m) => {
     if (!m || !ok.includes(m)) return null;
