@@ -1,0 +1,45 @@
+# Unit tests on Linux and Windows, plus build and a smoke e2e (real Electron
+# app under xvfb) on Linux. Runs on every push and pull request except the
+# upload/** branches (those only publish a prebuilt release).
+name: CI
+
+on:
+  push:
+    branches-ignore: ['upload/**']
+  pull_request:
+    branches-ignore: ['upload/**']
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      # onnxruntime-node's install script downloads extra binaries; the CPU
+      # binary ships in the package, so skip it.
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: System tools (pdftotext, pdfinfo, xvfb)
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils xvfb
+      - run: npm test
+      - run: npm run build
+      - name: Smoke e2e
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" npm run test:e2e:smoke
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
