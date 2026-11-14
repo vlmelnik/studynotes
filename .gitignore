@@ -7,3 +7,5 @@ src/main/google-client.local.js
 
 # private development notes (plan, handoff, lessons) – local only
 dev-notes/
+# dated backups the code-map tool writes on every run
+graphify-out/20*/
