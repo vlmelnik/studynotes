@@ -134,7 +134,11 @@ with a failing test first, then fix.
       v14 23, v15 17, v16 20, v161 11, v17 46, v17b 22; unit 127.
 
 ### Release
-- [ ] All unit + all e2e suites, independent review, `npm run dist:win`,
+- [x] Published 2026-11-14 00:01 UTC as v1.7.0 (r7, upload/v1.7.0-r7; zip 266512862 B,
+      exe 202543134 B); packaged Linux build checked (run 30, v17b 22, v17 D+L 10).
+      Wine is needed for the NSIS installer step (`apt-get install wine`).
+      Remaining `[Fable]` items of Phase 1 go into a later re-release.
+- [ ] (template for the next round) All unit + all e2e suites, independent review, `npm run dist:win`,
       packaged e2e (`STUDYNOTES_EXE`), publish as `upload/v1.7.0-r7`.
 
 ---
