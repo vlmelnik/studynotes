@@ -1,14 +1,15 @@
 {
-  "17": "ocr-golden.test.js",
-  "19": "package.json",
-  "23": "PenFilter",
-  "35": ".pageMenu",
-  "49": "editor.js",
-  "59": "pdfdoc.js",
-  "87": "tools.js",
-  "92": "ref_os",
-  "93": ".selectionToolbar",
-  "96": ".onKey",
-  "97": "paintStroke",
-  "98": "library-assets.test.js"
+  "3": "scan-geo.js",
+  "23": ".toast",
+  "29": "ref_fs",
+  "35": "cloud.js",
+  "47": "ref_node_assert",
+  "49": "library-view.js",
+  "52": "notices.js",
+  "55": "PenFilter",
+  "58": "ocr-text.test.js",
+  "70": ".constructor",
+  "87": ".select",
+  "88": "ref_path",
+  "91": "editor.js"
 }
