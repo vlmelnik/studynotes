@@ -2,6 +2,14 @@
 
 ## 1.7.0
 
+**Fixes (re-release, 14 Nov 2026)**
+- Dictionary check keeps formula symbols and variables (tf, lc, "поле B равно").
+- "Make text editable" replaces only the letters: figures and the PDF around the text stay the original.
+- One recognition per page at a time; red / orange text gets a matching font; very large areas give a clear message.
+- Underline: no longer confused with a ruled line at the edge of the selection.
+- "Read better with Google": calls no longer disturb each other; the spelling check can't hold up recognition.
+- Search lists a word made editable once.
+
 **Scans and PDFs: make printed text editable**
 - Lasso tool → option "Text area": draw a rectangle around printed text on a scan, photo or PDF page; or use the new page button in the toolbar (also in the page menu) for the whole page. The normal lasso stays as it was.
 - Text is recognised offline (Tesseract, German first so umlauts are right, English, Russian; very large or small text is rescaled for a second pass); the language data (7 MB) comes with the app.
