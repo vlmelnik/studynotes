@@ -5,8 +5,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { PDFDocument } = require('pdf-lib');
-const { Library, sanitizeName } = require('../src/main/library');
-const { searchLibrary } = require('../src/main/search');
+const { Library, sanitizeName } = require('../../../src/main/library');
+const { searchLibrary } = require('../../../src/main/search');
 
 async function tmpLib() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-lib-'));
@@ -126,7 +126,7 @@ test('import pdf + library search', async () => {
 });
 
 test('search folding keeps indices aligned with the original text', () => {
-  const { fold, searchNotebook } = require('../src/main/search');
+  const { fold, searchNotebook } = require('../../../src/main/search');
   for (const s of ['Bandlücke Übung', 'ÄÖÜ ß café', 'Привет МИР', 'ﬁx']) assert.strictEqual(fold(s).length, s.length, s);
   const nb = { pages: [{ id: 'a', kind: 'pdf', pdfPage: 1 }] };
   const hits = searchNotebook(nb, { pages: { 1: 'Die   Bandlücke von\nSilizium' } }, {}, 'bandlucke');
@@ -136,7 +136,7 @@ test('search folding keeps indices aligned with the original text', () => {
 });
 
 test('search: a word made editable from the scan is found once (the old text under the patch is not a second hit)', () => {
-  const { searchNotebook } = require('../src/main/search');
+  const { searchNotebook } = require('../../../src/main/search');
   const nb = { pages: [{ id: 'a', kind: 'pdf', pdfPage: 1 }, { id: 'b', kind: 'pdf', pdfPage: 2 }, { id: 'c', kind: 'pdf', pdfPage: 3 }] };
   const idx = { pages: { 1: 'Der Mieter zahlt die Kaution', 2: 'Kaution in Raten', 3: 'Die Kaution steht unten' } };
   const pages = {

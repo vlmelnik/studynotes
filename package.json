@@ -9,7 +9,7 @@
   "scripts": {
     "build": "node scripts/notices.js && node scripts/build.js",
     "start": "npm run build && electron .",
-    "test": "node --test test/*.test.js",
+    "test": "node --test \"test/unit/**/*.test.js\"",
     "dist:win": "node scripts/build.js --minify && electron-builder --win",
     "graph": "graphify update . && graphify cluster-only . --no-label"
   },

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { graphicMarks, besideMark, underlinedWords, paragraphs, combineBoxes } = require('../src/shared/scan-layout');
+const { graphicMarks, besideMark, underlinedWords, paragraphs, combineBoxes } = require('../../../src/shared/scan-layout');
 
 const line = (x0, x1, cy, more = {}) => ({ x0, x1, cy, fs: 12, ff: 'inter', c: '#222222', ...more });
 

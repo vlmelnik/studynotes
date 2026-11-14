@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { googleLine } = require('../src/shared/ocr-text');
+const { googleLine } = require('../../../src/shared/ocr-text');
 
 test('googleLine: the separator line Google puts first is not text', () => {
   assert.strictEqual(googleLine('________________\n\nCurrent waveform', 'Curent wavefonn'), 'Current waveform');

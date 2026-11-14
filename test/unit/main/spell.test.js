@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { correctLines } = require('../src/main/spell');
+const { correctLines } = require('../../../src/main/spell');
 
 const fix = (text) => correctLines([{ text, words: text.split(' ').map((t) => ({ text: t })) }]).lines[0];
 

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { homography, applyH, boxWarp, cssMatrix3d, colourAt } = require('../src/shared/warp');
+const { homography, applyH, boxWarp, cssMatrix3d, colourAt } = require('../../../src/shared/warp');
 
 test('warp: homography maps the 4 corners exactly', () => {
   const src = [[0, 0], [100, 0], [100, 20], [0, 20]], dst = [[2, 3], [110, -4], [112, 30], [-1, 22]];

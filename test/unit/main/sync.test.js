@@ -8,9 +8,9 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
-const { syncLibrary, validRemotePath, md5File } = require('../src/main/sync');
-const { GoogleAuth, DriveRemote, createPkce, buildAuthUrl, encodePath, decodePath } = require('../src/main/drive');
-const { FakeDriveApi } = require('./fake-drive-api');
+const { syncLibrary, validRemotePath, md5File } = require('../../../src/main/sync');
+const { GoogleAuth, DriveRemote, createPkce, buildAuthUrl, encodePath, decodePath } = require('../../../src/main/drive');
+const { FakeDriveApi } = require('../../fake-drive-api');
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');
 

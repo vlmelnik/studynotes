@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const g = require('../src/shared/geometry');
+const g = require('../../../src/shared/geometry');
 
 const stroke = (pts, s = 2) => ({ id: 'x', t: 'pen', c: '#000', s, p: pts.flatMap(([x, y]) => [x, y, 0.5]) });
 

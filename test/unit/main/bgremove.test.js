@@ -3,9 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const bg = require('../src/main/bgremove');
+const bg = require('../../../src/main/bgremove');
 
-const MODEL = path.join(__dirname, '..', 'assets', 'models', bg.MODEL_FILE);
+const MODEL = path.join(__dirname, '..', '..', '..', 'assets', 'models', bg.MODEL_FILE);
 
 // Synthetic scene: shaded orange ball with a dark outline on a light grey/blue vertical
 // gradient with mild noise (something like a product photo).

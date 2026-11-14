@@ -4,9 +4,9 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { PDFDocument, degrees } = require('pdf-lib');
-const { exportNotebook, makeMapper, wrapText } = require('../src/main/export');
+const { exportNotebook, makeMapper, wrapText } = require('../../../src/main/export');
 
-const FONT = fs.readFileSync(path.join(__dirname, '..', 'assets', 'DejaVuSans.ttf'));
+const FONT = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'assets', 'DejaVuSans.ttf'));
 
 async function makeSourcePdf() {
   const doc = await PDFDocument.create();
@@ -68,13 +68,13 @@ test('export: pdf pages, paper pages, duplicates, ink and unicode text', async (
 
   const subset = await exportNotebook({ notebook, pdfBytes, pages, pageIds: ['b', 'd'], fontBytes: FONT });
   assert.strictEqual((await PDFDocument.load(subset)).getPageCount(), 2);
-  fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
-  fs.writeFileSync(path.join(__dirname, 'out', 'export-sample.pdf'), out);
+  fs.mkdirSync(path.join(__dirname, '..', '..', 'out'), { recursive: true });
+  fs.writeFileSync(path.join(__dirname, '..', '..', 'out', 'export-sample.pdf'), out);
 });
 
 test('export: ligatures are not used, so "ti"/"fi" stay searchable and copyable', async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const assets = path.join(__dirname, '..', 'assets');
+  const assets = path.join(__dirname, '..', '..', '..', 'assets');
   const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
   const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 595, h: 842 }] };
   const texts = [{ id: 'a', x: 50, y: 100, w: 400, fs: 14, c: '#000000', ff: 'carlito', text: 'Wichtig finden', html: '<b><u>Wichtig</u></b> finden' }];
@@ -119,7 +119,7 @@ test('export: rotated and semi-transparent pictures look like on screen', { skip
 
 test('1.7: export adds recognised handwriting as invisible, copyable text (also Cyrillic)', async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const assets = path.join(__dirname, '..', 'assets');
+  const assets = path.join(__dirname, '..', '..', '..', 'assets');
   const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
   const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 595, h: 842 }] };
   const strokes = [{ id: 's', t: 'pen', c: '#000', s: 2, p: [100, 100, 0.5, 160, 110, 0.5, 200, 100, 0.5] }, { id: 'h', t: 'pen', sh: 1, c: '#000', s: 2, p: [0, 0, 0.5, 10, 10, 0.5] }];
@@ -143,7 +143,7 @@ test('1.7: "Match the document" text is drawn soft (outlines) and stays searchab
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const { execFileSync } = require('child_process');
   const os = require('os');
-  const assets = path.join(__dirname, '..', 'assets');
+  const assets = path.join(__dirname, '..', '..', '..', 'assets');
   const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
   const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 400, h: 200 }] };
   const base = { x: 20, y: 40, w: 300, fs: 24, c: '#000000', ff: 'opensans', text: 'Soft letters', r: 3 };
@@ -172,8 +172,8 @@ test('1.7: "Match the document" text is drawn soft (outlines) and stays searchab
 test('1.7: every font exports all its letters (pdf-lib subsetting can drop glyphs)', { skip: !require('fs').existsSync('/usr/bin/pdftoppm') && 'pdftoppm not installed' }, async () => {
   const { execFileSync } = require('child_process');
   const os = require('os');
-  const { FONTS } = require('../src/shared/fonts');
-  const assets = path.join(__dirname, '..', 'assets');
+  const { FONTS } = require('../../../src/shared/fonts');
+  const assets = path.join(__dirname, '..', '..', '..', 'assets');
   const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
   const ids = Object.keys(FONTS).filter((f) => FONTS[f].kind);
   const ROW = 40, W = 600;
@@ -205,7 +205,7 @@ test('1.7: every font exports all its letters (pdf-lib subsetting can drop glyph
 
 test('1.7: a recognised paragraph keeps its line spacing (lh) in the PDF', async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const assets = path.join(__dirname, '..', 'assets');
+  const assets = path.join(__dirname, '..', '..', '..', 'assets');
   const readFont = async (f) => fs.readFileSync(fs.existsSync(path.join(assets, 'fonts', f)) ? path.join(assets, 'fonts', f) : path.join(assets, f));
   const notebook = { title: 't', pages: [{ id: 'p', kind: 'paper', paper: 'plain', w: 595, h: 842 }] };
   const ys = async (lh) => {

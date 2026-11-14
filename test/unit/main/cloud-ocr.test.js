@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { CloudSync } = require('../src/main/cloud');
+const { CloudSync } = require('../../../src/main/cloud');
 
 // Google reading: two calls at the same time must not overlap, or the
 // clean-up at the start of the second deletes the temporary docs of the first.

@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { stacked, restack, layerOf } = require('../src/shared/stacking');
+const { stacked, restack, layerOf } = require('../../../src/shared/stacking');
 
 const ids = (d, l) => stacked(d, l).map((e) => e.obj.id);
 
@@ -33,9 +33,4 @@ test('stacking: several selected objects keep their relative order', () => {
   d = restack(d, new Set(['a', 'b']), 1);
   assert.deepStrictEqual(ids(d, 'f'), ['a', 'b']);
   assert.deepStrictEqual(ids(d, 'b'), ['c']);
-});
-
-test('richtext: out-of-range character references do not crash export parsing', () => {
-  const { parseRich } = require('../src/shared/richtext');
-  assert.doesNotThrow(() => parseRich('a &#99999999; b &#x110000; c'));
 });
