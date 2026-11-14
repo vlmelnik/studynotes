@@ -34,7 +34,7 @@ never pushed. If it exists:
 ## Rules
 - **Secrets:** `src/main/google-client.local.js` holds the Google OAuth client.
   It is git-ignored: never print, copy into other files, or commit it. Before
-  every push: `git grep -nE "GOCSPX" HEAD` must find nothing.
+  every push: `git grep -nE "GOCSPX-[A-Za-z0-9_-]{10}" HEAD` must find nothing.
 - **Public repository:** everything committed is public. Examples, screenshots,
   test data and docs are neutral and in English: no personal names, no private
   photos or documents, no local paths with user names.
