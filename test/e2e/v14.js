@@ -12,7 +12,6 @@ fs.mkdirSync(out, { recursive: true });
 const { check, errors, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
 const { at: atPage } = require('./harness/page');
-const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v14-'));
 const libDir = path.join(tmp, 'Library');
 const userData = path.join(tmp, 'u');

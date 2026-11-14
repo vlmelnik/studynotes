@@ -7,14 +7,12 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { PDFDocument, StandardFonts } = require('pdf-lib');
 
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
 const { check, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
-const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-ocrb-'));
 const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
 const LANG = process.env.RU ? 'ru' : process.env.EN ? 'en' : 'de';

@@ -11,7 +11,6 @@ fs.mkdirSync(out, { recursive: true });
 const { check, errors, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
 const { at: atPage } = require('./harness/page');
-const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v16-'));
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v16-${name}.png`) });
 
@@ -45,7 +44,6 @@ const launch = () => launchApp({ tmp });
   };
   const pageData = (i = 0) => ed((k) => { const e = window.__app.active; return e.pageData(e.pages[k].id); }, i);
   const setData = (d, i = 0) => ed(([dd, k]) => { const e = window.__app.active; e.setPageData(e.pages[k].id, { strokes: [], texts: [], items: [], ...dd }); }, [d, i]);
-  const closeDialogs = async () => { while (await win.locator('.modal-actions .btn').count()) { await win.locator('.modal-actions .btn').first().click(); await win.waitForTimeout(100); } };
 
   // ===================================================================== A. dialogs: Cancel works; delete page button
   if (sections.includes('A')) {

@@ -27,7 +27,6 @@ const { launch: launchApp } = require('./harness/app');
   await win.waitForTimeout(500);
   const r0 = await ed(() => window.__app.active.viewer.pageClientRect(0));
   const z = await ed(() => window.__app.active.viewer.zoom);
-  const toClient = (x, y) => [r0.left + x * z, r0.top + y * z];
 
   // ---------- options strip / zoom pill ----------
   const stripHidden = async (tool) => { await win.keyboard.press(tool); return ed(() => document.querySelector('.tool-options').classList.contains('empty')); };

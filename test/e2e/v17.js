@@ -3,7 +3,6 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { PDFDocument, StandardFonts } = require('pdf-lib');
 
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
@@ -11,7 +10,6 @@ fs.mkdirSync(out, { recursive: true });
 const { check, errors, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
 const { at: atPage } = require('./harness/page');
-const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v17-'));
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v17-${name}.png`) });
 
@@ -35,15 +33,6 @@ const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1', STUDYNOTE
     await win.mouse.up();
     await win.waitForTimeout(150);
   };
-  const pen = (type, x, y, o) => ed(([t, cx, cy, oo]) => {
-    const target = document.elementFromPoint(cx, cy);
-    target.dispatchEvent(new PointerEvent(t, { bubbles: true, cancelable: true, composed: true, pointerId: 9, isPrimary: true, pointerType: 'pen', clientX: cx, clientY: cy, ...oo }));
-  }, [type, x, y, o]);
-  const key = (init) => ed((i) => {
-    const ev = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...i });
-    if (i.keyCode != null) Object.defineProperty(ev, 'keyCode', { get: () => i.keyCode });
-    document.body.dispatchEvent(ev);
-  }, init);
 
   // ===================================================================== A. library ↔ notebook keeps page and zoom
   if (sections.includes('A')) {
@@ -171,7 +160,6 @@ const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1', STUDYNOTE
     const clipZ = { x: r0.left + 25 * z0, y: r0.top + 55 * z0, width: 530 * z0, height: Math.min(ph + 10, 760) * z0 };
     const tag = process.env.SN_TAG || 'real';
     await win.screenshot({ path: path.join(out, `v17-${tag}-before.png`), clip: clipZ });
-    const t0 = Date.now();
     await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
     await ed(() => window.__mk);
     const d = await pageData();

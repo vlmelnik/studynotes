@@ -12,7 +12,6 @@ fs.mkdirSync(out, { recursive: true });
 const { check, errors, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
 const { at: atPage } = require('./harness/page');
-const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v17b-'));
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v17b-${name}.png`) });
 
@@ -58,7 +57,6 @@ async function makePdf(file) {
   await makePdf(pdfFile);
   const { app, win, ed } = await launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
   const at = (x, y, pg = 0) => atPage(ed, x, y, pg);
-  const pageData = () => ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
 
   await ed(async (f) => { const [r] = await window.api.importFiles('', [f]); await window.__app.openNotebook(r); }, pdfFile);
   await win.waitForTimeout(1200);

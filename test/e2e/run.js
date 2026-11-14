@@ -6,7 +6,6 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execFileSync } = require('child_process');
-const assert = require('assert');
 
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');

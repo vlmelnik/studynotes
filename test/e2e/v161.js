@@ -3,7 +3,6 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { PDFDocument, StandardFonts } = require('pdf-lib');
 
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
@@ -11,9 +10,7 @@ fs.mkdirSync(out, { recursive: true });
 const { check, errors, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
 const { at: atPage } = require('./harness/page');
-const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v161-'));
-const shot = (win, name) => win.screenshot({ path: path.join(out, `v161-${name}.png`) });
 
 const launch = () => launchApp({ tmp });
 
