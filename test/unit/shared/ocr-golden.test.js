@@ -26,7 +26,8 @@ function replay(rec) {
 }
 
 test('OCR golden: recorded readings give the recorded layout', { skip: files.length ? false : 'no recorded readings yet' }, () => {
-  const now = Object.fromEntries(files.map((f) => [f, replay(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')))]));
+  // (in the stored JSON form: fields that are undefined are left out)
+  const now = JSON.parse(JSON.stringify(Object.fromEntries(files.map((f) => [f, replay(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')))]))));
   if (process.env.UPDATE_GOLDEN) {
     fs.writeFileSync(expectFile, JSON.stringify(now, null, 1) + '\n');
     return;

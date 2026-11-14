@@ -1,0 +1,458 @@
+{
+ "de-sncarlito-photo.json": {
+  "langs": null,
+  "skew": 1.75,
+  "text": [
+   "Der Mieter zahlt die Kaution für die Wohnung",
+   "in drei gleichen Raten bis zum Monatsende.",
+   "Bitte prüfen Sie die Größe der Räume genau."
+  ],
+  "boxes": [
+   {
+    "text": "Der Mieter zahlt die Kaution für die Wohnung",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.79,
+    "y": 88.56
+   },
+   {
+    "text": "in drei gleichen Raten bis zum Monatsende.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.18,
+    "y": 116.42
+   },
+   {
+    "text": "Bitte prüfen Sie die Große der Räume genau.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.08,
+    "y": 144.65
+   }
+  ]
+ },
+ "de-snmono-hard.json": {
+  "langs": null,
+  "skew": -2.99,
+  "text": [
+   "Der Mieter zahlt die Kaution fur die Wohnung",
+   "in drei gleichen Raten zum Monatsende.",
+   "Bitte prüfen Sie die Größe der Räume genau."
+  ],
+  "boxes": [
+   {
+    "text": "Der Mieter zahlt die Kaution für die Wohnung",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 47.61,
+    "y": 97.32
+   },
+   {
+    "text": "in drei gleichen Raten 1:5 zum Monatsende,",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.09,
+    "y": 125.68
+   },
+   {
+    "text": "Bitte prüfen Sie die Große der Räume genau.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.53,
+    "y": 153.41
+   }
+  ]
+ },
+ "de-snsans-clean.json": {
+  "langs": null,
+  "skew": 0,
+  "text": [
+   "Der Mieter zahlt die Kaution für die Wohnung",
+   "in drei gleichen Raten bis zum Monatsende.",
+   "Bitte prüfen Sie die Größe der Räume genau."
+  ],
+  "boxes": [
+   {
+    "text": "Der Mieter zahlt die Kaution für die Wohnung",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.22,
+    "y": 92.17
+   },
+   {
+    "text": "in drei gleichen Raten bis zum Monatsende.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.1,
+    "y": 120.05
+   },
+   {
+    "text": "Bitte prüfen Sie die Große der Räume genau.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.22,
+    "y": 148.11
+   }
+  ]
+ },
+ "de-snserif-tilt+2.5.json": {
+  "langs": null,
+  "skew": 2.48,
+  "text": [
+   "Der Mieter zahlt die Kaution für die Wohnung",
+   "in drei gleichen Raten bis zum Monatsende.",
+   "Bitte prüfen Sie die Größe der Räume genau."
+  ],
+  "boxes": [
+   {
+    "text": "Der Mieter zahlt die Kaution für die Wohnung",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 51.82,
+    "y": 87.28
+   },
+   {
+    "text": "in drei gleichen Raten bis zum Monatsende.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.62,
+    "y": 114.85
+   },
+   {
+    "text": "Bitte prüfen Sie die Große der Räume genau.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.4,
+    "y": 143.02
+   }
+  ]
+ },
+ "en-sncarlito-photo.json": {
+  "langs": null,
+  "skew": 1.85,
+  "text": [
+   "The tenant agrees to pay the monthly rent",
+   "before the third working day of each month,",
+   "Please check the size of every room carefully."
+  ],
+  "boxes": [
+   {
+    "text": "The tenant agrees to pay the monthly rent",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 51.23,
+    "y": 88.46
+   },
+   {
+    "text": "before the third working day of each month.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.94,
+    "y": 116.58
+   },
+   {
+    "text": "Please check the size of every room carefully.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.38,
+    "y": 144.67
+   }
+  ]
+ },
+ "en-snmono-hard.json": {
+  "langs": null,
+  "skew": -3.01,
+  "text": [
+   "The tenant agrees to pay the monthly rent",
+   "before the third working Jay of each month.",
+   "please check the size of every room carefully."
+  ],
+  "boxes": [
+   {
+    "text": "The tenant agrees to pay the monthly rent",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 48.09,
+    "y": 97.99
+   },
+   {
+    "text": "before the third working day of each month.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.07,
+    "y": 125.52
+   },
+   {
+    "text": "Please check the size of every room carefully.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.52,
+    "y": 152.64
+   }
+  ]
+ },
+ "en-snsans-clean.json": {
+  "langs": null,
+  "skew": 0,
+  "text": [
+   "The tenant agrees to pay the monthly rent",
+   "before the third working day of each month.",
+   "Please check the size of every room carefully."
+  ],
+  "boxes": [
+   {
+    "text": "The tenant agrees to pay the monthly rent",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.88,
+    "y": 92.16
+   },
+   {
+    "text": "before the third working day of each month.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.1,
+    "y": 120.05
+   },
+   {
+    "text": "Please check the size of every room carefully.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.22,
+    "y": 148.11
+   }
+  ]
+ },
+ "en-snserif-tilt+2.5.json": {
+  "langs": null,
+  "skew": 2.52,
+  "text": [
+   "The tenant agrees to pay the monthly rent",
+   "before the third working day of each month,",
+   "Please check the size of every room carefully."
+  ],
+  "boxes": [
+   {
+    "text": "The tenant agrees to pay the monthly rent",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 51.75,
+    "y": 86.64
+   },
+   {
+    "text": "before the third working day of each month.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.86,
+    "y": 114.98
+   },
+   {
+    "text": "Please check the size of every room carefully.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.38,
+    "y": 143.17
+   }
+  ]
+ },
+ "ru-sncarlito-photo.json": {
+  "langs": null,
+  "skew": 1.81,
+  "text": [
+   "Арендатор обязуется вносить плату вовремя",
+   "и бережно относиться к мебели в квартире.",
+   "Залог возвращается через месяц после выезда."
+  ],
+  "boxes": [
+   {
+    "text": "Арендатор обязуется вносить плату вовремя",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 51.06,
+    "y": 88.67
+   },
+   {
+    "text": "и бережно относиться к мебели в квартире.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.93,
+    "y": 116.65
+   },
+   {
+    "text": "Залог возвращается через месяц после выезда.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.52,
+    "y": 144.94
+   }
+  ]
+ },
+ "ru-snmono-hard.json": {
+  "langs": null,
+  "skew": -2.98,
+  "text": [
+   "Арендатор обязуется вносить плату вовремя",
+   "и бережно относиться | сли в квартире.",
+   "Залог возвращается через месяц после выезда."
+  ],
+  "boxes": [
+   {
+    "text": "Арендатор обязуется вносить плату вовремя",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 48.23,
+    "y": 98.01
+   },
+   {
+    "text": "и бережно относиться к мебели в квартире.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.1,
+    "y": 125.87
+   },
+   {
+    "text": "Залог возвращается через месяц после выезда.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 51.27,
+    "y": 153.43
+   }
+  ]
+ },
+ "ru-snsans-clean.json": {
+  "langs": null,
+  "skew": 0,
+  "text": [
+   "Арендатор обязуется вносить плату вовремя",
+   "и бережно относиться к мебели в квартире.",
+   "Залог возвращается через месяц после выезда."
+  ],
+  "boxes": [
+   {
+    "text": "Арендатор обязуется вносить плату вовремя",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.12,
+    "y": 92.17
+   },
+   {
+    "text": "и бережно относиться к мебели в квартире.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.1,
+    "y": 120.05
+   },
+   {
+    "text": "Залог возвращается через месяц после выезда.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.23,
+    "y": 148.28
+   }
+  ]
+ },
+ "ru-snserif-tilt+2.5.json": {
+  "langs": null,
+  "skew": 2.43,
+  "text": [
+   "Арендатор обязуется вносить плату вовремя",
+   "и бережно относиться к мебели в квартире.",
+   "Залог возвращается через месяц после выезда."
+  ],
+  "boxes": [
+   {
+    "text": "Арендатор обязуется вносить плату вовремя",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 51.72,
+    "y": 87.29
+   },
+   {
+    "text": "и бережно относиться к мебели в квартире.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 50.89,
+    "y": 115.22
+   },
+   {
+    "text": "Залог возвращается через месяц после выезда.",
+    "al": "left",
+    "b": false,
+    "i": false,
+    "u": false,
+    "x": 49.21,
+    "y": 143.81
+   }
+  ]
+ }
+}

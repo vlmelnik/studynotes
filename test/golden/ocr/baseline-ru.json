@@ -1,0 +1,659 @@
+{
+ "lang": "ru",
+ "lines": [
+  "Арендатор обязуется вносить плату вовремя",
+  "и бережно относиться к мебели в квартире.",
+  "Залог возвращается через месяц после выезда."
+ ],
+ "note": "written by UPDATE_GOLDEN=1 node test/e2e/ocr-bench.js",
+ "cases": {
+  "SN Sans|clean": {
+   "cer": 0,
+   "fams": "sans",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Sans|tilt+2.5": {
+   "cer": 0,
+   "fams": "sans",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Sans|tilt-4": {
+   "cer": 0,
+   "fams": "sans",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Sans|blur": {
+   "cer": 0,
+   "fams": "sans",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Sans|photo": {
+   "cer": 0,
+   "fams": "sans",
+   "rot": 1.8,
+   "n": 3
+  },
+  "SN Sans|hard": {
+   "cer": 0.008,
+   "fams": "sans",
+   "rot": -1.7,
+   "n": 3
+  },
+  "SN Serif|clean": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Serif|tilt+2.5": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 2.4,
+   "n": 3
+  },
+  "SN Serif|tilt-4": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": -4.1,
+   "n": 3
+  },
+  "SN Serif|blur": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Serif|photo": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Serif|hard": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": -3.3,
+   "n": 3
+  },
+  "SN Carlito|clean": {
+   "cer": 0,
+   "fams": "carlito",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Carlito|tilt+2.5": {
+   "cer": 0,
+   "fams": "carlito",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Carlito|tilt-4": {
+   "cer": 0,
+   "fams": "carlito",
+   "rot": -4.1,
+   "n": 3
+  },
+  "SN Carlito|blur": {
+   "cer": 0,
+   "fams": "carlito",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Carlito|photo": {
+   "cer": 0,
+   "fams": "carlito",
+   "rot": 1.8,
+   "n": 3
+  },
+  "SN Carlito|hard": {
+   "cer": 0.008,
+   "fams": "carlito",
+   "rot": -3.3,
+   "n": 3
+  },
+  "SN Mono|clean": {
+   "cer": 0,
+   "fams": "mono",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Mono|tilt+2.5": {
+   "cer": 0,
+   "fams": "mono",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Mono|tilt-4": {
+   "cer": 0,
+   "fams": "mono",
+   "rot": -3.9,
+   "n": 3
+  },
+  "SN Mono|blur": {
+   "cer": 0,
+   "fams": "mono",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Mono|photo": {
+   "cer": 0,
+   "fams": "mono",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Mono|hard": {
+   "cer": 0,
+   "fams": "mono",
+   "rot": -3,
+   "n": 3
+  },
+  "DejaVu Serif|clean": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": 0,
+   "n": 1
+  },
+  "DejaVu Serif|tilt+2.5": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": 2.5,
+   "n": 3
+  },
+  "DejaVu Serif|tilt-4": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": -3.9,
+   "n": 3
+  },
+  "DejaVu Serif|blur": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": 0,
+   "n": 1
+  },
+  "DejaVu Serif|photo": {
+   "cer": 0,
+   "fams": "sourcesans/notoserif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "DejaVu Serif|hard": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": -3,
+   "n": 3
+  },
+  "DejaVu Sans|clean": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": 0,
+   "n": 1
+  },
+  "DejaVu Sans|tilt+2.5": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": 2.4,
+   "n": 3
+  },
+  "DejaVu Sans|tilt-4": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": -4,
+   "n": 3
+  },
+  "DejaVu Sans|blur": {
+   "cer": 0,
+   "fams": "sans",
+   "rot": 0,
+   "n": 1
+  },
+  "DejaVu Sans|photo": {
+   "cer": 0.016,
+   "fams": "sourcesans",
+   "rot": 1.7,
+   "n": 3
+  },
+  "DejaVu Sans|hard": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": -3,
+   "n": 3
+  },
+  "SN Caladea|clean": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Caladea|tilt+2.5": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 2.4,
+   "n": 3
+  },
+  "SN Caladea|tilt-4": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": -4.1,
+   "n": 3
+  },
+  "SN Caladea|blur": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Caladea|photo": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Caladea|hard": {
+   "cer": 0.016,
+   "fams": "serif",
+   "rot": -3.2,
+   "n": 3
+  },
+  "SN Gelasio|clean": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Gelasio|tilt+2.5": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 2.4,
+   "n": 3
+  },
+  "SN Gelasio|tilt-4": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Gelasio|blur": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Gelasio|photo": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Gelasio|hard": {
+   "cer": 0.008,
+   "fams": "serif",
+   "rot": -3.2,
+   "n": 3
+  },
+  "SN Open Sans|clean": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Open Sans|tilt+2.5": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": 2.4,
+   "n": 3
+  },
+  "SN Open Sans|tilt-4": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Open Sans|blur": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Open Sans|photo": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": 1.8,
+   "n": 3
+  },
+  "SN Open Sans|hard": {
+   "cer": 0,
+   "fams": "opensans",
+   "rot": -3,
+   "n": 3
+  },
+  "SN Roboto|clean": {
+   "cer": 0,
+   "fams": "roboto",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Roboto|tilt+2.5": {
+   "cer": 0,
+   "fams": "roboto",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Roboto|tilt-4": {
+   "cer": 0,
+   "fams": "roboto",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Roboto|blur": {
+   "cer": 0,
+   "fams": "roboto",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Roboto|photo": {
+   "cer": 0,
+   "fams": "roboto",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Roboto|hard": {
+   "cer": 0,
+   "fams": "roboto",
+   "rot": -3.2,
+   "n": 3
+  },
+  "SN Inter|clean": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Inter|tilt+2.5": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Inter|tilt-4": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Inter|blur": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Inter|photo": {
+   "cer": 0,
+   "fams": "inter",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Inter|hard": {
+   "cer": 0.016,
+   "fams": "inter",
+   "rot": -3.1,
+   "n": 3
+  },
+  "SN Lato|clean": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Lato|tilt+2.5": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 2.4,
+   "n": 3
+  },
+  "SN Lato|tilt-4": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Lato|blur": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Lato|photo": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Lato|hard": {
+   "cer": 0,
+   "fams": "serif",
+   "rot": -3.2,
+   "n": 3
+  },
+  "SN Source Sans|clean": {
+   "cer": 0,
+   "fams": "sourcesans",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Source Sans|tilt+2.5": {
+   "cer": 0,
+   "fams": "sourcesans",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Source Sans|tilt-4": {
+   "cer": 0,
+   "fams": "sourcesans",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Source Sans|blur": {
+   "cer": 0,
+   "fams": "sourcesans",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Source Sans|photo": {
+   "cer": 0,
+   "fams": "sourcesans",
+   "rot": 1.8,
+   "n": 3
+  },
+  "SN Source Sans|hard": {
+   "cer": 0.008,
+   "fams": "sourcesans",
+   "rot": -3.2,
+   "n": 3
+  },
+  "SN Fira Sans|clean": {
+   "cer": 0,
+   "fams": "fira",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Fira Sans|tilt+2.5": {
+   "cer": 0,
+   "fams": "fira",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Fira Sans|tilt-4": {
+   "cer": 0,
+   "fams": "fira",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Fira Sans|blur": {
+   "cer": 0,
+   "fams": "fira",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Fira Sans|photo": {
+   "cer": 0,
+   "fams": "fira",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Fira Sans|hard": {
+   "cer": 0,
+   "fams": "fira",
+   "rot": -3.1,
+   "n": 3
+  },
+  "SN Montserrat|clean": {
+   "cer": 0,
+   "fams": "montserrat",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Montserrat|tilt+2.5": {
+   "cer": 0,
+   "fams": "montserrat",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Montserrat|tilt-4": {
+   "cer": 0,
+   "fams": "montserrat",
+   "rot": -4.1,
+   "n": 3
+  },
+  "SN Montserrat|blur": {
+   "cer": 0,
+   "fams": "montserrat",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Montserrat|photo": {
+   "cer": 0,
+   "fams": "montserrat",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Montserrat|hard": {
+   "cer": 0,
+   "fams": "montserrat",
+   "rot": -3.1,
+   "n": 3
+  },
+  "SN Noto Serif|clean": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Noto Serif|tilt+2.5": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Noto Serif|tilt-4": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": -4.1,
+   "n": 3
+  },
+  "SN Noto Serif|blur": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Noto Serif|photo": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN Noto Serif|hard": {
+   "cer": 0,
+   "fams": "notoserif",
+   "rot": -3.1,
+   "n": 3
+  },
+  "SN Garamond|clean": {
+   "cer": 0,
+   "fams": "garamond",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Garamond|tilt+2.5": {
+   "cer": 0,
+   "fams": "garamond",
+   "rot": 2.5,
+   "n": 3
+  },
+  "SN Garamond|tilt-4": {
+   "cer": 0,
+   "fams": "garamond",
+   "rot": -4,
+   "n": 3
+  },
+  "SN Garamond|blur": {
+   "cer": 0.016,
+   "fams": "garamond",
+   "rot": 0,
+   "n": 3
+  },
+  "SN Garamond|photo": {
+   "cer": 0,
+   "fams": "garamond",
+   "rot": 1.8,
+   "n": 3
+  },
+  "SN Garamond|hard": {
+   "cer": 0.117,
+   "fams": "carlito",
+   "rot": -3.2,
+   "n": 3
+  },
+  "SN PT Serif|clean": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN PT Serif|tilt+2.5": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": 2.4,
+   "n": 3
+  },
+  "SN PT Serif|tilt-4": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": -4.1,
+   "n": 3
+  },
+  "SN PT Serif|blur": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": 0,
+   "n": 3
+  },
+  "SN PT Serif|photo": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": 1.7,
+   "n": 3
+  },
+  "SN PT Serif|hard": {
+   "cer": 0,
+   "fams": "ptserif",
+   "rot": -3.2,
+   "n": 3
+  }
+ }
+}
