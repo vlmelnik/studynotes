@@ -40,6 +40,8 @@ function lev(a, b) {
 
 (async () => {
   const { app, win, ed } = await launch();
+  // the "Editable scans" add-on is on (otherwise the first case waits on its question)
+  await ed(() => { window.__app.settings.editableScans = true; });
   await ed(async () => { const r = await window.api.createNotebook('', { title: 'bench', paper: 'blank', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForTimeout(600);
   const rows = [];
@@ -87,7 +89,8 @@ function lev(a, b) {
         await win.waitForTimeout(400);
         first = false;
       }
-      await ed(() => window.__mk);
+      // (a case that hangs fails the bench instead of stopping it silently)
+      await ed(() => Promise.race([window.__mk, new Promise((_, no) => setTimeout(() => no(new Error('case timed out after 120 s')), 120000))]));
       const d = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
       const t = d.texts.slice().sort((a, b) => a.y - b.y);
       if (process.env.LOGT) console.log(JSON.stringify(t.map((q) => [q.text.slice(0, 12), q.x, q.y, q.w, q.fs, q.r])));
