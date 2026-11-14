@@ -92,14 +92,14 @@ npm run test:ocr         # quality bench for "Make text editable" (slow)
 npm run test:all         # unit tests, build, all e2e suites
 ```
 
-The e2e suites drive the real app with Playwright; on Linux prefix them with `xvfb-run -a -s "-screen 0 1600x1000x24"` and install `poppler-utils` (pdfinfo, pdftotext). A single suite runs with `node test/e2e/<suite>.js` (`run.js` is the core tools on a generated 600-page PDF, `v11.js` … `v17b.js` are the feature suites, `ONLY=A,B` limits the sections of most of them). `STUDYNOTES_EXE=<path to the packaged app>` runs the suites against a packaged build. Shared helpers (`check`, `launch`, `at`, the summary line) are in `test/e2e/harness/`; CI (`.github/workflows/ci.yml`) runs the unit tests on Linux and Windows and the smoke suite on Linux.
+The e2e suites drive the real app with Playwright; on Linux prefix them with `xvfb-run -a -s "-screen 0 1600x1000x24"` and install `poppler-utils` (pdfinfo, pdftotext). A single suite runs with `node test/e2e/<suite>.js` (`run.js` is the core tools on a generated 600-page PDF, `v11.js` … `v17b.js` and `scan-layout.js` are the feature suites, `ocr-bench.js` is `npm run test:ocr`, `ocr-profile.js` and `real-pdfs.js` are tools, not checks; `ONLY=A,B` limits the sections of most of them). `STUDYNOTES_EXE=<path to the packaged app>` runs the suites against a packaged build. Shared helpers (`check`, `launch`, `at`, the summary line) are in `test/e2e/harness/`; CI (`.github/workflows/ci.yml`) runs the unit tests on Linux and Windows and the smoke suite on Linux.
 
 <details>
 <summary>Code overview</summary>
 
-- `src/main/` – Electron main process: storage with atomic writes (`library.js`), PDF export (`export.js`), Drive sync (`cloud.js`, `sync.js`), PDFs opened in place (`external.js`), PDF forms and signatures (`forms.js`), local backups (`localbackup.js`).
-- `src/renderer/` – UI: page viewer (`viewer.js`), pen input and tools (`tools.js`), editor with undo and autosave (`editor.js`), library (`library-view.js`), interface language (`i18n.js`), Fill & sign (`fill-sign.js`).
-- `src/shared/` – used by both screen and export: ink outlines (`ink.js`), eraser and shape geometry (`geometry.js`), paper (`paper.js`), Russian texts (`i18n-ru.js`).
+- `src/main/` – Electron main process: storage with atomic writes (`library.js`), PDF export (`export.js`), Drive sync (`cloud.js`, `sync.js`), PDFs opened in place (`external.js`), PDF forms and signatures (`forms.js`), local backups (`localbackup.js`), text recognition (`ocr.js`, `spell.js`, `handwriting.js`).
+- `src/renderer/` – UI: page viewer (`viewer.js`), pen input and tools (`tools.js`), editor with undo and autosave (`editor.js`), library (`library-view.js`), interface language (`i18n.js`), Fill & sign (`fill-sign.js`), "Make text editable" (`scan-edit.js`, `scan-geo.js`), searchable scans (`ocr.js`).
+- `src/shared/` – used by both screen and export: ink outlines (`ink.js`), eraser and shape geometry (`geometry.js`), paper (`paper.js`), rich text and text boxes (`richtext.js`, `textbox.js`), fonts (`fonts.js`), data format and migrations (`format.js`), PDF text lines and selection (`pdf-text-layout.js`), and the pure parts of "Make text editable": recognised lines and text (`ocr-lines.js`, `ocr-text.js`), fonts and text boxes (`scan-text.js`), layout (`scan-layout.js`), fitting to the ink (`scan-fit.js`), cleaning the scan (`scan-clean.js`), perspective (`warp.js`). Small helpers are in `util.js`. Everything in it must run without Node, Electron or the DOM (a unit test checks this).
 - `graphify-out/` – a code map (`GRAPH_REPORT.md`, `graph.html`), refreshed with `npm run graph`.
 
 </details>
