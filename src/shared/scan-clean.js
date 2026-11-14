@@ -340,7 +340,6 @@ function cleanLines(img, lines, maskImg = img) {
   // the letters of another (the line above, the next column)
   for (let i = 0; i < W * H; i++) { if (keep[i] & 1) fill[i] = 0; else if (fill[i]) keep[i] = 0; }
   inpaint(img, fill, 1, keep);
-  void H;
   out.fill = fill; // which pixels were painted over
   return out;
 }

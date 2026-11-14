@@ -79,10 +79,9 @@ function variants(w, table, max = 2, limit = 800) {
 /**
  * Corrects the words of recognised lines. lines: [{ text, words: [{ text, conf? }] }]
  * (conf: the reader's confidence 0–100, optional).
- * Returns the lines with corrected text (and words), plus how many words changed.
+ * Returns the lines with corrected text (and words).
  */
 function correctLines(lines) {
-  let changed = 0;
   // the last word of the previous line: a line start is a sentence start
   // only after a full stop (or on the first line)
   let lastTok = null;
@@ -92,7 +91,7 @@ function correctLines(lines) {
     // the line's script: what most of its letters are (Russian with a few Latin terms stays Russian)
     const script = nCyr >= nLat ? 'cyr' : 'lat';
     // ctx: { prev, next, conf } – the neighbouring words and the reader's confidence
-    const fix = (raw, count = false, ctx = {}) => {
+    const fix = (raw, ctx = {}) => {
       const m = raw.match(/^([^\p{L}\p{N}]*)([\p{L}\p{N}][\p{L}\p{N}'’-]*[\p{L}\p{N}]|[\p{L}\p{N}])([^\p{L}\p{N}]*)$/u);
       if (!m) return raw;
       const [, pre, w, post] = m;
@@ -111,11 +110,10 @@ function correctLines(lines) {
         // Russian words or when the reader was unsure (mixed letters always)
         const cyrSide = (x) => !x || CYR.test(x);
         if (!hasC && known(w, 'lat') && !(cyrSide(ctx.prev) && cyrSide(ctx.next) && (ctx.prev || ctx.next)) && !(ctx.conf != null && ctx.conf < UNSURE)) return raw;
-        if (count) changed++;
         return pre + c + post;
       }
       // hyphenated: each part on its own
-      if (w.includes('-')) return pre + w.split('-').map((p) => fix(p, count)).join('-') + post;
+      if (w.includes('-')) return pre + w.split('-').map((p) => fix(p)).join('-') + post;
       // acronyms and terms in capitals (TCP, RS) and words already right stay
       if (!hasC && w.length <= 5 && w === w.toUpperCase()) return raw;
       const ws = hasC && !hasL ? 'cyr' : hasL && !hasC ? 'lat' : 'mixed';
@@ -144,7 +142,6 @@ function correctLines(lines) {
         if (m2 && known(m2[2], 'cyr')) best = m2[1] + ' ' + m2[2];
       }
       if (!best) return raw;
-      if (count) changed++;
       return pre + best + post;
     };
     // a one-letter Russian word read in Latin ("K сожалению" → "К сожалению"):
@@ -165,7 +162,7 @@ function correctLines(lines) {
     const words = ws.map((wd, i) => {
       const t = String(wd.text || '');
       const prev = i ? String(ws[i - 1].text || '') : prevLine, next = ws[i + 1] && String(ws[i + 1].text || '');
-      return { ...wd, text: single(t, next, prev, wd.conf) || fix(t, false, { prev, next, conf: wd.conf }) };
+      return { ...wd, text: single(t, next, prev, wd.conf) || fix(t, { prev, next, conf: wd.conf }) };
     });
     const parts = text.split(/(\s+)/);
     // the words' confidence, when the text splits into the same words
@@ -177,13 +174,13 @@ function correctLines(lines) {
       k++;
       const prev = k ? toks[k - 1] : prevLine, next = toks[k + 1];
       const s1 = single(part, next, prev, confOf(k));
-      if (s1) { changed++; return s1; }
-      return fix(part, true, { prev, next, conf: confOf(k) });
+      if (s1) return s1;
+      return fix(part, { prev, next, conf: confOf(k) });
     }).join('');
     if (toks.length) lastTok = toks[toks.length - 1];
     return { ...l, text: fixed, words };
   });
-  return { lines: out, changed };
+  return { lines: out };
 }
 
 module.exports = { correctLines, variants };
