@@ -1,5 +1,9 @@
 // Quality bench for "Make text editable" (fonts x photo conditions): prints a
-// table and checks the error-rate limits. usage: npm run test:ocr
+// table, checks the error-rate limits and compares every case with its stored
+// reference (test/golden/ocr/baseline-<lang>.json): a case may not get worse
+// than its reference (error rate +1 point, same number of lines, angle ±0.5°,
+// same typeface kind). usage: npm run test:ocr (RU=1 / EN=1 for the other
+// languages); UPDATE_GOLDEN=1 records the current results as the reference.
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -12,15 +16,12 @@ const { check, finish } = require('./harness/report');
 const { launch: launchApp } = require('./harness/app');
 const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-ocrb-'));
-const shot = (win, name) => win.screenshot({ path: path.join(out, `v17-${name}.png`) });
-
-
 const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
+const LANG = process.env.RU ? 'ru' : process.env.EN ? 'en' : 'de';
+const goldenFile = path.join(root, 'test', 'golden', 'ocr', `baseline-${LANG}.json`);
+// cases whose raw reading is stored for the unit tests (font|condition)
+const RAW_CASES = ['SN Sans|clean', 'SN Serif|tilt+2.5', 'SN Carlito|photo', 'SN Mono|hard'];
 
-
-
-// Quality bench for "Make text editable": fonts × photo conditions.
-// Prints a table (character error rate, font, angle) and checks limits.
 const LINES = process.env.RU
   ? ['Арендатор обязуется вносить плату вовремя', 'и бережно относиться к мебели в квартире.', 'Залог возвращается через месяц после выезда.']
   : process.env.EN ? ['The tenant agrees to pay the monthly rent', 'before the third working day of each month.', 'Please check the size of every room carefully.']
@@ -94,9 +95,16 @@ function lev(a, b) {
       const cer = lev(got, want) / want.length;
       const fams = [...new Set(t.map((q) => q.ff))].join('/');
       const rot = t.length ? (t.reduce((a, q) => a + (q.r || 0), 0) / t.length).toFixed(1) : '-';
-      rows.push({ font: css, cond, cer, fams, want: fam, rot, n: t.length });
+      rows.push({ font: css, cond, cer, fams, want: fam, rot: rot === '-' ? '-' : Number(rot), n: t.length });
       const soft = t.length ? Math.max(...t.map((q) => q.look || 0)) : 0;
       console.log(`${css.padEnd(15)} ${cond.padEnd(9)} soft ${soft.toFixed(2)} CER ${(cer * 100).toFixed(1).padStart(5)}%  font ${fams.padEnd(14)} (want ${fam})  angle ${rot}  lines ${t.length}`);
+      // a few cases as recorded input for the fast unit tests of the layout rules
+      if (process.env.UPDATE_GOLDEN && RAW_CASES.includes(`${css}|${cond}`)) {
+        const dbg = await ed(() => ({ first: window.__ocrDebug.first, join: window.__ocrDebug.join }));
+        const rawDir = path.join(path.dirname(goldenFile), 'raw');
+        fs.mkdirSync(rawDir, { recursive: true });
+        fs.writeFileSync(path.join(rawDir, `${LANG}-${css.replace(/\W/g, '').toLowerCase()}-${cond}.json`), JSON.stringify({ lang: LANG, font: css, cond, ...dbg }) + '\n');
+      }
       if (process.env.DUMP) {
         const urls = await ed(() => window.__ocrDebug);
         urls.forEach((u, k) => fs.writeFileSync(path.join(out, `dump-${css.replace(/\W/g, '')}-${cond}-${k ? 'orig' : 'norm'}.png`), Buffer.from(u.split(',')[1], 'base64')));
@@ -107,6 +115,35 @@ function lev(a, b) {
         await win.screenshot({ path: path.join(out, `bench-${fam}-${css.replace(/\W/g, '')}-${cond}.png`), clip: { x: r.left + 20 * z, y: r.top + 50 * z, width: 545 * z, height: 170 * z } });
       }
     }
+  }
+  // reference results per case
+  const key = (r) => `${r.font}|${r.cond}`;
+  const now = Object.fromEntries(rows.map((r) => [key(r), { cer: Math.round(r.cer * 1000) / 1000, fams: r.fams, rot: r.rot, n: r.n }]));
+  const subset = !!(process.env.FONTS || process.env.CONDS);
+  if (process.env.UPDATE_GOLDEN) {
+    const old = fs.existsSync(goldenFile) ? JSON.parse(fs.readFileSync(goldenFile, 'utf8')).cases : {};
+    fs.mkdirSync(path.dirname(goldenFile), { recursive: true });
+    fs.writeFileSync(goldenFile, JSON.stringify({ lang: LANG, lines: LINES, note: 'written by UPDATE_GOLDEN=1 node test/e2e/ocr-bench.js', cases: { ...(subset ? old : {}), ...now } }, null, 1) + '\n');
+    console.log(`reference written: ${path.relative(root, goldenFile)} (${Object.keys(now).length} cases)`);
+  } else if (fs.existsSync(goldenFile)) {
+    const ref = JSON.parse(fs.readFileSync(goldenFile, 'utf8')).cases;
+    const worse = [], better = [], missing = [];
+    for (const [k, r] of Object.entries(now)) {
+      const g = ref[k];
+      if (!g) { missing.push(k); continue; }
+      const why = [];
+      if (r.cer > g.cer + 0.01) why.push(`CER ${(g.cer * 100).toFixed(1)} → ${(r.cer * 100).toFixed(1)} %`);
+      if (r.n !== g.n) why.push(`lines ${g.n} → ${r.n}`);
+      if (r.rot !== '-' && g.rot !== '-' && Math.abs(r.rot - g.rot) > 0.5) why.push(`angle ${g.rot} → ${r.rot}`);
+      if (r.fams !== g.fams) why.push(`font ${g.fams} → ${r.fams}`);
+      if (why.length) worse.push(`${k}: ${why.join(', ')}`);
+      else if (r.cer < g.cer - 0.01) better.push(`${k}: CER ${(g.cer * 100).toFixed(1)} → ${(r.cer * 100).toFixed(1)} %`);
+    }
+    if (better.length) console.log(`better than the reference (record with UPDATE_GOLDEN=1):\n  ${better.join('\n  ')}`);
+    check(`golden: no case worse than its reference (${LANG})`, !worse.length, worse.join('; '));
+    check('golden: every case has a reference', !missing.length, missing.join(', '));
+  } else {
+    console.log(`no reference yet for ${LANG}: run with UPDATE_GOLDEN=1 to record one`);
   }
   const avg = rows.reduce((a, r) => a + r.cer, 0) / rows.length;
   console.log(`average CER ${(avg * 100).toFixed(2)}%`);

@@ -364,6 +364,8 @@ async function editableRun(editor, index, page, area) {
     const pngOf = async (im) => { const c = imageCanvas(im); const bl = await pngBlob(c); return { c, bl }; };
     let n0 = await pngOf(norm);
     let lines = await recognizeSized(n0.c, n0.bl);
+    // (tests: the first reading as recorded input for the layout rules)
+    if (window.__ocrDebug) window.__ocrDebug.first = lines.map((l) => ({ text: l.text, conf: l.conf, bbox: l.bbox, baseline: l.baseline, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf, bbox: w.bbox })) }));
     const langs = narrowLangs(lines) || LANGS;
     if (langs !== LANGS && Math.abs(skewOf(lines)) <= 0.35) lines = await recognizeSized(n0.c, n0.bl, langs);
     if (editor.destroyed) { busy.remove(); return; }
@@ -674,6 +676,7 @@ async function editableRun(editor, index, page, area) {
     });
     // lines that belong together become one box (a paragraph, a centred title
     // of several lines): same font, size and colour, evenly spaced, aligned
+    if (window.__ocrDebug) window.__ocrDebug.join = { texts: texts.map((t) => ({ ...t, q: t.q ? 1 : undefined, cg: t.cg ? 1 : undefined })), lines: lines.map((l) => ({ bbox: l.bbox })), fonts: fonts.map((f) => ({ hand: !!f.hand })), r, S };
     const { boxes, lineOf } = joinParagraphs(texts, lines, fonts, r, S);
     editor.commit(page.id, before, { ...before, items: before.items.concat([item]), texts: before.texts.concat(boxes) });
     busy.remove();
