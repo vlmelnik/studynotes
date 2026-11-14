@@ -1,0 +1,4 @@
+# Data files are read byte for byte (word lists, dictionaries, language data,
+# fonts): never convert their line endings on checkout (Windows: CRLF).
+assets/** -text
+*.traineddata.gz binary

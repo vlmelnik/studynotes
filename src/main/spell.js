@@ -20,7 +20,7 @@ function load() {
   const nspell = require('nspell');
   const read = (f) => fs.readFileSync(path.join(DIR, f));
   const de = new Set();
-  for (const w of read('de.txt').toString('utf8').split('\n')) if (w) de.add(w.toLowerCase());
+  for (const w of read('de.txt').toString('utf8').split(/\r?\n/)) if (w) de.add(w.toLowerCase());
   dicts = { ru: nspell(read('ru.aff'), read('ru.dic')), en: nspell(read('en.aff'), read('en.dic')), de };
   return dicts;
 }
