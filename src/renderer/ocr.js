@@ -6,23 +6,10 @@
 // Based on the contribution by Pedro Falbo (pull request #1).
 import { isCancel } from './pdfdoc.js';
 import { recognizeSized, ensureOcr } from './scan-edit.js';
+import { linesFrom } from '../shared/ocr-lines.js';
 
 export { ensureOcr };
 
-const r2 = (v) => Math.round(v * 100) / 100;
-
-// Words → lines (page units). Tesseract already groups words into lines.
-function linesFrom(got, scale) {
-  const out = [];
-  for (const l of got) {
-    const ws = (l.words || []).filter((w) => w && w.text && w.text.trim() && w.bbox && (w.conf == null || w.conf >= 25))
-      .map((w) => ({ t: w.text.trim(), x0: r2(w.bbox.x0 / scale), x1: r2(w.bbox.x1 / scale), y0: r2(w.bbox.y0 / scale), y1: r2(w.bbox.y1 / scale) }));
-    if (!ws.length) continue;
-    ws.sort((a, b) => a.x0 - b.x0);
-    out.push({ y0: Math.min(...ws.map((w) => w.y0)), y1: Math.max(...ws.map((w) => w.y1)), words: ws });
-  }
-  return out;
-}
 
 /**
  * Recognise one page of `pdf` (a PdfDoc). Returns { lines, text } in page

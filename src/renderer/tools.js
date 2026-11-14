@@ -16,7 +16,8 @@ import { restack, stacked, layerOf } from '../shared/stacking.js';
 import { Laser } from './laser.js';
 import { isClosedShape } from '../shared/ink.js';
 import { placeAt } from './fill-sign.js';
-import { TextSelection, peekLayout, charAt, spanBetween, highlightStrokes } from './pdf-text.js';
+import { TextSelection, peekLayout } from './pdf-text.js';
+import { charAt, spanBetween, highlightStrokes } from '../shared/pdf-text-layout.js';
 import { PenFilter } from '../shared/pen-filter.js';
 
 const HOLD_MS = 550;
