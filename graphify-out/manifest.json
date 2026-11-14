@@ -174,8 +174,8 @@
     "semantic_hash": ""
   },
   "src/renderer/tools.js": {
-    "mtime": 1794645400.8449044,
-    "seen": 1794645573.903556,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721617,
     "ast_hash": "d93d467d232b3f81274b73ce5a699d82",
     "semantic_hash": ""
   },
@@ -354,8 +354,8 @@
     "semantic_hash": ""
   },
   "src/renderer/pdf-text.js": {
-    "mtime": 1794645439.6727352,
-    "seen": 1794645573.9035497,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721564,
     "ast_hash": "fa7688c7205139448dbe7bd63897f46e",
     "semantic_hash": ""
   },
@@ -486,27 +486,27 @@
     "semantic_hash": ""
   },
   "src/renderer/scan-edit.js": {
-    "mtime": 1794645439.6740358,
-    "seen": 1794645573.9035518,
-    "ast_hash": "af4bf2fce04240ccb3400cd68ebc8c97",
+    "mtime": 1794649713.0239534,
+    "seen": 1794650655.072158,
+    "ast_hash": "fd254b9a967c8ea5c8620d2d4b2e4f84",
     "semantic_hash": ""
   },
   "src/shared/scan-clean.js": {
-    "mtime": 1794575125.4008358,
-    "seen": 1794645573.9035733,
-    "ast_hash": "fd9ef659a5756508c6099c29f00e38a2",
+    "mtime": 1794649713.0239534,
+    "seen": 1794650655.0721767,
+    "ast_hash": "6e85b2360c403aa70969615c4ceb1fc0",
     "semantic_hash": ""
   },
   "test/e2e/v17.js": {
-    "mtime": 1794642782.4088044,
-    "seen": 1794645573.9035947,
-    "ast_hash": "b895f393ede6a36ce3316d2f7b984c10",
+    "mtime": 1794649684.6411262,
+    "seen": 1794650655.0721974,
+    "ast_hash": "7eca06da0ad792bcdc51ae8e45a1f240",
     "semantic_hash": ""
   },
   "test/e2e/ocr-bench.js": {
-    "mtime": 1794615018.8324432,
-    "seen": 1794645573.903584,
-    "ast_hash": "0810b93f50fc2edf6231a7eab5ae92ca",
+    "mtime": 1794648750.883974,
+    "seen": 1794650655.072187,
+    "ast_hash": "8c6721cac1fee20e0a67d41ebfef02c8",
     "semantic_hash": ""
   },
   "licenses/caladea-LICENSE.txt": {
@@ -594,8 +594,8 @@
     "semantic_hash": ""
   },
   "src/renderer/scan-geo.js": {
-    "mtime": 1794645400.796566,
-    "seen": 1794645573.9035532,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721595,
     "ast_hash": "702a98bc2f0483e2f7a170f5818db5fb",
     "semantic_hash": ""
   },
@@ -630,8 +630,8 @@
     "semantic_hash": ""
   },
   "src/renderer/ocr.js": {
-    "mtime": 1794645439.6709502,
-    "seen": 1794645573.9035485,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.072155,
     "ast_hash": "458793906eafb270d1ccd1f45262f60d",
     "semantic_hash": ""
   },
@@ -702,26 +702,26 @@
     "semantic_hash": ""
   },
   "src/shared/ocr-lines.js": {
-    "mtime": 1794645439.6695802,
-    "seen": 1794645573.903566,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721707,
     "ast_hash": "58e6976f5b1a3453b45aba983adcec3f",
     "semantic_hash": ""
   },
   "src/shared/pdf-text-layout.js": {
-    "mtime": 1794645400.8185685,
-    "seen": 1794645573.9035695,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721738,
     "ast_hash": "6e0071a587db6cda74d1f54228ce0116",
     "semantic_hash": ""
   },
   "src/shared/scan-fit.js": {
-    "mtime": 1794645400.7967377,
-    "seen": 1794645573.9035742,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721774,
     "ast_hash": "789e82ee77b83503fcbac31f25053fe4",
     "semantic_hash": ""
   },
   "src/shared/scan-text.js": {
-    "mtime": 1794645439.67115,
-    "seen": 1794645573.903576,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0721788,
     "ast_hash": "6cf7ec9610c232f0979f23edc5f8f6c4",
     "semantic_hash": ""
   },
@@ -900,8 +900,8 @@
     "semantic_hash": ""
   },
   "test/unit/shared/pdf-text-layout.test.js": {
-    "mtime": 1794645481.488121,
-    "seen": 1794645573.9036176,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0722408,
     "ast_hash": "8686d176ccc0054498ef48440171c46c",
     "semantic_hash": ""
   },
@@ -918,14 +918,14 @@
     "semantic_hash": ""
   },
   "test/unit/shared/scan-clean.test.js": {
-    "mtime": 1794615232.3883777,
-    "seen": 1794645573.90362,
-    "ast_hash": "47d306b7f05a4f131c3e0ca66c85f2fb",
+    "mtime": 1794649654.4030132,
+    "seen": 1794650655.0722437,
+    "ast_hash": "ff13fde61b0bff7c79621bd6a61af064",
     "semantic_hash": ""
   },
   "test/unit/shared/scan-fit.test.js": {
-    "mtime": 1794645518.7207973,
-    "seen": 1794645573.9036207,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0722444,
     "ast_hash": "7fcdd2728d3e935fdb6e79e137cbb1d6",
     "semantic_hash": ""
   },
@@ -936,8 +936,8 @@
     "semantic_hash": ""
   },
   "test/unit/shared/scan-text.test.js": {
-    "mtime": 1794645472.4961214,
-    "seen": 1794645573.9036222,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.0722463,
     "ast_hash": "a13a18a10e91e8ec8e882373f7dc065c",
     "semantic_hash": ""
   },
@@ -948,8 +948,8 @@
     "semantic_hash": ""
   },
   "test/unit/shared/shared-guard.test.js": {
-    "mtime": 1794645518.7206094,
-    "seen": 1794645573.9036238,
+    "mtime": 1794645838.8961048,
+    "seen": 1794650655.072248,
     "ast_hash": "cef0f4b085d78a611ccab92c35ef2b9d",
     "semantic_hash": ""
   },
@@ -981,6 +981,108 @@
     "mtime": 1794575125.395984,
     "seen": 1794645573.9036605,
     "ast_hash": "cc437fab800f068c680c49507f34caec",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/baseline-de.json": {
+    "mtime": 1794648750.8870773,
+    "seen": 1794650655.0722005,
+    "ast_hash": "5f055a69a3ff29a04855b62f2ca8ec73",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/baseline-en.json": {
+    "mtime": 1794648750.887153,
+    "seen": 1794650655.0722017,
+    "ast_hash": "d4c68c0f010cd7da28a08ff886287a81",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/baseline-ru.json": {
+    "mtime": 1794648750.887153,
+    "seen": 1794650655.0722027,
+    "ast_hash": "7315f4f79e3ecd8ea4cba89a6bede9ef",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/de-sncarlito-photo.json": {
+    "mtime": 1794648750.887153,
+    "seen": 1794650655.0722036,
+    "ast_hash": "7681679242087b70c2a7a16e00c609a0",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/de-snmono-hard.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722044,
+    "ast_hash": "2246f3dd5b82f77678bc27fbb6c49ecd",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/de-snsans-clean.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.072205,
+    "ast_hash": "031c89e0b7aedf9febe2964e5f775e98",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/de-snserif-tilt+2.5.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722058,
+    "ast_hash": "cda8fe2b9b080510991858ba73191f7e",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/en-sncarlito-photo.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.072209,
+    "ast_hash": "a7d83733353e3dcf635375cb5ecdc0f6",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/en-snmono-hard.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722094,
+    "ast_hash": "3cc87e8630718e96c9ba8965b7ff6845",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/en-snsans-clean.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.07221,
+    "ast_hash": "9f6e60b84035566213a6737135700916",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/en-snserif-tilt+2.5.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722113,
+    "ast_hash": "6ffddbd10e1b472d5bcca1b3f4e9a614",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/expect.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722117,
+    "ast_hash": "f47816077094a7212e8cc561b075339d",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/ru-sncarlito-photo.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722127,
+    "ast_hash": "908805e22013eaa533a595ea8e9b73bd",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/ru-snmono-hard.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722136,
+    "ast_hash": "db9f0c02ca863abf1bcf301c38bf065e",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/ru-snsans-clean.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722144,
+    "ast_hash": "0fc895f4218363e6e0860e68c8f9260c",
+    "semantic_hash": ""
+  },
+  "test/golden/ocr/raw/ru-snserif-tilt+2.5.json": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.072215,
+    "ast_hash": "7a87cbf8b7455d0f797b217a9b944f03",
+    "semantic_hash": ""
+  },
+  "test/unit/shared/ocr-golden.test.js": {
+    "mtime": 1794648750.887316,
+    "seen": 1794650655.0722377,
+    "ast_hash": "bf5adb540b0afa13811ac7a134a8b91a",
     "semantic_hash": ""
   },
   "package-lock.json": {
