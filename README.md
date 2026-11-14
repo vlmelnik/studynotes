@@ -81,12 +81,18 @@ module.exports = { clientId: '…apps.googleusercontent.com', clientSecret: '…
 
 or set `STUDYNOTES_GOOGLE_CLIENT_ID` / `STUDYNOTES_GOOGLE_CLIENT_SECRET`. Without them, sync still works with your own client (Settings → Google Drive → *Advanced*).
 
-End-to-end tests drive the real app with Playwright (on Linux prefix with `xvfb-run -a`):
+Tests:
 
 ```bash
-node test/e2e/run.js       # core tools on a generated 600-page PDF
-node test/e2e/v15.js       # newest features
+npm test                 # unit tests (test/unit/shared, test/unit/main), Node 22+
+npm run build            # the e2e suites run against dist/, build first
+npm run test:e2e:smoke   # seconds: boot, notebook, one stroke, save + reopen, PDF export
+npm run test:e2e         # smoke + every e2e suite in sequence, stops at the first failing suite
+npm run test:ocr         # quality bench for "Make text editable" (slow)
+npm run test:all         # unit tests, build, all e2e suites
 ```
+
+The e2e suites drive the real app with Playwright; on Linux prefix them with `xvfb-run -a -s "-screen 0 1600x1000x24"` and install `poppler-utils` (pdfinfo, pdftotext). A single suite runs with `node test/e2e/<suite>.js` (`run.js` is the core tools on a generated 600-page PDF, `v11.js` … `v17b.js` are the feature suites, `ONLY=A,B` limits the sections of most of them). `STUDYNOTES_EXE=<path to the packaged app>` runs the suites against a packaged build. Shared helpers (`check`, `launch`, `at`, the summary line) are in `test/e2e/harness/`; CI (`.github/workflows/ci.yml`) runs the unit tests on Linux and Windows and the smoke suite on Linux.
 
 <details>
 <summary>Code overview</summary>

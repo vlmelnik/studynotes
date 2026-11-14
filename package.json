@@ -10,6 +10,10 @@
     "build": "node scripts/notices.js && node scripts/build.js",
     "start": "npm run build && electron .",
     "test": "node --test \"test/unit/**/*.test.js\"",
+    "test:e2e:smoke": "node test/e2e/smoke.js",
+    "test:e2e": "node test/e2e/smoke.js && node test/e2e/run.js && node test/e2e/v11.js && node test/e2e/v12.js && node test/e2e/v13.js && node test/e2e/v14.js && node test/e2e/v15.js && node test/e2e/v16.js && node test/e2e/v161.js && node test/e2e/v17.js && node test/e2e/v17b.js",
+    "test:ocr": "node test/e2e/ocr-bench.js",
+    "test:all": "npm test && npm run build && npm run test:e2e",
     "dist:win": "node scripts/build.js --minify && electron-builder --win",
     "graph": "graphify update . && graphify cluster-only . --no-label"
   },
