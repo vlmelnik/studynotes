@@ -2,6 +2,11 @@
 
 ## 1.7.0
 
+**Fixes (re-release, 15 Nov 2026)**
+- "Make text editable" keeps table borders, form lines and neighbouring text: only the letters are erased.
+- Form labels and table cells are no longer joined into one "paragraph"; paragraphs, lists and addresses still become one box.
+- Font matching is faster on long pages (about 10–15 % less time per page).
+
 **Fixes (re-release, 14 Nov 2026)**
 - Dictionary check keeps formula symbols and variables (tf, lc, "поле B равно").
 - "Make text editable" replaces only the letters: figures and the PDF around the text stay the original.
