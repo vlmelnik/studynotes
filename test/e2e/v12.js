@@ -195,7 +195,7 @@ const { launch: launchApp } = require('./harness/app');
   await ed(() => window.__app.active.flush());
   const pdf = path.join(tmp, 'v12.pdf');
   await ed(([a, b]) => window.api.exportTo(a, null, b), [rel, pdf]);
-  const txt = execFileSync('pdftotext', [pdf, '-']).toString();
+  const txt = execFileSync('pdftotext', ['-enc', 'UTF-8', pdf, '-']).toString();
   const fonts = execFileSync('pdffonts', [pdf]).toString();
   check('export contains the styled text with the serif font', /Teil/.test(txt) && /Hinter dem Bild/.test(txt) && /Serif/i.test(fonts), fonts.split('\n').slice(2).map((l) => l.split(/\s+/)[0]).join(' '));
   execFileSync('pdftoppm', ['-r', '60', '-png', '-f', '1', '-l', '1', pdf, path.join(out, 'v12-03-export')]);

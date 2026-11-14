@@ -214,7 +214,7 @@ const { launch: launchApp } = require('./harness/app');
   const exp = path.join(tmp, 'export.pdf');
   await ed(([a, b]) => window.api.exportTo(a, null, b), [rel, exp]);
   const info = execFileSync('pdfinfo', [exp]).toString();
-  const text = execFileSync('pdftotext', ['-f', '1', '-l', '1', exp, '-']).toString();
+  const text = execFileSync('pdftotext', ['-enc', 'UTF-8', '-f', '1', '-l', '1', exp, '-']).toString();
   check('export contains pasted text, table cells and styled text', /Привет/.test(text) && /12 V/.test(text) && /Wichtig/.test(text), `${/Pages:\s+(\d+)/.exec(info)[1]} pages`);
   execFileSync('pdftoppm', ['-r', '60', '-png', '-f', '1', '-l', '1', exp, path.join(out, 'v11-04-export')]);
 

@@ -397,7 +397,7 @@ const driveFile = (p) => { const [id] = Object.entries(driveIndex()).find(([, f]
     await ed(([f]) => { const e = window.__app.active; return e.flush().then(() => window.api.exportTo(e.rel, null, f)); }, [pdfFile]);
     const { execFileSync } = require('child_process');
     execFileSync('pdftoppm', ['-png', '-r', '60', '-f', '1', '-l', '3', pdfFile, path.join(out, 'v13-export')]);
-    const txt = execFileSync('pdftotext', [pdfFile, '-']).toString();
+    const txt = execFileSync('pdftotext', ['-enc', 'UTF-8', pdfFile, '-']).toString();
     check('export: PDF has the text boxes and pages', /Hi there/.test(txt), txt.slice(0, 60).replace(/\s+/g, ' '));
   }
 

@@ -59,7 +59,7 @@ test('export: images, tables, rich text in all fonts, pen styles, board, two PDF
   assert.ok(Math.abs(board.width - (1803 + 72)) < 1, JSON.stringify(board));
   fs.mkdirSync(path.join(__dirname, '..', '..', 'out'), { recursive: true });
   fs.writeFileSync(path.join(__dirname, '..', '..', 'out', 'export-v11.pdf'), out);
-  const txt = execFileSync('pdftotext', ['-f', '1', '-l', '1', path.join(__dirname, '..', '..', 'out', 'export-v11.pdf'), '-']).toString();
+  const txt = execFileSync('pdftotext', ['-enc', 'UTF-8', '-f', '1', '-l', '1', path.join(__dirname, '..', '..', 'out', 'export-v11.pdf'), '-']).toString();
   assert.ok(txt.includes('Привет') && txt.includes('Übung') && txt.includes('Wert'), txt.slice(0, 200));
 });
 

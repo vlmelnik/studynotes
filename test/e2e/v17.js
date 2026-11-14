@@ -224,7 +224,7 @@ const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1', STUDYNOTE
       await ed(() => window.__app.active.flush());
       const exp = path.join(tmp, 'v17-scan.pdf');
       await ed(([a, b]) => window.api.exportTo(a, null, b), [rel, exp]);
-      const txt = require('child_process').execFileSync('pdftotext', ['-layout', '-f', '1', '-l', '1', exp, '-']).toString();
+      const txt = require('child_process').execFileSync('pdftotext', ['-enc', 'UTF-8', '-layout', '-f', '1', '-l', '1', exp, '-']).toString();
       const rows = txt.split('\n').map((x) => x.trim()).filter(Boolean);
       const first = rows.find((x) => x.includes('The tenant agrees')) || '';
       check('D: export wraps like the screen (paragraph line 1 complete in the PDF)', /650 euros$/.test(first) && rows.some((x) => x.startsWith('before the third working day')), JSON.stringify(rows.slice(0, 6)));
