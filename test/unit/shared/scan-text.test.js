@@ -68,3 +68,15 @@ test('dilateMask grows a mask by the radius', () => {
   assert.strictEqual(g.reduce((s, v) => s + (v ? 1 : 0), 0), 9);
   assert.strictEqual(g[0], 0);
 });
+
+test('sampleLines: all lines of a short text; a spread sample plus the headings of a long one', () => {
+  const { sampleLines } = require('../../../src/shared/scan-text');
+  const line = (h, len) => ({ text: 'x'.repeat(len), bbox: { y0: 0, y1: h } });
+  assert.deepStrictEqual(sampleLines([line(30, 5), line(30, 9)]), [0, 1]);
+  // 40 lines of text, a heading first, one long line in every stretch of four
+  const lines = Array.from({ length: 40 }, (_, k) => line(k === 0 ? 60 : 30, k % 4 === 2 ? 50 : 20));
+  const got = sampleLines(lines);
+  assert.ok(got.includes(0), 'the heading');
+  assert.strictEqual(got.length, 11);
+  assert.deepStrictEqual(got.slice(1), [2, 6, 10, 14, 18, 22, 26, 30, 34, 38]);
+});

@@ -24,6 +24,35 @@ test('paragraphs: two columns are two paragraphs; tilted or handwritten lines st
   assert.deepStrictEqual(g.map((x) => x.idx), [[0, 2], [1, 3], [4]]);
 });
 
+test('paragraphs: the labels of a form (widely spaced, different lengths) stay single boxes', () => {
+  // "Name:", "Street and number:", "City:", "Date of birth:" one under the other, 1.8 × the font size apart
+  const g = paragraphs([line(50, 90, 100, { text: 'Name:' }), line(50, 170, 122, { text: 'Street and number:' }), line(50, 82, 144, { text: 'City:' }), line(50, 140, 166, { text: 'Date of birth:' })]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0], [1], [2], [3]]);
+});
+
+test('paragraphs: a paragraph with 1.5 line spacing is still one box (its lines are full)', () => {
+  const g = paragraphs([line(50, 400, 100), line(50, 392, 118), line(50, 398, 136), line(50, 210, 154)]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0, 1, 2, 3]]);
+});
+
+test('paragraphs: a single-spaced list or address stays one box whatever the lengths', () => {
+  const g = paragraphs([line(50, 80, 100, { text: 'Milk' }), line(50, 92, 115, { text: 'Bread' }), line(50, 100, 130, { text: 'Butter' }), line(50, 78, 145, { text: 'Eggs' })]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0, 1, 2, 3]]);
+});
+
+test('paragraphs: the cells of a table are not joined down a column', () => {
+  // three rows of "Item | Qty | Price": every line has a neighbour in its row
+  const row = (cy, a, b, c) => [line(50, 50 + a.length * 6, cy, { text: a }), line(200, 200 + b.length * 6, cy, { text: b }), line(300, 300 + c.length * 6, cy, { text: c })];
+  const items = [...row(100, 'Pen', '2', '1.50'), ...row(115, 'Notebook', '10', '12.00'), ...row(130, 'Ruler', '1', '0.80')];
+  const g = paragraphs(items);
+  assert.ok(g.every((x) => x.idx.length === 1), JSON.stringify(g.map((x) => x.idx)));
+});
+
+test('paragraphs: a short line ending with a colon closes its group when widely spaced', () => {
+  const g = paragraphs([line(50, 400, 100, { text: 'Please note the following points before you sign:' }), line(50, 150, 122, { text: 'Remarks:' }), line(50, 148, 144, { text: 'see page 2' })]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0], [1], [2]]);
+});
+
 // a small ink mask: words with an underline under the 2nd one
 function mask(w, h, fill) {
   const ink = new Uint8Array(w * h);

@@ -135,7 +135,7 @@ function underlinedWords(li, words, base, hgt, line = null) {
 /**
  * Lines that belong together: one under the other at an even spacing, the
  * same font, size and colour, aligned on the left, the right or centred.
- * items: [{ x0, x1, cy, fs, ff, c, hand, warp }] (page units, cy: centre of
+ * items: [{ x0, x1, cy, fs, ff, c, text, hand, warp }] (page units, cy: centre of
  * the line). Returns groups [{ idx: [line numbers top → bottom], al, pitch }];
  * a single line is a group of its own.
  */
@@ -148,12 +148,17 @@ function paragraphs(items) {
     if (Number.isNaN(p) || Number.isNaN(q)) return a === b;
     return Math.abs((p >> 16) - (q >> 16)) + Math.abs(((p >> 8) & 255) - ((q >> 8) & 255)) + Math.abs((p & 255) - (q & 255)) < 90;
   };
+  // lines with another text beside them in the same row: a table, or columns
+  const beside = items.map((t, k) => items.some((o, j) => j !== k && Math.abs(o.cy - t.cy) < Math.min(o.fs, t.fs) * 0.5 && (o.x0 > t.x1 || o.x1 < t.x0)));
+  const wOf = (q) => q.x1 - q.x0;
+  const numeric = (q) => { const x = String(q.text || '').replace(/\s/g, ''); return !!x && (x.match(/[\d.,:%€$£+\-–]/g) || []).length >= x.length * 0.6; };
   for (const k of order) {
     const t = items[k];
     let joined = false;
     if (!t.hand && !t.warp) {
       for (const g of groups) {
-        const last = items[g.idx[g.idx.length - 1]], first = items[g.idx[0]];
+        const lastK = g.idx[g.idx.length - 1];
+        const last = items[lastK], first = items[g.idx[0]];
         if (last.hand || last.warp || last.ff !== t.ff || !near(last.fs, t.fs, t.fs * 0.08) || !sameColour(last.c, t.c)) continue;
         const pitch = t.cy - last.cy;
         if (pitch < t.fs * 0.95 || pitch > t.fs * 2.1) continue;
@@ -168,6 +173,19 @@ function paragraphs(items) {
         const al = g.al ? (g.al === 'left' && left ? 'left' : g.al === 'right' && right ? 'right' : g.al === 'center' && centre ? 'center' : null)
           : left ? 'left' : centre ? 'center' : right ? 'right' : null;
         if (!al) continue;
+        // running text or single entries? Lines of a paragraph are full up
+        // to its last one. Not joined:
+        // - cells of a table (a row neighbour, short or numbers) – only long
+        //   lines side by side are columns of text;
+        // - widely spaced lines after a short one or after a colon (the
+        //   labels of a form). Single-spaced short lines stay together (a
+        //   list, an address).
+        if (beside[k] && beside[lastK] && (wOf(last) < last.fs * 10 || numeric(t) || numeric(last))) continue;
+        if (pitch > t.fs * 1.45) {
+          const widest = Math.max(wOf(t), ...g.idx.map((i) => wOf(items[i])));
+          if (al !== 'center' && wOf(last) < widest * 0.72) continue;
+          if (/:\s*$/.test(String(last.text || ''))) continue;
+        }
         g.al = al; g.pitch = g.pitch || pitch; g.idx.push(k); joined = true;
         break;
       }

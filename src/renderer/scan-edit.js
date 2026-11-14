@@ -11,7 +11,7 @@ import { FONTS } from '../shared/fonts.js';
 import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
-import { CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, escHtml, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
+import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, escHtml, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
 
 const LINE_H = 1.3;
 const DPI_SCALE = 300 / 72; // page units are points: render at 300 dpi
@@ -89,6 +89,7 @@ async function rasterize(editor, index, r, S) {
 // blur levels (× letter size) the candidates are compared at: a blurry photo
 // loses thin details like serifs
 const BLURS = [0, 0.03, 0.07, 0.12];
+const BLUR_PROBE = 3; // candidates compared at every blur before narrowing
 
 const cssFont = (c, px) => `${c.i ? 'italic ' : ''}${c.b ? 700 : 400} ${px}px "${FONTS[c.ff].css}"`;
 
@@ -120,7 +121,13 @@ async function fontScores(li, line, gray, cands) {
   const inkW = line.bbox.x1 - line.bbox.x0;
   const baseY = ((line.baseline.y0 + line.baseline.y1) / 2) - li.box.y0;
   const out = [];
+  // how blurred the line is does not depend on the typeface: the first
+  // candidates are compared at every blur, the others only at the blurs that
+  // fitted those best and the ones next to them
+  let levels = BLURS;
+  const wins = new Map();
   for (const c of cands) {
+    if (levels === BLURS && out.length >= BLUR_PROBE) levels = BLURS.filter((bk, i) => wins.has(bk) || wins.has(BLURS[i - 1]) || wins.has(BLURS[i + 1]));
     await document.fonts.load(cssFont(c, 40), text).catch(() => {});
     ctx.font = cssFont(c, 100);
     const m = ctx.measureText(text);
@@ -133,8 +140,8 @@ async function fontScores(li, line, gray, cands) {
     ctx.fillStyle = '#000';
     // a blurry photo loses thin details (serifs): compare with the candidate
     // drawn sharp and blurred as much as the photo might be, keep the best
-    let score = 0;
-    for (const bk of BLURS) {
+    let score = 0, at = null;
+    for (const bk of levels) {
       const blur = bk * px;
       ctx.clearRect(0, 0, w, h);
       ctx.filter = blur ? `blur(${blur.toFixed(2)}px)` : 'none';
@@ -149,8 +156,9 @@ async function fontScores(li, line, gray, cands) {
       let cov = 0, av = 0;
       for (let k = 0; k < w * h; k++) { const v = a[k * 4 + 3] / 255 - am; cov += v * (D[k] - dm); av += v * v; }
       const sc = av && dv ? cov / Math.sqrt(av * dv) : 0;
-      if (sc > score) score = sc;
+      if (sc > score) { score = sc; at = bk; }
     }
+    if (at !== null) wins.set(at, (wins.get(at) || 0) + 1);
     out.push({ ...c, px, score, prior: CLASSIC.has(c.ff) ? PRIOR : 0, left: mm.actualBoundingBoxLeft, asc: mm.fontBoundingBoxAscent, desc: mm.fontBoundingBoxDescent, baseY: baseY + li.box.y0 });
   }
   return out;
@@ -205,7 +213,10 @@ export async function recognizeSized(canvas, blob, langs = LANGS) {
     try { return [await pngBlob(c2), f]; } finally { c2.width = c2.height = 0; }
   };
   const read = async (bl, f, dx = 0, dy = 0) => {
+    const t0 = performance.now();
     const got = await window.api.ocrRecognize(new Uint8Array(await bl.arrayBuffer()), langs);
+    // (tests: every reading with its languages, lines found and time)
+    if (window.__ocrDebug) (window.__ocrDebug.readLog ||= []).push([langs.join('+'), got.length, Math.round(performance.now() - t0)]);
     const sc = (b) => ({ x0: b.x0 / f + dx, y0: b.y0 / f + dy, x1: b.x1 / f + dx, y1: b.y1 / f + dy });
     return got.map((l) => ({ ...l, bbox: sc(l.bbox), baseline: sc(l.baseline), words: l.words.map((w) => ({ ...w, bbox: sc(w.bbox) })) }));
   };
@@ -348,7 +359,12 @@ async function editableRun(editor, index, page, area) {
   const S = Math.min(DPI_SCALE, MAX_SIDE / Math.max(rw, rh), Math.sqrt(MAX_PIXELS / (rw * rh)));
   const busy = toast('Recognising text…', { timeout: 600000 });
   try {
+    // (tests: where the time goes)
+    const dbgT = window.__ocrDebug ? (window.__ocrDebug.t = {}) : null;
+    let t0 = performance.now();
+    const mark = (name) => { if (dbgT) { const n = performance.now(); dbgT[name] = Math.round(n - t0); t0 = n; } };
     const { canvas, ctx } = await rasterize(editor, index, r, S);
+    mark('raster');
     const W = canvas.width, H = canvas.height;
     const orig = ctx.getImageData(0, 0, W, H);
     // light letters on dark: everything below works on the negative (dark
@@ -364,6 +380,7 @@ async function editableRun(editor, index, page, area) {
     const pngOf = async (im) => { const c = imageCanvas(im); const bl = await pngBlob(c); return { c, bl }; };
     let n0 = await pngOf(norm);
     let lines = await recognizeSized(n0.c, n0.bl);
+    mark('read1');
     // (tests: the first reading as recorded input for the layout rules)
     if (window.__ocrDebug) window.__ocrDebug.first = lines.map((l) => ({ text: l.text, conf: l.conf, bbox: l.bbox, baseline: l.baseline, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf, bbox: w.bbox })) }));
     const langs = narrowLangs(lines) || LANGS;
@@ -457,6 +474,7 @@ async function editableRun(editor, index, page, area) {
       if (window.__ocrDebug) window.__ocrDebug.marks = marks;
       if (marks.length) lines = lines.filter((l) => !besideMark(l.bbox, marks, textH, (l.words || []).length || 1));
     }
+    mark('reads');
     if (area && area.poly) lines = lines.filter((l) => pointInPolygon(...toPage(...back((l.bbox.x0 + l.bbox.x1) / 2, (l.bbox.y0 + l.bbox.y1) / 2)), area.poly));
     if (!lines.length) { busy.remove(); toast('No printed text found here'); return; }
     // dictionary check: look-alike letters of the wrong script ("Tak" → "Так"),
@@ -466,6 +484,7 @@ async function editableRun(editor, index, page, area) {
       lines = lines.map((l, k) => ({ ...l, text: fixed.lines[k].text, words: (l.words || []).map((w, i) => ({ ...w, text: fixed.lines[k].words[i].text })) }));
     } catch (err) { console.warn('spelling check failed', err); }
 
+    mark('spell');
     // 3. font (needs the ink), then clean the paper
     //    first every typeface in its regular style, then bold / italic only
     //    for the few that fit best (fast enough with many fonts)
@@ -477,21 +496,37 @@ async function editableRun(editor, index, page, area) {
       const li = lineInk(norm, { x0: l.bbox.x0 - pad, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + pad, y1: l.bbox.y1 + pad });
       const ok = li.w > 0 && li.h > 0;
       inks.push(ok ? li : null);
-      scores.push(ok ? await fontScores(li, l, norm, fams.concat(HAND).map((ff) => ({ ff, b: false, i: false }))) : []);
+      scores.push([]);
       weights.push(ok ? strokeWeight(li) : 0);
+    }
+    // a long text: every typeface is tried on a sample of the lines only (and
+    // on all lines of another size – headings), the rest just with the ones
+    // that fit the sample best. Short texts: every line with every typeface.
+    const regular = (ffs) => ffs.concat(HAND).map((ff) => ({ ff, b: false, i: false }));
+    const sample = sampleLines(lines);
+    for (const k of sample) {
+      if (inks[k]) scores[k] = await fontScores(inks[k], lines[k], norm, regular(fams));
       await new Promise((res) => setTimeout(res)); // keep the window responsive
     }
-    if (window.__ocrDebug) window.__ocrDebug.best = scores.map((sc) => +Math.max(0, ...sc.filter((c) => FONTS[c.ff].kind !== 'hand').map((c) => c.score)).toFixed(3));
     const sum = (ff) => scores.reduce((a, sc) => { const c = sc.find((q) => q.ff === ff); return a + (c ? c.score + c.prior : 0); }, 0);
     const ranked = fams.slice().sort((x, y) => sum(y) - sum(x));
     // the 3 best, plus the best of each other kind (a serif heading in a sans text)
     const top = new Set(ranked.slice(0, 3));
     for (const kd of ['sans', 'serif', 'mono']) { const f = ranked.find((q) => FONTS[q].kind === kd); if (f) top.add(f); }
+    const inSample = new Set(sample);
+    for (let k = 0; k < lines.length; k++) {
+      if (inSample.has(k) || !inks[k]) continue;
+      scores[k] = await fontScores(inks[k], lines[k], norm, regular([...top]));
+      await new Promise((res) => setTimeout(res));
+    }
+    mark('fonts1');
+    if (window.__ocrDebug) window.__ocrDebug.best = scores.map((sc) => +Math.max(0, ...sc.filter((c) => FONTS[c.ff].kind !== 'hand').map((c) => c.score)).toFixed(3));
     const styled = [...top].flatMap((ff) => [{ ff, b: true, i: false }, { ff, b: false, i: true }]);
     for (let k = 0; k < lines.length; k++) {
       if (inks[k]) scores[k] = scores[k].concat(await fontScores(inks[k], lines[k], norm, styled));
       await new Promise((res) => setTimeout(res));
     }
+    mark('fonts2');
     // handwriting: compared with the best printed font the letters stand
     // unevenly and change size from piece to piece, and the reading is less
     // sure. A whole handwritten page, or single lines (a filled-in form).
@@ -584,6 +619,7 @@ async function editableRun(editor, index, page, area) {
       if (work !== orig) invert(orig);
       for (const lk of looks) lk.color = invertHex(lk.color);
     }
+    mark('geo+clean');
     n0.c.width = n0.c.height = 0;
 
     // 4. the cleaned paper as a picture over the area of the lines: only the
@@ -677,6 +713,7 @@ async function editableRun(editor, index, page, area) {
     });
     // lines that belong together become one box (a paragraph, a centred title
     // of several lines): same font, size and colour, evenly spaced, aligned
+    mark('patch+boxes');
     if (window.__ocrDebug) window.__ocrDebug.join = { texts: texts.map((t) => ({ ...t, q: t.q ? 1 : undefined, cg: t.cg ? 1 : undefined })), lines: lines.map((l) => ({ bbox: l.bbox })), fonts: fonts.map((f) => ({ hand: !!f.hand })), r, S };
     const { boxes, lineOf } = joinParagraphs(texts, lines, fonts, r, S);
     editor.commit(page.id, before, { ...before, items: before.items.concat([item]), texts: before.texts.concat(boxes) });

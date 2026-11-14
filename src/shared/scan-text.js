@@ -156,6 +156,29 @@ function chooseFonts(all, bolds) {
 }
 
 /**
+ * The lines every typeface is tried on when a text is long (indexes into
+ * lines): up to `max` lines spread evenly over the text, preferring long ones
+ * (more letters, a surer match), plus every line of clearly another size
+ * (headings may be set in another typeface). All lines when there are few.
+ */
+function sampleLines(lines, max = 10) {
+  const n = lines.length;
+  if (n <= max) return lines.map((_, k) => k);
+  const hs = lines.map((l) => l.bbox.y1 - l.bbox.y0), sorted = hs.slice().sort((a, b) => a - b), med = sorted[n >> 1];
+  const pick = new Set();
+  // (headings: at most as many again, the largest first)
+  hs.map((h, k) => [h, k]).filter(([h]) => h > med * 1.25 || h < med * 0.75).sort((a, b) => b[0] - a[0]).slice(0, max).forEach(([, k]) => pick.add(k));
+  // one line from each of `max` stretches of the text: the longest there
+  for (let i = 0; i < max; i++) {
+    const a = Math.floor((i * n) / max), b = Math.floor(((i + 1) * n) / max);
+    let best = a;
+    for (let k = a; k < b; k++) if (lines[k].text.trim().length > lines[best].text.trim().length) best = k;
+    pick.add(best);
+  }
+  return [...pick].sort((a, b) => a - b);
+}
+
+/**
  * The languages to read with once the first reading shows the script: a
  * German / English page read with Russian too gets stray Cyrillic look-alikes
  * ("Рог" for "Fior") in blurry places, and the other way round. null = keep all.
@@ -268,7 +291,7 @@ function dilateMask(m, w, h, r) {
 function joinParagraphs(texts, lines, fonts, r, S) {
   const items = texts.map((t, k) => ({
     x0: r.x0 + lines[k].bbox.x0 / S, x1: r.x0 + lines[k].bbox.x1 / S, cy: t.y + (t.fs * LINE_H) / 2,
-    fs: t.fs, ff: t.ff, c: t.c, hand: !!fonts[k].hand, warp: !!(t.q || t.r || t.cg),
+    fs: t.fs, ff: t.ff, c: t.c, text: t.text, hand: !!fonts[k].hand, warp: !!(t.q || t.r || t.cg),
   }));
   const groups = paragraphs(items);
   const boxes = [], lineOf = texts.map((t) => ({ id: t.id, j: 0 }));
@@ -306,4 +329,4 @@ function joinParagraphs(texts, lines, fonts, r, S) {
   return { boxes, lineOf };
 }
 
-module.exports = { CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, escHtml, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };
+module.exports = { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, escHtml, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };
