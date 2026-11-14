@@ -1,6 +1,5 @@
 // End-to-end checks for the v1.1 features, through the real UI and the real
 // system clipboard. usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/v11.js
-const { _electron: electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -9,31 +8,13 @@ const { execFileSync } = require('child_process');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
-const results = [];
-function check(name, ok, info = '') {
-  results.push({ name, ok: !!ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
-}
+const { check, errors, finish } = require('./harness/report');
+const { launch: launchApp } = require('./harness/app');
 
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v11-'));
   const libDir = path.join(tmp, 'Library');
-  const env = { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: libDir, STUDYNOTES_USERDATA: path.join(tmp, 'u') };
-  const launch = () => electron.launch({
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: process.env.STUDYNOTES_EXE ? ['--no-sandbox'] : [root, '--no-sandbox'],
-    env,
-  });
-  let app = await launch();
-  let win = await app.firstWindow();
-  const errors = [];
-  const watch = (w) => {
-    w.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-    w.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  };
-  watch(win);
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
+  let { app, win } = await launchApp({ tmp });
 
   const ed = (fn, arg) => win.evaluate(fn, arg);
   const pageData = (i = 0) => ed((k) => { const e = window.__app.active; return e.pageData(e.pages[k].id); }, i);
@@ -294,12 +275,8 @@ function check(name, ok, info = '') {
   await app.close();
 
   const lib2 = path.join(tmp, 'Library2');
-  env.STUDYNOTES_LIBRARY = lib2;
-  env.STUDYNOTES_USERDATA = path.join(tmp, 'u2');
-  app = await launch();
-  win = await app.firstWindow();
-  watch(win);
-  await win.waitForFunction(() => window.__app);
+  // the second start keeps the default window size, as before
+  ({ app, win } = await launchApp({ tmp, library: lib2, userData: path.join(tmp, 'u2'), viewport: null }));
   const imported = await win.evaluate((f) => window.api.testImportBackup(f), backup);
   await win.evaluate((f) => window.__app.library.load(f), imported.rel);
   await win.waitForTimeout(500);
@@ -319,9 +296,5 @@ function check(name, ok, info = '') {
 
   // settings export / import keeps tool state
   await app.close();
-  const realErrors = errors.filter((e) => !/Autofill|DevTools/.test(e));
-  check('no console / page errors', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
-  const failed = results.filter((r) => !r.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-  process.exit(failed.length ? 1 : 0);
+  finish(errors, { ignore: /Autofill|DevTools/, label: 'no console / page errors' });
 })().catch((e) => { console.error(e); process.exit(2); });

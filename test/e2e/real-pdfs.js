@@ -1,20 +1,17 @@
 // Opens real-world PDFs given on the command line, scrolls, writes, exports.
 // usage: xvfb-run -a node test/e2e/real-pdfs.js a.pdf b.pdf
-const { _electron: electron } = require('playwright-core');
+const { launch } = require('./harness/app');
 const path = require('path'), fs = require('fs'), os = require('os');
 const { execFileSync } = require('child_process');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-real-'));
-  const app = await electron.launch({ executablePath: require('electron'), args: [root, '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'L'), STUDYNOTES_USERDATA: path.join(tmp, 'u') } });
-  const win = await app.firstWindow();
+  const { app, win } = await launch({ tmp, library: path.join(tmp, 'L') });
+  // extra listeners: this script also prints console warnings
   const errors = [];
   win.on('pageerror', (e) => errors.push(e.message));
   win.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text().slice(0, 200)); });
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
   let k = 0;
   for (const file of process.argv.slice(2)) {
     k++;

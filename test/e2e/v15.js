@@ -1,6 +1,5 @@
 // End-to-end checks for v1.5 through the real UI.
 // usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/v15.js
-const { _electron: electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -10,31 +9,16 @@ const ext = require('../../src/main/external');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
-const results = [];
-function check(name, ok, info = '') {
-  results.push({ name, ok: !!ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
-}
+const { check, errors, finish } = require('./harness/report');
+const { launch: launchApp } = require('./harness/app');
+const { at: atPage } = require('./harness/page');
 const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v15-'));
 const libDir = path.join(tmp, 'Library');
 const userData = path.join(tmp, 'u');
-const errors = [];
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v15-${name}.png`) });
 
-async function launch(extraArgs = []) {
-  const app = await electron.launch({
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: [...(packaged ? [] : [root]), '--no-sandbox', ...extraArgs],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: libDir, STUDYNOTES_USERDATA: userData },
-  });
-  const win = await app.firstWindow();
-  win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  win.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
-  return { app, win, ed: (fn, arg) => win.evaluate(fn, arg) };
-}
+const launch = (extraArgs = []) => launchApp({ tmp, args: extraArgs });
 
 (async () => {
   const sections = (process.env.ONLY || 'A,B,C,D,E,F,G,H,I').split(',');
@@ -76,11 +60,7 @@ async function launch(extraArgs = []) {
   await win.waitForTimeout(500);
   await ed(() => { const v = window.__app.active.viewer; v.zoomTo(0.95, undefined, undefined, false); v.scroller.scrollTop = 0; v.update(); });
   await win.waitForTimeout(300);
-  const at = async (x, y) => {
-    const r = await ed(() => window.__app.active.viewer.pageClientRect(0));
-    const z = await ed(() => window.__app.active.viewer.zoom);
-    return [r.left + x * z, r.top + y * z];
-  };
+  const at = (x, y, page = 0) => atPage(ed, x, y, page);
   const draw = async (pts) => {
     const [x0, y0] = await at(...pts[0]);
     await win.mouse.move(x0, y0); await win.mouse.down();
@@ -283,9 +263,5 @@ async function launch(extraArgs = []) {
     await app.close();
   }
 
-  const real = errors.filter((e) => !/favicon|ResizeObserver/.test(e));
-  check('no page errors', real.length === 0, real.slice(0, 5).join(' | '));
-  const passed = results.filter((r) => r.ok).length;
-  console.log(`${passed}/${results.length} checks passed`);
-  process.exit(passed === results.length ? 0 : 1);
+  finish(errors);
 })().catch((e) => { console.error(e); process.exit(2); });

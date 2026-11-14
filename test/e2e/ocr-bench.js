@@ -1,6 +1,5 @@
-// End-to-end checks for v1.7 through the real UI.
-// usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/v17.js
-const { _electron: electron } = require('playwright-core');
+// Quality bench for "Make text editable" (fonts x photo conditions): prints a
+// table and checks the error-rate limits. usage: npm run test:ocr
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -9,30 +8,14 @@ const { PDFDocument, StandardFonts } = require('pdf-lib');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
-const results = [];
-function check(name, ok, info = '') {
-  results.push({ name, ok: !!ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
-}
+const { check, finish } = require('./harness/report');
+const { launch: launchApp } = require('./harness/app');
 const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-ocrb-'));
-const errors = [];
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v17-${name}.png`) });
 
 
-async function launch() {
-  const app = await electron.launch({
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: [...(packaged ? [] : [root]), '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_FAKE_INK: '1' },
-  });
-  const win = await app.firstWindow();
-  win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  win.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
-  return { app, win, ed: (fn, arg) => win.evaluate(fn, arg) };
-}
+const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
 
 
 
@@ -130,8 +113,6 @@ function lev(a, b) {
   check('bench: average character error rate below 3 %', avg < 0.03, (avg * 100).toFixed(2) + '%');
   check('bench: no case above 12 %', rows.every((r) => r.cer < 0.12), rows.filter((r) => r.cer >= 0.12).map((r) => `${r.font}/${r.cond} ${(r.cer * 100).toFixed(0)}%`).join(', '));
   await app.close();
-  const failed = results.filter((r) => !r.ok).length;
-  console.log(`${results.length - failed}/${results.length} checks passed`);
   fs.rmSync(tmp, { recursive: true, force: true });
-  process.exit(failed ? 1 : 0);
+  finish();
 })().catch((e) => { console.error(e); process.exit(1); });

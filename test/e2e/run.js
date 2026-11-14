@@ -2,7 +2,6 @@
 // large PDF, writes with a simulated pen, uses every tool, checks persistence,
 // export and performance. Screenshots go to test/out/.
 // usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/run.js
-const { _electron: electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -13,7 +12,9 @@ const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
 
-const results = [];
+const report = require('./harness/report');
+const { errors, finish } = report;
+const { launch: launchApp } = require('./harness/app');
 let metricsApp = null;
 async function mem(label) {
   if (!metricsApp) return;
@@ -24,8 +25,7 @@ async function mem(label) {
 }
 function check(name, ok, info = '') {
   mem(name);
-  results.push({ name, ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
+  report.check(name, ok, info);
 }
 
 async function main() {
@@ -35,24 +35,11 @@ async function main() {
   const bigPdf = path.join(tmp, 'Halbleiter Skript.pdf');
   execFileSync('node', [path.join(root, 'scripts', 'make-test-pdf.js'), bigPdf, '600'], { stdio: 'inherit' });
 
-  const launch = () => electron.launch({
-    // STUDYNOTES_EXE: run a packaged build instead of the dev sources.
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: process.env.STUDYNOTES_EXE ? ['--no-sandbox'] : [root, '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: libDir, STUDYNOTES_USERDATA: userData },
-  });
+  const launch = () => launchApp({ tmp, library: libDir, userData });
 
-  let app = await launch();
+  let { app, win } = await launch();
   metricsApp = app;
-  let win = await app.firstWindow();
   win.on('crash', () => console.log('!!! renderer crashed'));
-  const errors = [];
-  const watch = (w) => {
-    w.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-    w.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  };
-  watch(win);
-  await win.setViewportSize({ width: 1500, height: 940 });
   await win.waitForFunction(() => window.__app && document.querySelector('.library'));
   await win.screenshot({ path: path.join(out, '01-library-empty.png') });
   check('app starts and shows library', true);
@@ -329,10 +316,7 @@ async function main() {
   check('stroke saved when the window is closed immediately', fs.existsSync(blankPage) && JSON.parse(fs.readFileSync(blankPage)).strokes.length === 1,
     fs.readdirSync(path.join(libDir, blankRel, 'pages')).join(',') + ' / ' + blankNb.pages.map((p) => p.id).join(','));
   check('sync conflict copy left untouched', fs.existsSync(path.join(pagesDir, firstId + ' (1).json')));
-  app = await launch();
-  win = await app.firstWindow();
-  watch(win);
-  await win.setViewportSize({ width: 1500, height: 940 });
+  ({ app, win } = await launch());
   await win.waitForFunction(() => window.__app && document.querySelectorAll('.card').length >= 3, null, { timeout: 20000 });
   await win.waitForTimeout(800);
   await win.screenshot({ path: path.join(out, '09-library.png') });
@@ -361,12 +345,7 @@ async function main() {
   check('library search finds typed note', true);
 
   await app.close();
-  const realErrors = errors.filter((e) => !/Autofill|DevTools/.test(e));
-  check('no console / page errors', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
-  const failed = results.filter((x) => !x.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-  fs.writeFileSync(path.join(out, 'e2e-results.json'), JSON.stringify(results, null, 2));
-  process.exit(failed.length ? 1 : 0);
+  finish(errors, { ignore: /Autofill|DevTools/, label: 'no console / page errors', resultsFile: path.join(out, 'e2e-results.json') });
 }
 
 main().catch((e) => { console.error(e); process.exit(2); });

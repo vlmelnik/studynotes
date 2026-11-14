@@ -1,6 +1,5 @@
 // End-to-end checks for v1.6.1 through the real UI.
 // usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/v161.js
-const { _electron: electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -9,29 +8,14 @@ const { PDFDocument, StandardFonts } = require('pdf-lib');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
-const results = [];
-function check(name, ok, info = '') {
-  results.push({ name, ok: !!ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
-}
+const { check, errors, finish } = require('./harness/report');
+const { launch: launchApp } = require('./harness/app');
+const { at: atPage } = require('./harness/page');
 const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v161-'));
-const errors = [];
 const shot = (win, name) => win.screenshot({ path: path.join(out, `v161-${name}.png`) });
 
-async function launch() {
-  const app = await electron.launch({
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: [...(packaged ? [] : [root]), '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: path.join(tmp, 'Library'), STUDYNOTES_USERDATA: path.join(tmp, 'u') },
-  });
-  const win = await app.firstWindow();
-  win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  win.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
-  return { app, win, ed: (fn, arg) => win.evaluate(fn, arg) };
-}
+const launch = () => launchApp({ tmp });
 
 
 (async () => {
@@ -41,11 +25,7 @@ async function launch() {
   await win.waitForTimeout(600);
   const pageData = () => ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
   const setData = (d) => ed((d) => { const e = window.__app.active; e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [], ...d }); }, d);
-  const at = async (x, y, page = 0) => {
-    const r = await ed((p) => window.__app.active.viewer.pageClientRect(p), page);
-    const z = await ed(() => window.__app.active.viewer.zoom);
-    return [r.left + x * z, r.top + y * z];
-  };
+  const at = (x, y, page = 0) => atPage(ed, x, y, page);
   const draw = async (pts, opt = {}) => {
     const [x0, y0] = await at(...pts[0]);
     await win.mouse.move(x0, y0); await win.mouse.down();
@@ -238,10 +218,6 @@ async function launch() {
   }
 
   await app.close();
-  const real = errors.filter((e) => !/favicon|ResizeObserver/.test(e));
-  check('no page errors', real.length === 0, real.slice(0, 5).join(' | '));
-  const failed = results.filter((r) => !r.ok).length;
-  console.log(`${results.length - failed}/${results.length} checks passed`);
   fs.rmSync(tmp, { recursive: true, force: true });
-  process.exit(failed ? 1 : 0);
+  finish(errors);
 })().catch((e) => { console.error(e); process.exit(1); });

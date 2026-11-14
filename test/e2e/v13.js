@@ -1,6 +1,5 @@
 // End-to-end checks for v1.3 through the real UI.
 // usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/v13.js
-const { _electron: electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -8,30 +7,15 @@ const os = require('os');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
-const results = [];
-function check(name, ok, info = '') {
-  results.push({ name, ok: !!ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
-}
+const { check, errors, finish } = require('./harness/report');
+const { launch: launchApp } = require('./harness/app');
+const { at: atPage } = require('./harness/page');
 const packaged = !!process.env.STUDYNOTES_EXE;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v13-'));
 const libDir = path.join(tmp, 'Library');
 const driveDir = path.join(tmp, 'FakeDrive');
-const errors = [];
 
-async function launch() {
-  const app = await electron.launch({
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: packaged ? ['--no-sandbox'] : [root, '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: libDir, STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_FAKE_DRIVE: driveDir },
-  });
-  const win = await app.firstWindow();
-  win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  win.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
-  return { app, win, ed: (fn, arg) => win.evaluate(fn, arg) };
-}
+const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_DRIVE: driveDir } });
 const driveIndex = () => { try { return JSON.parse(fs.readFileSync(path.join(driveDir, 'index.json'), 'utf8')); } catch { return {}; } };
 const driveFile = (p) => { const [id] = Object.entries(driveIndex()).find(([, f]) => f.path === p && !f.role) || []; return id ? fs.readFileSync(path.join(driveDir, id), 'utf8') : null; };
 
@@ -49,9 +33,7 @@ const driveFile = (p) => { const [id] = Object.entries(driveIndex()).find(([, f]
   const at = async (x, y, page = 0) => {
     await ed(([p, yy]) => { const v = window.__app.active.viewer; v.scrollToPage(p, yy); v.update(); }, [page, y]);
     await win.waitForTimeout(120);
-    const r = await ed((p) => window.__app.active.viewer.pageClientRect(p), page);
-    const zz = await ed(() => window.__app.active.viewer.zoom);
-    return [r.left + x * zz, r.top + y * zz];
+    return atPage(ed, x, y, page);
   };
   const draw = async (pts) => {
     const [x0, y0] = await at(pts[0][0], pts[0][1]);
@@ -420,9 +402,5 @@ const driveFile = (p) => { const [id] = Object.entries(driveIndex()).find(([, f]
   }
 
   await app.close();
-  const realErrors = errors.filter((e) => !/Autofill|DevTools/.test(e));
-  check('no console / page errors', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
-  const failed = results.filter((x) => !x.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-  process.exit(failed.length ? 1 : 0);
+  finish(errors, { ignore: /Autofill|DevTools/, label: 'no console / page errors' });
 })().catch((e) => { console.error(e); process.exit(2); });

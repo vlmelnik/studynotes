@@ -1,6 +1,5 @@
 // End-to-end checks for v1.2 through the real UI.
 // usage: xvfb-run -a -s "-screen 0 1600x1000x24" node test/e2e/v12.js
-const { _electron: electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -9,29 +8,15 @@ const { execFileSync } = require('child_process');
 const root = path.join(__dirname, '..', '..');
 const out = path.join(root, 'test', 'out');
 fs.mkdirSync(out, { recursive: true });
-const results = [];
-function check(name, ok, info = '') {
-  results.push({ name, ok: !!ok, info });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
-}
+const { check, errors, finish } = require('./harness/report');
+const { launch: launchApp } = require('./harness/app');
 
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-v12-'));
   const libDir = path.join(tmp, 'Library');
   const driveDir = path.join(tmp, 'FakeDrive');
   const packaged = !!process.env.STUDYNOTES_EXE;
-  const app = await electron.launch({
-    executablePath: process.env.STUDYNOTES_EXE || require('electron'),
-    args: packaged ? ['--no-sandbox'] : [root, '--no-sandbox'],
-    env: { ...process.env, STUDYNOTES_TEST: '1', STUDYNOTES_LIBRARY: libDir, STUDYNOTES_USERDATA: path.join(tmp, 'u'), STUDYNOTES_FAKE_DRIVE: driveDir },
-  });
-  const win = await app.firstWindow();
-  const errors = [];
-  win.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  win.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await win.setViewportSize({ width: 1500, height: 940 });
-  await win.waitForFunction(() => window.__app);
-  const ed = (fn, arg) => win.evaluate(fn, arg);
+  const { app, win, ed } = await launchApp({ tmp, env: { STUDYNOTES_FAKE_DRIVE: driveDir } });
   const pageData = () => ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id); });
 
   const rel = await ed(async () => {
@@ -285,9 +270,5 @@ function check(name, ok, info = '') {
   }
 
   await app.close();
-  const realErrors = errors.filter((e) => !/Autofill|DevTools/.test(e));
-  check('no console / page errors', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
-  const failed = results.filter((x) => !x.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-  process.exit(failed.length ? 1 : 0);
+  finish(errors, { ignore: /Autofill|DevTools/, label: 'no console / page errors' });
 })().catch((e) => { console.error(e); process.exit(2); });
