@@ -53,14 +53,17 @@ function lineInk(img, box) {
   let edge = 0, n = 0;
   for (let x = 0; x < w; x++) { edge += L[x] + L[(h - 1) * w + x]; n += 2; }
   for (let y = 0; y < h; y++) { edge += L[y * w] + L[y * w + w - 1]; n += 2; }
-  const light = edge / n < th; // paper darker than the threshold: light text
   // keep only clear ink (a margin from the threshold avoids paper noise)
   let lo = 0, hi = 0, nl = 0, nh = 0;
   for (let i = 0; i < L.length; i++) { if (L[i] <= th) { lo += L[i]; nl++; } else { hi += L[i]; nh++; } }
+  // paper darker than the threshold: light text (and most of the box is
+  // dark – a rule or frame along the border is no dark paper)
+  const light = edge / n < th && nl > nh;
   const mLo = nl ? lo / nl : 0, mHi = nh ? hi / nh : 255;
   if (mHi - mLo < 25) return { box: b, w, h, ink, light }; // no contrast: nothing to clean
   for (let i = 0; i < L.length; i++) ink[i] = light ? (L[i] > th ? 1 : 0) : (L[i] <= th ? 1 : 0);
-  return { box: b, w, h, ink, light };
+  // (th: the threshold used, to tell ink from paper around the box the same way)
+  return { box: b, w, h, ink, light, th };
 }
 
 /** Typical colour of the ink (the darkest / strongest part of it). */
@@ -108,15 +111,17 @@ function dilate(mask, w, h, r) {
  * mask over the whole image (1 = replace). Pixels are filled from the outside
  * in (each from its known neighbours), then given the grain of nearby paper.
  */
-function inpaint(img, fill, seed = 1) {
+function inpaint(img, fill, seed = 1, avoid = null) {
   const { width: W, height: H, data: d } = img;
   const known = new Uint8Array(W * H);
   let todo = [];
-  for (let i = 0; i < W * H; i++) { if (fill[i]) todo.push(i); else known[i] = 1; }
+  // (avoid: ink that stays – a rule, a neighbour's letters – and its soft
+  // edge (4) are no paper to copy from)
+  for (let i = 0; i < W * H; i++) { if (fill[i]) todo.push(i); else if (!(avoid && avoid[i])) known[i] = 1; }
   if (!todo.length) return;
   const filled = todo.slice();
   const nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
-  let guard = 0;
+  let guard = 0, relaxed = avoid ? 0 : 2;
   while (todo.length && guard++ < 4000) {
     const next = [], set = [];
     for (const i of todo) {
@@ -131,7 +136,14 @@ function inpaint(img, fill, seed = 1) {
       }
       if (n) set.push([i, r / n, g / n, b / n]); else next.push(i);
     }
-    if (!set.length) break;
+    if (!set.length) {
+      // walled in by kept ink: first its edge, then its colour – better
+      // than the old letters
+      if (relaxed === 2) break;
+      relaxed++;
+      for (let i = 0; i < W * H; i++) if (avoid[i] && !fill[i] && (relaxed === 2 || avoid[i] === 4)) known[i] = 1;
+      continue;
+    }
     for (const [i, r, g, b] of set) { d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b; d[i * 4 + 3] = 255; known[i] = 1; }
     todo = next;
   }
@@ -145,12 +157,12 @@ function inpaint(img, fill, seed = 1) {
       const xx = x + Math.round((rnd() * 2 - 1) * R), yy = y + Math.round((rnd() * 2 - 1) * R);
       if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
       const j = yy * W + xx;
-      if (fill[j]) continue;
+      if (fill[j] || (avoid && avoid[j])) continue;
       // the source pixel's difference to its own neighbourhood mean
       let mr = 0, mg = 0, mb = 0, n = 0;
       for (const o of [-2, 2, -2 * W, 2 * W]) {
         const k = j + o;
-        if (k < 0 || k >= W * H || fill[k]) continue;
+        if (k < 0 || k >= W * H || fill[k] || (avoid && avoid[k])) continue;
         mr += d[k * 4]; mg += d[k * 4 + 1]; mb += d[k * 4 + 2]; n++;
       }
       if (!n) continue;
@@ -161,12 +173,126 @@ function inpaint(img, fill, seed = 1) {
 }
 
 /**
- * Clears the given text lines from the image (in place).
- * lines: [{ bbox:{x0,y0,x1,y1} }] in pixels. Returns per line { color, light, inkBox }.
+ * Straight runs of ink: pieces of at least `min` pixels in a row, joined
+ * with the pieces of the next row they touch (a rule that is not quite level
+ * is a staircase of such pieces). Returns groups { x0, x1, y0, y1 (ends
+ * exclusive), runs: [y, xa, xb, …] }.
+ */
+function longRuns(ink, w, h, min) {
+  const runs = [], rowAt = new Int32Array(h + 1), parent = [];
+  for (let y = 0; y < h; y++) {
+    rowAt[y] = runs.length / 3;
+    for (let x = 0; x < w; x++) {
+      if (!ink[y * w + x]) continue;
+      const xa = x;
+      while (x < w && ink[y * w + x]) x++;
+      if (x - xa >= min) { runs.push(y, xa, x); parent.push(parent.length); }
+    }
+  }
+  rowAt[h] = runs.length / 3;
+  const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+  for (let y = 1; y < h; y++) {
+    let p = rowAt[y - 1];
+    for (let q = rowAt[y]; q < rowAt[y + 1]; q++) {
+      while (p < rowAt[y] && runs[p * 3 + 2] < runs[q * 3 + 1]) p++;
+      for (let k = p; k < rowAt[y] && runs[k * 3 + 1] <= runs[q * 3 + 2]; k++) {
+        const a = find(k), b = find(q);
+        if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);
+      }
+    }
+  }
+  const groups = new Map();
+  for (let k = 0; k < parent.length; k++) {
+    const r = find(k), y = runs[k * 3], xa = runs[k * 3 + 1], xb = runs[k * 3 + 2];
+    let g = groups.get(r);
+    if (!g) { g = { x0: xa, x1: xb, y0: y, y1: y + 1, runs: [] }; groups.set(r, g); }
+    if (xa < g.x0) g.x0 = xa; if (xb > g.x1) g.x1 = xb; if (y + 1 > g.y1) g.y1 = y + 1;
+    g.runs.push(y, xa, xb);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Ink that is no letter of the line: rules, table borders, frames. A level
+ * run longer than any letter's stroke that goes on past the line's text, an
+ * upright one that passes the line above and below. ink: mask of a window
+ * around the line (w × h), bb: the line's box in the window's pixels,
+ * far: how far past the text a level run must reach.
+ */
+function ruleMask(ink, w, h, bb, hgt, far = 2) {
+  const rule = new Uint8Array(w * h);
+  const min = Math.max(4, Math.round(hgt * 0.5));
+  for (const g of longRuns(ink, w, h, min)) {
+    if (g.x1 - g.x0 < hgt * 1.5 || !(g.x0 <= bb.x0 - far || g.x1 >= bb.x1 + far)) continue;
+    for (let k = 0; k < g.runs.length; k += 3) rule.fill(1, g.runs[k] * w + g.runs[k + 1], g.runs[k] * w + g.runs[k + 2]);
+  }
+  // upright: the same on the turned mask
+  const t = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) t[x * h + y] = ink[y * w + x];
+  for (const g of longRuns(t, h, w, min)) {
+    if (g.x1 - g.x0 < hgt * 1.2 || g.x0 > bb.y0 - 2 || g.x1 < bb.y1 + 2) continue;
+    for (let k = 0; k < g.runs.length; k += 3) for (let y = g.runs[k + 1]; y < g.runs[k + 2]; y++) rule[y * w + g.runs[k]] = 1;
+  }
+  return rule;
+}
+
+/**
+ * The letters of a line among the ink around it (li: lineInk of the padded
+ * box; rule: mask of the same size, ink that is no letter). The ink on the
+ * recognised line and what hangs together with it; beside the line only a
+ * lone dot (a full stop the reader missed) – not a neighbouring column.
+ */
+function letterInk(li, bbox, rule) {
+  const { w, h, ink } = li;
+  const hgt = bbox.y1 - bbox.y0;
+  const xa = Math.max(0, Math.floor(bbox.x0 - li.box.x0 - 2)), xb = Math.min(w, Math.ceil(bbox.x1 - li.box.x0 + 2));
+  const ya = Math.max(0, Math.floor(bbox.y0 - li.box.y0 - hgt * 0.12)), yb = Math.min(h, Math.ceil(bbox.y1 - li.box.y0 + hgt * 0.12));
+  const own = new Uint8Array(w * h);
+  const free = (i) => ink[i] && !rule[i] && !own[i];
+  const stack = [];
+  const flood = (i, onPix) => {
+    own[i] = 1; stack.push(i);
+    while (stack.length) {
+      const j = stack.pop(), x = j % w, y = (j / w) | 0;
+      if (onPix) onPix(x, y);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const k = yy * w + xx;
+        if (free(k)) { own[k] = 1; stack.push(k); }
+      }
+    }
+  };
+  for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++) if (free(y * w + x)) flood(y * w + x);
+  // beside the line: one small mark alone on its side
+  const dot = Math.max(3, hgt * 0.35);
+  for (const [sa, sb] of [[0, xa], [xb, w]]) {
+    const parts = [];
+    for (let y = 0; y < h; y++) for (let x = sa; x < sb; x++) {
+      if (!free(y * w + x)) continue;
+      const c = { x0: x, x1: x, y0: y, y1: y, pix: [] };
+      flood(y * w + x, (px, py) => { c.pix.push(py * w + px); if (px < c.x0) c.x0 = px; if (px > c.x1) c.x1 = px; if (py < c.y0) c.y0 = py; if (py > c.y1) c.y1 = py; });
+      parts.push(c);
+    }
+    const c = parts[0];
+    // (at the edge of the box it may go on outside: part of something bigger)
+    const lone = parts.length === 1 && c.x1 - c.x0 < dot && c.y1 - c.y0 < dot && c.x0 > 0 && c.y0 > 0 && c.x1 < w - 1 && c.y1 < h - 1;
+    if (!lone) for (const p of parts) for (const i of p.pix) own[i] = 0;
+  }
+  return own;
+}
+
+/**
+ * Clears the given text lines from the image (in place): only the letters'
+ * ink. Rules, table borders, frames and the ink of a neighbouring column
+ * stay as they are (a letter on a rule goes, the rule stays whole).
+ * lines: [{ bbox:{x0,y0,x1,y1}, under }] in pixels (under: the line's
+ * underline is put on the text box – a short rule under it goes too).
+ * Returns per line { color, light, inkBox }.
  */
 function cleanLines(img, lines, maskImg = img) {
   const W = img.width, H = img.height;
-  const fill = new Uint8Array(W * H);
+  const fill = new Uint8Array(W * H), keep = new Uint8Array(W * H);
   const out = [];
   for (const l of lines) {
     const hgt = l.bbox.y1 - l.bbox.y0;
@@ -174,13 +300,46 @@ function cleanLines(img, lines, maskImg = img) {
     // ink found on the light-corrected picture, colours from the real one
     // (a little wider: a full stop the reader missed is cleaned too)
     const li = lineInk(maskImg, { x0: l.bbox.x0 - hgt * 0.4, y0: l.bbox.y0 - pad, x1: l.bbox.x1 + hgt * 0.5, y1: l.bbox.y1 + pad });
-    const color = inkColor(img, li);
+    if (li.th === undefined) { out.push({ color: inkColor(img, li), light: li.light }); continue; }
+    // rules show in a wider window: they go on past the line
+    const wb = clampBox(maskImg, { x0: l.bbox.x0 - hgt, y0: l.bbox.y0 - hgt, x1: l.bbox.x1 + hgt, y1: l.bbox.y1 + hgt });
+    const ww = wb.x1 - wb.x0, wh = wb.y1 - wb.y0, ox = li.box.x0 - wb.x0, oy = li.box.y0 - wb.y0;
+    const wide = new Uint8Array(ww * wh);
+    for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) {
+      const v = lum(maskImg.data, ((wb.y0 + y) * maskImg.width + wb.x0 + x) * 4);
+      wide[y * ww + x] = li.light ? (v > li.th ? 1 : 0) : (v <= li.th ? 1 : 0);
+    }
+    // (an underline that is put on the text box ends near the text)
+    const wRule = ruleMask(wide, ww, wh, { x0: l.bbox.x0 - wb.x0, y0: l.bbox.y0 - wb.y0, x1: l.bbox.x1 - wb.x0, y1: l.bbox.y1 - wb.y0 }, hgt, l.under ? Math.max(2, hgt * 0.5) : 2);
+    const rule = new Uint8Array(li.w * li.h);
+    for (let y = 0; y < li.h; y++) for (let x = 0; x < li.w; x++) rule[y * li.w + x] = wRule[(y + oy) * ww + x + ox];
+    const own = letterInk(li, l.bbox, rule);
+    // (the colour from the letters, not from a border beside them)
+    const color = inkColor(img, own.some(Boolean) ? { ...li, ink: own } : li);
     // anti-aliased edges and paper shadows next to the letters go too
-    const grown = dilate(li.ink, li.w, li.h, Math.max(1, Math.round(hgt * 0.07)));
-    for (let y = 0; y < li.h; y++) for (let x = 0; x < li.w; x++) if (grown[y * li.w + x]) fill[(li.box.y0 + y) * W + li.box.x0 + x] = 1;
+    const r = Math.max(1, Math.round(hgt * 0.07));
+    const grown = dilate(own, li.w, li.h, r);
+    // what stays: rules (1), other ink (2) and the soft edge around both (4),
+    // which is neither painted with a letter's edge nor copied as paper
+    const stay = new Uint8Array(ww * wh);
+    for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) {
+      const i = y * ww + x, lx = x - ox, ly = y - oy;
+      const k = lx >= 0 && ly >= 0 && lx < li.w && ly < li.h ? ly * li.w + lx : -1;
+      if (wide[i] && !(k >= 0 && own[k])) stay[i] = 1;
+    }
+    const edge = dilate(stay, ww, wh, r);
+    for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) {
+      const i = y * ww + x, g = (wb.y0 + y) * W + wb.x0 + x, lx = x - ox, ly = y - oy;
+      const k = lx >= 0 && ly >= 0 && lx < li.w && ly < li.h ? ly * li.w + lx : -1;
+      if (k >= 0 && rule[k]) keep[g] |= 1; else if (stay[i]) keep[g] |= 2; else if (edge[i]) keep[g] |= 4;
+      if (k >= 0 && !stay[i] && (own[k] || (grown[k] && !edge[i]))) fill[g] = 1;
+    }
     out.push({ color, light: li.light });
   }
-  inpaint(img, fill);
+  // a rule is painted by no line; other ink one line leaves alone may be
+  // the letters of another (the line above, the next column)
+  for (let i = 0; i < W * H; i++) { if (keep[i] & 1) fill[i] = 0; else if (fill[i]) keep[i] = 0; }
+  inpaint(img, fill, 1, keep);
   void H;
   out.fill = fill; // which pixels were painted over
   return out;
@@ -273,4 +432,4 @@ function normalizeLight(img, block = 32) {
   return { width: W, height: H, data: out, uneven };
 }
 
-module.exports = { lineInk, inkColor, dilate, inpaint, cleanLines, otsu, normalizeLight };
+module.exports = { lineInk, inkColor, dilate, inpaint, cleanLines, longRuns, ruleMask, letterInk, otsu, normalizeLight };

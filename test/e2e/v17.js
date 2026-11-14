@@ -233,6 +233,62 @@ const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1', STUDYNOTE
     await ed(() => window.__app.active.undo());
     const u = await pageData();
     check('D: one undo step', u.texts.length === 0 && u.items.length === 1, JSON.stringify([u.texts.length, u.items.length]));
+
+    // a table cell: the borders right next to the text stay in the picture
+    // (cleaning paints the letters only, plan 1.3)
+    const T = await ed(async () => {
+      const e = window.__app.active;
+      const S = 2.5, W = 500, H = 200;
+      const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#f1ece0'; ctx.fillRect(0, 0, cv.width, cv.height);
+      await document.fonts.load('400 30px "SN Sans"');
+      ctx.fillStyle = '#222'; ctx.font = `400 ${22 * S}px "SN Sans"`; ctx.textBaseline = 'alphabetic';
+      const tx = 150, base = 250, word = 'Number of rooms';
+      ctx.fillText(word, tx, base);
+      const tw = Math.ceil(ctx.measureText(word).width);
+      // borders (3 px): 5 px under the baseline (no descenders) and 16 px
+      // after the last letter – both closer than the padding around a line
+      const bottom = base + 5, right = tx + tw + 16, top = base - 90;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(right, top, 3, 200);
+      ctx.fillRect(40, bottom, right - 40, 3);
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+      const src = await window.api.writeAsset(e.rel, new Uint8Array(await blob.arrayBuffer()), 'png');
+      e.setPageData(e.pages[0].id, { strokes: [], texts: [], items: [{ id: 'scan', type: 'img', x: 40, y: 60, w: W, h: H, src }] });
+      // points on the borders and in the letters, in page units
+      const pg = (x, y) => [40 + x / S, 60 + y / S];
+      return {
+        border: [pg(right + 1.5, base - 40), pg(right + 1.5, base - 20), pg(right + 1.5, base - 5), pg(tx + 30, bottom + 1.5), pg(tx + tw / 2, bottom + 1.5), pg(tx + tw - 30, bottom + 1.5)],
+        text: [pg(tx, base - 60), pg(tx + tw, base + 1)],
+      };
+    });
+    await win.waitForTimeout(500);
+    await ed(() => { window.__mk = window.__app.active.makePageEditable(0); });
+    await ed(() => window.__mk);
+    const dT = await pageData();
+    const patchT = dT.items.find((it) => it.id !== 'scan');
+    const cell = patchT ? await ed(async ([it, P]) => {
+      const e = window.__app.active;
+      const img = await createImageBitmap(await (await fetch(e.assetUrl(it.src))).blob());
+      const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      const xy = (p) => [Math.round(((p[0] - it.x) / it.w) * img.width), Math.round(((p[1] - it.y) / it.h) * img.height)];
+      const alpha = P.border.map((p) => { const [x, y] = xy(p); return x >= 0 && y >= 0 && x < img.width && y < img.height ? px[(y * img.width + x) * 4 + 3] : 0; });
+      // the letters: painted, and as light as paper
+      const [x0, y0] = xy(P.text[0]), [x1, y1] = xy(P.text[1]);
+      let painted = 0, min = 255;
+      for (let y = Math.max(0, y0); y < Math.min(img.height, y1); y++) for (let x = Math.max(0, x0); x < Math.min(img.width, x1); x++) {
+        const i = (y * img.width + x) * 4;
+        if (px[i + 3] > 128) { painted++; min = Math.min(min, 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]); }
+      }
+      return { alpha, painted, min: Math.round(min) };
+    }, [patchT, T]) : null;
+    check('D: table cell: the text is read and painted over', dT.texts.some((t) => t.text === 'Number of rooms') && !!cell && cell.painted > 500 && cell.min > 150, JSON.stringify([dT.texts.map((t) => t.text), cell && [cell.painted, cell.min]]));
+    check('D: table cell: the borders next to the text are not painted over (patch transparent there)', !!cell && cell.alpha.every((v) => v === 0), JSON.stringify(cell && cell.alpha));
+    await shot(win, 'cell');
+    await ed(() => window.__app.active.undo());
   }
 
   // ===================================================================== E. handwriting → text (fake recognizer outside Windows)

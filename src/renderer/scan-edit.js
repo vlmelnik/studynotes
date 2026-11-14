@@ -577,7 +577,8 @@ async function editableRun(editor, index, page, area) {
       c.getContext('2d').putImageData(im, 0, 0);
       return c;
     });
-    const looks = cleanLines(work, lines.map((l, k) => (unders[k] ? { ...l, bbox: { ...l.bbox, y1: Math.max(l.bbox.y1, Math.max(l.baseline.y0, l.baseline.y1) + (l.bbox.y1 - l.bbox.y0) * 0.45) } } : l)), norm);
+    // (only the letters are painted over; under: the underline goes onto the text box)
+    const looks = cleanLines(work, lines.map((l, k) => (unders[k] ? { ...l, under: true, bbox: { ...l.bbox, y1: Math.max(l.bbox.y1, Math.max(l.baseline.y0, l.baseline.y1) + (l.bbox.y1 - l.bbox.y0) * 0.45) } } : l)), norm);
     if (dark) {
       invert(work);
       if (work !== orig) invert(orig);
