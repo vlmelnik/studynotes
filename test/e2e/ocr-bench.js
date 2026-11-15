@@ -93,6 +93,7 @@ function lev(a, b) {
       const t = d.texts.slice().sort((a, b) => a.y - b.y);
       if (process.env.LOGT) console.log(JSON.stringify(t.map((q) => [q.text.slice(0, 12), q.x, q.y, q.w, q.fs, q.r])));
       const got = t.map((q) => q.text).join('\n'), want = LINES.join('\n');
+      if (process.env.SHOW) console.log(JSON.stringify(t.map((q) => q.text)), JSON.stringify(await ed(() => ({ first: (window.__ocrDebug.first || []).map((l) => [l.text, Math.round(l.conf), l.words.map((w) => [w.text, Math.round(w.bbox.x0), Math.round(w.bbox.x1)])]), stray: window.__ocrDebug.stray, log: window.__ocrDebug.readLog }))));
       const cer = lev(got, want) / want.length;
       const fams = [...new Set(t.map((q) => q.ff))].join('/');
       const rot = t.length ? (t.reduce((a, q) => a + (q.r || 0), 0) / t.length).toFixed(1) : '-';

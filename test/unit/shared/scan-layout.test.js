@@ -129,6 +129,9 @@ test('splitColumns: a border between two words (table cell, frame) cuts the line
   assert.deepStrictEqual(splitColumns([l], pic(50)).map((x) => [x.text, !!x.cut]), [['Up', true], ['Logic-unit', true]]);
   assert.deepStrictEqual(splitColumns([l], pic(null)).map((x) => x.text), ['Up Logic-unit']); // no border
   assert.deepStrictEqual(splitColumns([l], pic(50, 24, 36)).map((x) => x.text), ['Up Logic-unit']); // a short stroke (a letter, a dash)
+  // the dark side of a photo is no border
+  const dusk = { width: W, height: H, data: new Uint8ClampedArray(W * H * 4).fill(110) };
+  assert.deepStrictEqual(splitColumns([l], dusk).map((x) => x.text), ['Up Logic-unit']);
 });
 
 // a small ink mask: words with an underline under the 2nd one

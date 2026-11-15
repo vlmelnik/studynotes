@@ -209,7 +209,7 @@ function paragraphs(items) {
  * A line read across a gap that is none inside a text: two columns side by
  * side (a question and its answer), a number in front of an indented note, a
  * label left of a framed text. Cut between two words
- * - at a very wide gap (2.2 × the line's height), or
+ * - at a very wide gap (2.5 × the line's height), or
  * - at a wide one (1.2 ×) when another line close by starts right where the
  *   part after the gap does: that is where a column begins. ("I. Heading" with
  *   nothing below at that place stays whole.)
@@ -227,12 +227,17 @@ function splitColumns(lines, img = null) {
     const ya = Math.max(0, Math.round(y0 - h * 0.3)), yb = Math.min(img.height - 1, Math.round(y1 + h * 0.3));
     xa = Math.max(0, Math.ceil(xa)); xb = Math.min(img.width - 1, Math.floor(xb));
     if (yb - ya < 4) return false;
+    // the paper there (a photo may be dark on one side): the brightest of the gap
+    let paper = 0;
+    for (let x = xa; x <= xb; x++) for (let y = ya; y <= yb; y += 2) paper = Math.max(paper, lum(img.data, (y * img.width + x) * 4));
+    // a thin line: one column all ink, another one beside it clear
+    let rule = false, clear = false;
     for (let x = xa; x <= xb; x++) {
       let n = 0;
-      for (let y = ya; y <= yb; y++) if (lum(img.data, (y * img.width + x) * 4) < 150) n++;
-      if (n >= (yb - ya + 1) * 0.92) return true;
+      for (let y = ya; y <= yb; y++) if (lum(img.data, (y * img.width + x) * 4) < paper * 0.6) n++;
+      if (n >= (yb - ya + 1) * 0.92) rule = true; else if (n <= (yb - ya + 1) * 0.3) clear = true;
     }
-    return false;
+    return rule && clear;
   };
   const real = (w) => w && w.bbox && /[\p{L}\p{N}]/u.test(w.text);
   return lines.flatMap((l) => {
@@ -244,7 +249,7 @@ function splitColumns(lines, img = null) {
     const parts = [[ws[0]]];
     for (let k = 1; k < ws.length; k++) {
       const gap = ws[k].bbox.x0 - ws[k - 1].bbox.x1;
-      const cut = real(ws[k]) && real(ws[k - 1]) && (gap >= h * 2.2 || (gap >= h * 1.2 && starts(ws[k].bbox.x0))
+      const cut = real(ws[k]) && real(ws[k - 1]) && (gap >= h * 2.5 || (gap >= h * 1.2 && starts(ws[k].bbox.x0))
         || (gap >= h * 0.25 && ruled(ws[k - 1].bbox.x1 + 1, ws[k].bbox.x0 - 1, l.bbox.y0, l.bbox.y1)));
       if (cut) parts.push([]);
       parts[parts.length - 1].push(ws[k]);
