@@ -145,9 +145,9 @@ test('boldByWords: a line with a few bold words is regular with those words in b
   const sizes = [42, 42, 42, 42];
   const got = boldByWords([
     [7.2, 7.0, 7.4], // a heading, bold throughout
-    [7.1, 4.6, 4.5, 4.7], // "**Wer** muss den Unfall"
+    [7.1, 4.6, 4.5, 4.7], // "**Who** has to report"
     [4.6, 4.5, 0, 4.7, 4.4], // regular (one word too short to measure)
-    [7.0, 0, 7.2, 0, 0, 7.3, 4.5, 4.6], // "**Arbeitsunfähigkeit von mehr als 3 Kalendertagen** oder zum"
+    [7.0, 0, 7.2, 0, 0, 7.3, 4.5, 4.6], // six words in bold, two regular ones after them
   ], sizes, [true, true, true, true]);
   assert.deepStrictEqual(got.lines, [true, false, false, false]);
   assert.deepStrictEqual(got.words, [null, [true, false, false, false], null, [true, true, true, true, true, true, false, false]]);
@@ -167,7 +167,7 @@ test('boldByWords: words that all weigh the same, or too few of them, leave the 
 test('strayScript: a few words in Cyrillic letters on a German page are read again in German', () => {
   const { strayScript } = require('../../../src/shared/scan-text');
   const t = (text) => ({ text });
-  const page = [t('В Erläuterungen гиг Unfallanzeige'), t('Wer muss den Unfall anzeigen?'), t('Unternehmerinnen und Unternehmer.'), t('(2. В. Gewerbeaufsichtsamt, Amt für Arbeitsschutz)')];
+  const page = [t('В Hinweise гиг Anmeldung'), t('Der Mieter zahlt die Kaution für die Wohnung'), t('in drei gleichen Raten bis zum Monatsende.'), t('(2. В. bis zum Monatsende, pünktlich)')];
   assert.deepStrictEqual(strayScript(page), { langs: ['deu', 'eng'], idx: [0, 3] });
   assert.strictEqual(strayScript([t('Der Mieter zahlt die Kaution für die Wohnung'), t('Спасибо большое за помощь')]), null); // a mixed page
   assert.strictEqual(strayScript([t('Der Mieter zahlt die Kaution für die Wohnung pünktlich')]), null); // nothing stray
@@ -175,8 +175,8 @@ test('strayScript: a few words in Cyrillic letters on a German page are read aga
 
 test('romanStart: a Roman numeral read as small L\'s before a heading', () => {
   const { romanStart } = require('../../../src/shared/scan-text');
-  assert.strictEqual(romanStart('l. Erläuterungen zur Unfallanzeige'), 'I. Erläuterungen zur Unfallanzeige');
-  assert.strictEqual(romanStart('Il. Erläuterungen zu einzelnen Fragen'), 'II. Erläuterungen zu einzelnen Fragen');
+  assert.strictEqual(romanStart('l. Hinweise zur Anmeldung'), 'I. Hinweise zur Anmeldung');
+  assert.strictEqual(romanStart('Il. Hinweise zu einzelnen Fragen'), 'II. Hinweise zu einzelnen Fragen');
   assert.strictEqual(romanStart('I. Allgemeines'), 'I. Allgemeines');
   assert.strictEqual(romanStart('l. c. on page 3'), 'l. c. on page 3'); // (no heading follows)
 });

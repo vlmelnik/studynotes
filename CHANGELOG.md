@@ -2,6 +2,13 @@
 
 ## 1.7.0
 
+**Fixes (re-release, 15 Nov 2026, third)**
+- Blocks follow the page: a table cell of several lines is one box, the next row another one; a question and its answer side by side are no longer read as one line; a number in front of an indented note stays apart from the note.
+- Bold: a few bold words inside a regular line stay bold words (the line is not made bold as a whole); a heading above the text is its own box.
+- Short printed labels (two lines in a frame) are no longer taken for handwriting; a label outside the frame is not pulled into the text.
+- Text of one size gets one size (before, every line was measured on its own and came out a little different).
+- A German or English page no longer gets single "words" in Cyrillic letters ("zur" read as "гиг"); a word read with confidence is not replaced by a similar dictionary word ("Folie" stayed "Folic").
+
 **Fixes (re-release, 15 Nov 2026, second)**
 - A text that is bold throughout is now recognised as bold (before, only bold lines next to regular ones were).
 - The same text gets the same typeface every time: when no typeface clearly fits best, the everyday one of its kind (Arial-, Calibri- or Times-like) is used instead of one of several look-alikes.

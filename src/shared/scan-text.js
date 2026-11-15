@@ -99,8 +99,8 @@ function boldWords(li, words) {
  * Bold on a page of text, from its words: most words of a document are
  * regular, so a word whose strokes are clearly thicker than the page's typical
  * word (at its size) is bold. A line is bold when (nearly) all its words are;
- * a line with a few such words is regular with those words in bold ("**Wer**
- * muss den Unfall anzeigen?") – a whole-line measure lands in between and
+ * a line with a few such words is regular with those words in bold ("**Who**
+ * has to report it?") – a whole-line measure lands in between and
  * says "bold" for one line and "regular" for the next.
  * weights: per line the stroke thickness of its words (see wordWeights; null:
  * not measured), sizes: letter size per line, lineBolds: what the line

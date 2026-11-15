@@ -13,7 +13,7 @@
 //     "regular": ["Body text"],          … and not bold
 //     "boldWords": ["deposit"],          words set in bold inside a regular line
 //     "inside": true,                    no text box reaches out of the picture
-//     "text": ["zur Unfallanzeige"],     must be read like this somewhere
+//     "text": ["zur Anmeldung"],         must be read like this somewhere
 //     "not": ["гиг"] }                   must not appear anywhere
 const path = require('path');
 const fs = require('fs');
