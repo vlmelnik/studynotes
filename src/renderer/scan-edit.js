@@ -3,7 +3,7 @@
 // lines come back as normal text boxes in the closest font, size and colour.
 // Works for a lasso area or the whole page.
 import { googleLine } from '../shared/ocr-text.js';
-import { graphicMarks, besideMark, underlinedWords } from '../shared/scan-layout.js';
+import { splitColumns, graphicMarks, besideMark, underlinedWords } from '../shared/scan-layout.js';
 import { toast, confirmDialog, errorText } from './ui.js';
 import { uid } from './tools.js';
 import { stacked } from '../shared/stacking.js';
@@ -11,8 +11,8 @@ import { FONTS } from '../shared/fonts.js';
 import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
-import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, familyChoice, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
-import { LINE_H, escHtml, medianOr0 } from '../shared/util.js';
+import { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
+import { LINE_H, escHtml } from '../shared/util.js';
 import { bandCuts } from '../shared/scan-bands.js';
 
 const DPI_SCALE = 300 / 72; // page units are points: render at 300 dpi
@@ -440,6 +440,36 @@ async function editableRun(editor, index, page, area) {
       lines = await recognizeSized(n0.c, n0.bl, langs);
       if (editor.destroyed) { busy.remove(); return; }
     }
+    // a few "words" in the letters of another script than the page's: those
+    // lines are read once more, each on its own, in the page's languages
+    const stray = langs === LANGS ? strayScript(lines) : null;
+    if (stray) {
+      const other = stray.langs[0] === 'rus' ? /[a-zA-ZäöüÄÖÜß]/ : /[\u0400-\u04ff]/;
+      await Promise.all(stray.idx.map(async (k) => {
+        const l = lines[k], h = l.bbox.y1 - l.bbox.y0, pad = Math.round(h * 0.4);
+        const x0 = Math.max(0, Math.floor(l.bbox.x0 - pad)), y0 = Math.max(0, Math.floor(l.bbox.y0 - pad));
+        const x1 = Math.min(n0.c.width, Math.ceil(l.bbox.x1 + pad)), y1 = Math.min(n0.c.height, Math.ceil(l.bbox.y1 + pad));
+        const crop = document.createElement('canvas');
+        crop.width = x1 - x0; crop.height = y1 - y0;
+        crop.getContext('2d').drawImage(n0.c, -x0, -y0);
+        try {
+          const mv = (b) => ({ x0: b.x0 + x0, y0: b.y0 + y0, x1: b.x1 + x0, y1: b.y1 + y0 });
+          // (the pieces of the row, left to right: a wide gap makes two "lines" of it)
+          const got = (await recognizeSized(crop, null, stray.langs)).filter((q) => q.text.trim() && q.conf >= 50 && (q.bbox.y0 + q.bbox.y1) / 2 > pad && (q.bbox.y0 + q.bbox.y1) / 2 < crop.height - pad).sort((p, q) => p.bbox.x0 - q.bbox.x0);
+          if (!got.length) return;
+          const ws = got.flatMap((q) => q.words).map((w) => ({ ...w, bbox: mv(w.bbox) }));
+          const conf = got.reduce((a, q) => a + q.conf, 0) / got.length;
+          const text = got.map((q) => q.text.trim()).join(' ');
+          const first = got[0], last = got[got.length - 1];
+          if (!other.test(text) && conf >= l.conf - 15) {
+            lines[k] = { ...first, text, conf, words: ws, bbox: mv({ x0: first.bbox.x0, y0: Math.min(...got.map((q) => q.bbox.y0)), x1: last.bbox.x1, y1: Math.max(...got.map((q) => q.bbox.y1)) }),
+              baseline: mv({ x0: first.baseline.x0, y0: first.baseline.y0, x1: last.baseline.x1, y1: last.baseline.y1 }) };
+          }
+        } finally { crop.width = crop.height = 0; }
+      }));
+      if (window.__ocrDebug) window.__ocrDebug.stray = stray.idx.map((k) => lines[k].text);
+      if (editor.destroyed) { busy.remove(); return; }
+    }
     // dark labels, buttons or screens next to light paper (a price tag, a
     // sign): evening out the light turns a dark label into "paper" and its
     // light letters vanish – read the original picture too and add the lines
@@ -485,6 +515,12 @@ async function editableRun(editor, index, page, area) {
         return { ...l, conf, words: ws, text: ws.map((w) => w.text).join(' '), bbox: { ...l.bbox, x0, x1 }, baseline: { x0, y0: by(x0), x1, y1: by(x1) } };
       }).filter(Boolean);
     });
+    // … and a narrower one where a column starts (a question and its answer
+    // side by side, the number in front of an indented note)
+    // … or a border stands between two words (a table, a frame). One or two
+    // letters cut off like that are a label of a drawing ("U" with an index,
+    // an axis): it stays in the picture
+    lines = splitColumns(lines, norm).filter((l) => !(l.cut && !/\d/.test(l.text) && (l.text.match(/\p{L}/gu) || []).length <= 2));
     // (lines read with less confidence stay for now: handwriting is read so;
     // they are dropped again below unless they turn out to be handwritten)
     lines = lines.filter((l) => l.conf >= 35 && wordy(l.text.trim()) && l.bbox.y1 - l.bbox.y0 >= 6).map((l) => ({ ...l, weak: l.conf < 50 }));
@@ -524,6 +560,7 @@ async function editableRun(editor, index, page, area) {
       lines = lines.map((l, k) => ({ ...l, text: fixed.lines[k].text, words: (l.words || []).map((w, i) => ({ ...w, text: fixed.lines[k].words[i].text })) }));
     } catch (err) { console.warn('spelling check failed', err); }
 
+    lines = lines.map((l) => { const text = romanStart(l.text); return text === l.text ? l : { ...l, text, words: l.words && l.words.length ? [{ ...l.words[0], text: romanStart(l.words[0].text) }, ...l.words.slice(1)] : l.words }; });
     mark('spell');
     // 3. font (needs the ink), then clean the paper
     //    first every typeface in its regular style, then bold / italic only
@@ -585,7 +622,7 @@ async function editableRun(editor, index, page, area) {
     // (from the surely read lines: noise read weakly jitters a lot)
     const sure = lines.map((l, k) => !l.weak && jitter[k] !== null);
     const js = jitter.filter((_, k) => sure[k]);
-    const handPage = js.length >= 2 && (medianOr0(js) > 0.25 || (medianOr0(lines.filter((l, k) => sure[k]).map((l) => l.conf)) < 80 && medianOr0(js) > 0.15));
+    const handPage = handwrittenPage(js, lines.filter((l, k) => sure[k]).map((l) => l.conf));
     const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3)));
     if (window.__ocrDebug) window.__ocrDebug.hand = lines.map((l, k) => [jitter[k] === null ? null : +jitter[k].toFixed(2), Math.round(l.conf), handLine[k]]);
     const keep = scores.map((sc, k) => sc.length > 0 && (!lines[k].weak || handLine[k]));
@@ -626,8 +663,12 @@ async function editableRun(editor, index, page, area) {
     // … and how much better the bold letters fit than the regular ones
     const ds = regs.map((rc, k) => { const bc = rc && bestOf(kScores[k], fam, (c) => c.b); return rc && bc ? bc.score - rc.score : null; });
     const pxs = regs.filter(Boolean).map((rc) => rc.px).sort((x, y) => x - y);
-    const bolds = boldLines(qs, regs.map((rc) => (rc ? rc.px : 0)), { ps, ds, soft: pxs.length ? softPx / pxs[pxs.length >> 1] : null, mono: FONTS[fam] && FONTS[fam].kind === 'mono', known: famSure });
-    if (window.__ocrDebug) window.__ocrDebug.w = qs.map((q, k) => [+q.toFixed(2), regs[k] && +regs[k].px.toFixed(1), bolds[k], ps[k] === null ? null : +ps[k].toFixed(2), ds[k] === null ? null : +ds[k].toFixed(3)]);
+    const bolds0 = boldLines(qs, regs.map((rc) => (rc ? rc.px : 0)), { ps, ds, soft: pxs.length ? softPx / pxs[pxs.length >> 1] : null, mono: FONTS[fam] && FONTS[fam].kind === 'mono', known: famSure });
+    if (window.__ocrDebug) window.__ocrDebug.w = qs.map((q, k) => [+q.toFixed(2), regs[k] && +regs[k].px.toFixed(1), bolds0[k], ps[k] === null ? null : +ps[k].toFixed(2), ds[k] === null ? null : +ds[k].toFixed(3)]);
+    // … checked against the single words: a line with a few bold words is not a bold line
+    const byWords = boldByWords(lines.map((l, k) => (kInks[k] && regs[k] && l.words && l.words.length ? wordWeights(kInks[k], l.words) : null)), regs.map((rc) => (rc ? rc.px : 0)), bolds0);
+    const bolds = byWords.lines;
+    if (window.__ocrDebug) window.__ocrDebug.ww = lines.map((l, k) => (kInks[k] && regs[k] && l.words ? wordWeights(kInks[k], l.words).map((v) => +(v / regs[k].px).toFixed(3)) : null));
     const fonts = chooseFonts(kScores, bolds);
     // handwritten lines: the handwriting font that fits the page's writing best
     if (kHand.some(Boolean)) {
@@ -753,7 +794,7 @@ async function editableRun(editor, index, page, area) {
       // light ("Match the document" button), straight and sharp while editing
       // single bold words in a regular line
       const wordsOk = l.words && l.words.map((w) => w.text).join(' ') === t.text;
-      const bw3 = !f.b && !f.hand && kInks[k] && wordsOk && l.words.length >= 3 ? boldWords(kInks[k], l.words) : null;
+      const bw3 = f.b || f.hand || !kInks[k] || !wordsOk ? null : byWords.words[k] || (l.words.length >= 3 ? boldWords(kInks[k], l.words) : null);
       // (underlined: the whole line, or single words)
       const ul = wordsOk ? unders[k] : null;
       if (ul && ul.every(Boolean)) t.u = true;
@@ -763,7 +804,7 @@ async function editableRun(editor, index, page, area) {
           let x = escHtml(w.text);
           if (bw3 && bw3[i]) x = `<b>${x}</b>`;
           return ulw && ulw[i] ? `<u>${x}</u>` : x;
-        }).join(' ').replace(/<\/u> <u>/g, ' ');
+        }).join(' ').replace(/<\/u> <u>/g, ' ').replace(/<\/b> <b>/g, ' ');
       }
       if (geo.warp) Object.assign(t, geo.warp);
       if (geo.cg) t.cg = geo.cg;

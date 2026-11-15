@@ -7,7 +7,7 @@
 const { FONTS } = require('./fonts');
 const { round2 } = require('./geometry');
 const { paragraphs } = require('./scan-layout');
-const { LINE_H, escHtml, median } = require('./util');
+const { LINE_H, escHtml, median, medianOr0 } = require('./util');
 
 // ---------- font ----------
 // Every typeface with a kind can be matched. The classic office fonts are
@@ -65,13 +65,9 @@ function strokeWeight(li) {
   return mid.reduce((a, v) => a + v, 0) / mid.length;
 }
 
-/**
- * Words printed in bold inside a regular line ("the **deposit** is due"):
- * their strokes are clearly thicker than those of the line's other words.
- * Returns one flag per word (all false when unsure).
- */
-function boldWords(li, words) {
-  const ws = words.map((w) => {
+/** Stroke thickness of every word of a line in pixels (0: too short to measure). */
+function wordWeights(li, words) {
+  return words.map((w) => {
     const letters = (String(w.text || '').match(/[\p{L}\p{N}]/gu) || []).length;
     if (!w.bbox || letters < 3) return 0;
     const x0 = Math.max(0, Math.round(w.bbox.x0 - li.box.x0)), x1 = Math.min(li.w, Math.round(w.bbox.x1 - li.box.x0));
@@ -80,6 +76,15 @@ function boldWords(li, words) {
     for (let y = 0; y < li.h; y++) ink.set(li.ink.subarray(y * li.w + x0, y * li.w + x1), y * (x1 - x0));
     return strokeWeight({ w: x1 - x0, h: li.h, ink });
   });
+}
+
+/**
+ * Words printed in bold inside a regular line ("the **deposit** is due"):
+ * their strokes are clearly thicker than those of the line's other words.
+ * Returns one flag per word (all false when unsure).
+ */
+function boldWords(li, words) {
+  const ws = wordWeights(li, words);
   const ok = ws.filter((v) => v > 0).sort((a, b) => a - b);
   if (ok.length < 3) return words.map(() => false);
   const med = ok[ok.length >> 1];
@@ -88,6 +93,67 @@ function boldWords(li, words) {
   const flags = ws.map((v) => v > 0 && v >= med * 1.35 && v - med >= 0.8);
   // most of the line bold is a bold line, not bold words
   return flags.filter(Boolean).length * 2 > ok.length ? words.map(() => false) : flags;
+}
+
+/**
+ * Bold on a page of text, from its words: most words of a document are
+ * regular, so a word whose strokes are clearly thicker than the page's typical
+ * word (at its size) is bold. A line is bold when (nearly) all its words are;
+ * a line with a few such words is regular with those words in bold ("**Wer**
+ * muss den Unfall anzeigen?") – a whole-line measure lands in between and
+ * says "bold" for one line and "regular" for the next.
+ * weights: per line the stroke thickness of its words (see wordWeights; null:
+ * not measured), sizes: letter size per line, lineBolds: what the line
+ * measure says (boldLines) – it stays where the words say nothing: a page
+ * with too few words, or one whose words all weigh about the same (all
+ * regular, or all bold).
+ * Returns { lines: [bold?], words: [flags per word | null] }.
+ */
+function boldByWords(weights, sizes, lineBolds) {
+  const keep = { lines: lineBolds, words: weights.map(() => null) };
+  const rel = weights.map((ws, k) => (ws && sizes[k] > 0 ? ws.map((v) => v / sizes[k]) : null));
+  const all = rel.flatMap((r) => (r || []).filter((v) => v > 0));
+  if (all.length < 6) return keep;
+  // two kinds of words? (thin and thick strokes: two heaps of values)
+  const sorted = all.slice().sort((x, y) => x - y);
+  let lo = sorted[Math.floor(sorted.length * 0.25)], hi = sorted[sorted.length - 1], nHi = 0;
+  for (let pass = 0; pass < 12; pass++) {
+    let a = 0, na = 0, b = 0, nb = 0;
+    for (const v of sorted) { if (Math.abs(v - lo) <= Math.abs(v - hi)) { a += v; na++; } else { b += v; nb++; } }
+    if (!na || !nb) return keep;
+    lo = a / na; hi = b / nb; nHi = nb;
+  }
+  // (bold strokes are a good fifth thicker at least; most words are regular)
+  if (hi < lo * 1.2 || nHi > sorted.length * 0.45) return keep;
+  const thr = (lo + hi) / 2;
+  const heavy = (k, i) => rel[k][i] >= thr && weights[k][i] - lo * sizes[k] >= 0.5;
+  const light = (k, i) => rel[k][i] > 0 && rel[k][i] <= lo * 1.08;
+  const flags = rel.map((r, k) => (r ? r.map((v, i) => v > 0 && heavy(k, i)) : null));
+  if (!flags.some((f) => f && f.some(Boolean))) return keep;
+  const lines = lineBolds.slice(), words = weights.map(() => null);
+  flags.forEach((f, k) => {
+    if (!f) return;
+    const n = rel[k].filter((v) => v > 0).length, nb = f.filter(Boolean).length;
+    if (!n) return;
+    if (nb >= n * 0.75) { lines[k] = true; return; }
+    // (a heading in larger letters: its strokes are a little thinner for its
+    // size – bold by the line's measure and no word as thin as regular ones)
+    if (lineBolds[k] && !nb && !rel[k].some((v, i) => light(k, i))) return;
+    lines[k] = false;
+    if (!nb) return;
+    // short words (not measured) between or beside bold ones belong to them
+    const out = f.slice();
+    const bold = (i) => i >= 0 && i < f.length && f[i];
+    for (let i = 0; i < f.length; i++) {
+      if (rel[k][i] > 0) continue;
+      let a = i - 1, b = i + 1;
+      while (a >= 0 && !(rel[k][a] > 0)) a--;
+      while (b < f.length && !(rel[k][b] > 0)) b++;
+      out[i] = (a < 0 || bold(a)) && (b >= f.length || bold(b)) && (a >= 0 || b < f.length);
+    }
+    words[k] = out;
+  });
+  return { lines, words };
 }
 
 /**
@@ -202,6 +268,22 @@ function chooseFonts(all, bolds) {
 }
 
 /**
+ * Is the whole text handwritten? jitters: how unevenly the letters of each
+ * surely read line stand compared with the best printed typeface (0 = like
+ * print), confs: how sure the reading of those lines is (0–100).
+ * The typical line decides – but only from three lines on: with one or two,
+ * a single odd line (a label with an index, a date, a line full of
+ * underscores) would turn printed text into "handwriting", so there every
+ * line has to stand unevenly.
+ */
+function handwrittenPage(jitters, confs) {
+  if (jitters.length < 2) return false;
+  if (jitters.length < 3) return jitters.every((j) => j > 0.3);
+  const j = medianOr0(jitters);
+  return j > 0.25 || (medianOr0(confs) < 80 && j > 0.15);
+}
+
+/**
  * The lines every typeface is tried on when a text is long (indexes into
  * lines): up to `max` lines spread evenly over the text, preferring long ones
  * (more letters, a surer match), plus every line of clearly another size
@@ -247,6 +329,29 @@ function narrowLangs(lines) {
 
 // A word read without its umlaut (big or blurry letters lose the dots) while
 // the same word appears with it elsewhere in the text: use that spelling.
+/**
+ * Lines with letters of a script the page is not written in: on a page that
+ * is Latin throughout a "word" in Cyrillic letters is a misreading ("zur" →
+ * "гиг", "z. B." → "2. В.") however sure the reader was. Returns
+ * { langs, idx } – the lines to read once more and the languages for it – or
+ * null (too little text, a mixed page, or more than a few such lines).
+ */
+function strayScript(lines) {
+  const CYR = /[\u0400-\u04ff]/g, LAT = /[a-zA-ZäöüÄÖÜß]/g;
+  let lat = 0, cyr = 0;
+  const per = lines.map((l) => { const a = (l.text.match(LAT) || []).length, b = (l.text.match(CYR) || []).length; lat += a; cyr += b; return [a, b]; });
+  if (lat + cyr < 40) return null;
+  const main = lat >= (lat + cyr) * 0.95 ? 0 : cyr >= (lat + cyr) * 0.95 ? 1 : -1;
+  if (main < 0) return null;
+  // (Latin letters in a Russian text may be a name or a unit: only whole lines)
+  const idx = per.map((n, k) => (main === 0 ? n[1] > 0 : n[0] > 0 && n[1] === 0) ? k : -1).filter((k) => k >= 0);
+  if (!idx.length || idx.length > Math.max(3, lines.length * 0.25)) return null;
+  return { langs: main === 0 ? ['deu', 'eng'] : ['rus', 'eng'], idx };
+}
+
+/** "l. Heading", "Il. Heading": a Roman numeral read as small L's. */
+const romanStart = (text) => String(text).replace(/^([Il]{1,3})\.(?=\s+\p{Lu})/u, (m, n) => (n.includes('l') ? n.replace(/l/g, 'I') + '.' : m));
+
 function fixUmlauts(lines) {
   const plain = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const known = new Map();
@@ -334,17 +439,39 @@ function dilateMask(m, w, h, r) {
  * become one box with the lines one under the other, in the scan's spacing
  * and alignment. Returns the boxes and, for every line, its box and row.
  */
+/**
+ * One size for text of one size: every line's size is measured, so lines of
+ * the same print come out a few percent apart (10.0, 10.4, 9.8 pt) and the
+ * page looks uneven. Sizes within 8 % of each other, three lines or more, take
+ * their typical value. sizes: [number | null (leave as it is)].
+ */
+function evenSizes(sizes) {
+  const out = sizes.slice();
+  const idx = sizes.map((v, k) => (v > 0 ? k : -1)).filter((k) => k >= 0).sort((a, b) => sizes[a] - sizes[b]);
+  for (let i = 0; i < idx.length;) {
+    let j = i;
+    while (j + 1 < idx.length && sizes[idx[j + 1]] <= sizes[idx[i]] * 1.08) j++;
+    if (j - i >= 2) { const m = round2(median(idx.slice(i, j + 1).map((k) => sizes[k]))); for (let q = i; q <= j; q++) out[idx[q]] = m; }
+    i = j + 1;
+  }
+  return out;
+}
+
 function joinParagraphs(texts, lines, fonts, r, S) {
+  // (straight printed lines only; the line stays centred where it was)
+  const even = evenSizes(texts.map((t, k) => (fonts[k].hand || t.q || t.r ? null : t.fs)));
+  texts = texts.map((t, k) => (even[k] && even[k] !== t.fs ? { ...t, fs: even[k], y: round2(t.y + ((t.fs - even[k]) * LINE_H) / 2) } : t));
   const items = texts.map((t, k) => ({
     x0: r.x0 + lines[k].bbox.x0 / S, x1: r.x0 + lines[k].bbox.x1 / S, cy: t.y + (t.fs * LINE_H) / 2,
-    fs: t.fs, ff: t.ff, c: t.c, text: t.text, hand: !!fonts[k].hand, warp: !!(t.q || t.r || t.cg),
+    fs: t.fs, ff: t.ff, c: t.c, b: !!t.b, text: t.text, hand: !!fonts[k].hand, warp: !!(t.q || t.r),
   }));
   const groups = paragraphs(items);
   const boxes = [], lineOf = texts.map((t) => ({ id: t.id, j: 0 }));
   for (const g of groups) {
     const ts = g.idx.map((k) => texts[k]);
     if (ts.length === 1) { boxes.push(ts[0]); continue; }
-    const first = ts[0];
+    // one size for the block: its lines' typical one (each was measured)
+    const first = { ...ts[0], fs: round2(medianOr0(ts.map((t) => t.fs))) };
     const lh = Math.round((g.pitch / first.fs) * 100) / 100;
     // bold / italic / underlined: for the box when all its lines are, else per line
     const all = (key) => ts.every((t) => t[key]);
@@ -360,6 +487,7 @@ function joinParagraphs(texts, lines, fonts, r, S) {
     const x0 = Math.min(...ts.map((t) => t.x)), x1 = Math.max(...g.idx.map((k) => items[k].x1)) + first.fs * 0.2;
     const box = { ...first, y: round2(items[g.idx[0]].cy - (lh * first.fs) / 2), text: ts.map((t) => t.text).join('\n'), lh, b: base.b || undefined, i: base.i || undefined, u: base.u || undefined };
     if (rich) box.html = ts.map(row).join('\n'); else delete box.html;
+    delete box.cg; // (one box: no per-line colour stops)
     // the blur of the scan: the box's lines' typical value
     const looks = ts.map((t) => t.look || 0).sort((p, q) => p - q);
     if (looks[looks.length >> 1] > 0) { box.look = looks[looks.length >> 1]; box.fx = box.look; } else { delete box.look; delete box.fx; }
@@ -375,4 +503,4 @@ function joinParagraphs(texts, lines, fonts, r, S) {
   return { boxes, lineOf };
 }
 
-module.exports = { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, familyChoice, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };
+module.exports = { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, mainFamily, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, evenSizes, joinParagraphs };

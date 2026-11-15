@@ -137,7 +137,7 @@ function underlinedWords(li, words, base, hgt, line = null) {
 /**
  * Lines that belong together: one under the other at an even spacing, the
  * same font, size and colour, aligned on the left, the right or centred.
- * items: [{ x0, x1, cy, fs, ff, c, text, hand, warp }] (page units, cy: centre of
+ * items: [{ x0, x1, cy, fs, ff, c, b, text, hand, warp }] (page units, cy: centre of
  * the line). Returns groups [{ idx: [line numbers top → bottom], al, pitch }];
  * a single line is a group of its own.
  */
@@ -153,6 +153,7 @@ function paragraphs(items) {
   // lines with another text beside them in the same row: a table, or columns
   const beside = items.map((t, k) => items.some((o, j) => j !== k && Math.abs(o.cy - t.cy) < Math.min(o.fs, t.fs) * 0.5 && (o.x0 > t.x1 || o.x1 < t.x0)));
   const wOf = (q) => q.x1 - q.x0;
+  const single = (q) => { const x = String(q.text || '').trim(); return !!x && !/\s/.test(x); };
   const numeric = (q) => { const x = String(q.text || '').replace(/\s/g, ''); return !!x && (x.match(/[\d.,:%€$£+\-–]/g) || []).length >= x.length * 0.6; };
   for (const k of order) {
     const t = items[k];
@@ -161,9 +162,11 @@ function paragraphs(items) {
       for (const g of groups) {
         const lastK = g.idx[g.idx.length - 1];
         const last = items[lastK], first = items[g.idx[0]];
-        if (last.hand || last.warp || last.ff !== t.ff || !near(last.fs, t.fs, t.fs * 0.08) || !sameColour(last.c, t.c)) continue;
+        // (the size of a line is measured: lines of one block differ a little)
+        if (last.hand || last.warp || last.ff !== t.ff || !near(last.fs, t.fs, Math.min(last.fs, t.fs) * 0.15) || !sameColour(last.c, t.c)) continue;
         const pitch = t.cy - last.cy;
-        if (pitch < t.fs * 0.95 || pitch > t.fs * 2.1) continue;
+        const fs = Math.max(t.fs, last.fs);
+        if (pitch < fs * 0.95 || pitch > fs * 2.1) continue;
         if (g.pitch && !near(pitch, g.pitch, g.pitch * 0.12)) continue;
         // (one above the other)
         const ov = Math.min(last.x1, t.x1) - Math.max(last.x0, t.x0);
@@ -177,17 +180,22 @@ function paragraphs(items) {
         if (!al) continue;
         // running text or single entries? Lines of a paragraph are full up
         // to its last one. Not joined:
-        // - cells of a table (a row neighbour, short or numbers) – only long
-        //   lines side by side are columns of text;
+        // - cells of a table (a row neighbour; single words or numbers) –
+        //   lines of several words side by side are columns of text, or a
+        //   cell of several lines;
         // - widely spaced lines after a short one or after a colon (the
         //   labels of a form). Single-spaced short lines stay together (a
         //   list, an address).
-        if (beside[k] && beside[lastK] && (wOf(last) < last.fs * 10 || numeric(t) || numeric(last))) continue;
-        if (pitch > t.fs * 1.45) {
+        if (beside[k] && beside[lastK] && ((single(t) && single(last)) || numeric(t) || numeric(last))) continue;
+        if (pitch > fs * 1.45) {
           const widest = Math.max(wOf(t), ...g.idx.map((i) => wOf(items[i])));
           if (al !== 'center' && wOf(last) < widest * 0.72) continue;
           if (/:\s*$/.test(String(last.text || ''))) continue;
+          // (rows of one line each: a sentence that ends is not continued a row below)
+          if (g.idx.length === 1 && /[.?!]\s*$/.test(String(last.text || ''))) continue;
         }
+        // a line in bold above regular text, a row apart: its heading
+        if (g.idx.length === 1 && last.b && !t.b && pitch > fs * 1.3) continue;
         g.al = al; g.pitch = g.pitch || pitch; g.idx.push(k); joined = true;
         break;
       }
@@ -195,6 +203,60 @@ function paragraphs(items) {
     if (!joined) groups.push({ idx: [k], al: null, pitch: 0 });
   }
   return groups.map((g) => ({ idx: g.idx, al: g.al || 'left', pitch: g.pitch }));
+}
+
+/**
+ * A line read across a gap that is none inside a text: two columns side by
+ * side (a question and its answer), a number in front of an indented note, a
+ * label left of a framed text. Cut between two words
+ * - at a very wide gap (2.2 × the line's height), or
+ * - at a wide one (1.2 ×) when another line close by starts right where the
+ *   part after the gap does: that is where a column begins. ("I. Heading" with
+ *   nothing below at that place stays whole.)
+ * With the picture (img, dark ink on light paper): also at a vertical rule
+ * between two words – the border of a table cell or of a frame.
+ * lines: [{ text, conf, bbox, baseline, words: [{ text, conf, bbox }] }];
+ * returns the lines with the cut ones replaced by their parts (left → right,
+ * marked cut: true).
+ */
+function splitColumns(lines, img = null) {
+  // a column of ink from above the line to below it, somewhere in xa..xb
+  const ruled = (xa, xb, y0, y1) => {
+    if (!img) return false;
+    const h = y1 - y0;
+    const ya = Math.max(0, Math.round(y0 - h * 0.3)), yb = Math.min(img.height - 1, Math.round(y1 + h * 0.3));
+    xa = Math.max(0, Math.ceil(xa)); xb = Math.min(img.width - 1, Math.floor(xb));
+    if (yb - ya < 4) return false;
+    for (let x = xa; x <= xb; x++) {
+      let n = 0;
+      for (let y = ya; y <= yb; y++) if (lum(img.data, (y * img.width + x) * 4) < 150) n++;
+      if (n >= (yb - ya + 1) * 0.92) return true;
+    }
+    return false;
+  };
+  const real = (w) => w && w.bbox && /[\p{L}\p{N}]/u.test(w.text);
+  return lines.flatMap((l) => {
+    const ws = (l.words || []).filter((w) => w.bbox);
+    if (ws.length < 2 || ws.length !== (l.words || []).length) return [l];
+    const h = l.bbox.y1 - l.bbox.y0;
+    const starts = (x) => lines.some((o) => o !== l && Math.abs(o.bbox.x0 - x) <= h * 0.6
+      && Math.abs((o.bbox.y0 + o.bbox.y1) / 2 - (l.bbox.y0 + l.bbox.y1) / 2) <= h * 4);
+    const parts = [[ws[0]]];
+    for (let k = 1; k < ws.length; k++) {
+      const gap = ws[k].bbox.x0 - ws[k - 1].bbox.x1;
+      const cut = real(ws[k]) && real(ws[k - 1]) && (gap >= h * 2.2 || (gap >= h * 1.2 && starts(ws[k].bbox.x0))
+        || (gap >= h * 0.25 && ruled(ws[k - 1].bbox.x1 + 1, ws[k].bbox.x0 - 1, l.bbox.y0, l.bbox.y1)));
+      if (cut) parts.push([]);
+      parts[parts.length - 1].push(ws[k]);
+    }
+    if (parts.length === 1) return [l];
+    const bl = l.baseline || { x0: l.bbox.x0, y0: l.bbox.y1, x1: l.bbox.x1, y1: l.bbox.y1 };
+    const by = (x) => (bl.x1 - bl.x0 ? bl.y0 + ((bl.y1 - bl.y0) * (x - bl.x0)) / (bl.x1 - bl.x0) : bl.y0);
+    return parts.map((p) => {
+      const x0 = Math.min(...p.map((w) => w.bbox.x0)), x1 = Math.max(...p.map((w) => w.bbox.x1));
+      return { ...l, cut: true, conf: p.reduce((a, w) => a + w.conf, 0) / p.length, words: p, text: p.map((w) => w.text).join(' '), bbox: { ...l.bbox, x0, x1 }, baseline: { x0, y0: by(x0), x1, y1: by(x1) } };
+    });
+  });
 }
 
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -261,4 +323,4 @@ function combineBoxes(texts) {
   return out;
 }
 
-module.exports = { graphicMarks, besideMark, underlinedWords, paragraphs, combineBoxes };
+module.exports = { graphicMarks, besideMark, underlinedWords, paragraphs, splitColumns, combineBoxes };

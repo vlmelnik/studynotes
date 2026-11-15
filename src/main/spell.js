@@ -29,6 +29,8 @@ const CYR = /[Ѐ-ӿ]/, LAT = /[a-zA-ZäöüÄÖÜß]/;
 // below this recognition confidence a lone small Latin letter in Russian text
 // counts as a misread Russian word
 const UNSURE = 85;
+// … and from this confidence on a word in one script is not "corrected" to a look-alike
+const SURE = 90;
 
 function known(word, script) {
   const d = load();
@@ -135,7 +137,9 @@ function correctLines(lines) {
       let best = null;
       if (ws === 'mixed') best = tryScript(script) || tryScript(script === 'cyr' ? 'lat' : 'cyr');
       else if (ws === 'lat' && script === 'cyr' && w.length <= 12 && w !== w.toUpperCase()) best = tryScript('cyr') || tryScript('lat'); // a Russian word read in Latin?
-      else best = tryScript(ws);
+      // (a word in one script that the reader was sure of: the word list has
+      // gaps – "Folie" is not "Folic" because only that one is listed)
+      else if (!(ctx.conf != null && ctx.conf >= SURE)) best = tryScript(ws);
       // a lost space after a short Russian preposition ("сконтакторами" → "с контакторами")
       if (!best && ws === 'cyr' && w.length >= 6) {
         const m2 = w.match(/^(с|в|к|и|у|о|а|я|на|по|за|из|от|до|не|без|для|под|над|при|про)(.{4,})$/i);

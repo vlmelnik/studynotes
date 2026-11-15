@@ -9,3 +9,5 @@ src/main/google-client.local.js
 dev-notes/
 # dated backups the code-map tool writes on every run
 graphify-out/20*/
+# real pages for test/e2e/scan-check.js – private, local only
+test/private/

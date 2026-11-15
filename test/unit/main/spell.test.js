@@ -75,3 +75,9 @@ test('spell: the start of a line is not the start of a sentence', () => {
   const r2 = correctLines([{ text: 'Это так.', words: words('Это так.') }, { text: 'K сожалению нет', words: words('K сожалению нет') }]);
   assert.strictEqual(r2.lines[1].text, 'К сожалению нет');
 });
+
+test('spell: a word the reader was sure of is not swapped for a listed look-alike', () => {
+  const line = (conf) => correctLines([{ text: 'Folie 56', words: [{ text: 'Folie', conf }, { text: '56', conf: 96 }] }]).lines[0].text;
+  assert.strictEqual(line(96), 'Folie 56'); // (the word list has gaps)
+  assert.strictEqual(line(60), 'Folic 56'); // unsure: the listed word is taken, as before
+});

@@ -53,6 +53,84 @@ test('paragraphs: a short line ending with a colon closes its group when widely 
   assert.deepStrictEqual(g.map((x) => x.idx), [[0], [1], [2]]);
 });
 
+// ---------- a real page: two columns of questions and answers, numbered notes ----------
+// (the geometry of a page a user sent: 20 px letters, lines 23 px apart inside
+// a cell, 33 px and more between the rows)
+test('paragraphs: a cell of several lines is one block, the next row another one', () => {
+  const g = paragraphs([
+    line(98, 283, 73, { text: 'Wer muss den Unfall' }), line(98, 210, 96, { text: 'anzeigen?' }),
+    line(353, 970, 73, { text: 'Unternehmerinnen und Unternehmer. Diese können auch Personen' }), line(353, 768, 96, { text: 'bevollmächtigen die Unfallanzeige zu erstatten.' }),
+    line(98, 265, 129, { text: 'Wann ist ein Unfall' }), line(98, 210, 152, { text: 'anzuzeigen?' }),
+    line(353, 945, 129, { text: 'Arbeitsunfälle und Wegeunfälle (z. B. Unfall auf dem Weg zwischen' }), line(353, 912, 152, { text: 'Wohnung und Arbeitsstätte) sind anzuzeigen, wenn sie zu einer' }),
+    line(353, 978, 175, { text: 'Arbeitsunfähigkeit von mehr als 3 Kalendertagen oder zum Tod der' }), line(353, 596, 198, { text: 'versicherten Person führen.' }),
+  ].map((t) => ({ ...t, fs: 20 })));
+  assert.deepStrictEqual(g.map((x) => x.idx).sort((a, b) => a[0] - b[0]), [[0, 1], [2, 3], [4, 5], [6, 7, 8, 9]]);
+});
+
+test('paragraphs: lines of one block whose size was measured a little differently still join', () => {
+  // (a line with bold words measures smaller than its neighbours)
+  const g = paragraphs([{ ...line(353, 945, 129), fs: 20.1 }, { ...line(353, 912, 152), fs: 20 }, { ...line(353, 978, 175), fs: 18.5 }, { ...line(353, 596, 198), fs: 18.6 }]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0, 1, 2, 3]]);
+  // but a heading clearly larger than the text below it stays apart
+  const h = paragraphs([{ ...line(50, 300, 100), fs: 17 }, { ...line(50, 400, 122), fs: 12 }, { ...line(50, 390, 137), fs: 12 }]);
+  assert.deepStrictEqual(h.map((x) => x.idx), [[0], [1, 2]]);
+});
+
+test('paragraphs: single-line rows one under the other end with their sentence', () => {
+  // two questions, each one line, a row apart (wider than the line spacing would be)
+  const g = paragraphs([line(98, 311, 515, { text: 'Wer ist zu informieren?' }), line(98, 300, 548, { text: 'Wie ist das zu melden?' })].map((t) => ({ ...t, fs: 20 })));
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0], [1]]);
+});
+
+test('paragraphs: a bold line a row above regular text is its heading, not its first line', () => {
+  const g = paragraphs([line(98, 452, 30, { text: 'I. Notes on the form', b: true, fs: 20 }), line(98, 283, 68, { text: 'Who has to report', fs: 20 }), line(98, 210, 91, { text: 'the accident?', fs: 20 })]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0], [1, 2]]);
+});
+
+test('splitColumns: a line read across two columns is cut where the other column starts', () => {
+  const { splitColumns } = require('../../../src/shared/scan-layout');
+  const word = (text, x0, x1, y = 0) => ({ text, conf: 90, bbox: { x0, y0: y, x1, y1: y + 20 } });
+  const mk = (ws) => ({ text: ws.map((w) => w.text).join(' '), conf: 90, words: ws, bbox: { x0: ws[0].bbox.x0, y0: ws[0].bbox.y0, x1: ws[ws.length - 1].bbox.x1, y1: ws[0].bbox.y1 }, baseline: { x0: ws[0].bbox.x0, y0: ws[0].bbox.y0 + 16, x1: ws[ws.length - 1].bbox.x1, y1: ws[0].bbox.y0 + 16 } });
+  const lines = [
+    mk([word('Wer', 98, 130, 505), word('ist', 136, 155, 505), word('zu', 161, 180, 505), word('informieren?', 186, 311, 505)]),
+    mk([word('Versicherte', 381, 480, 505), word('Personen', 486, 570, 505)]),
+    // read as ONE line: the question and, 37 px further, the answer
+    mk([word('Wie', 98, 130, 584), word('ist', 136, 155, 584), word('die', 161, 190, 584), word('Unfallanzeige', 196, 316, 584), word('Per', 353, 385, 584), word('Post', 391, 430, 584), word('oder', 436, 475, 584), word('online,', 481, 545, 584)]),
+    mk([word('zu', 98, 118, 607), word('erstatten?', 124, 213, 607)]),
+    mk([word('Innerhalb', 353, 440, 640), word('von', 446, 480, 640), word('3', 486, 496, 640), word('Tagen', 502, 560, 640)]),
+  ];
+  const out = splitColumns(lines);
+  assert.deepStrictEqual(out.map((l) => l.text), ['Wer ist zu informieren?', 'Versicherte Personen', 'Wie ist die Unfallanzeige', 'Per Post oder online,', 'zu erstatten?', 'Innerhalb von 3 Tagen']);
+  const right = out[3];
+  assert.deepStrictEqual([right.bbox.x0, right.bbox.x1, right.words.length, right.baseline.x0], [353, 545, 4, 353]);
+});
+
+test('splitColumns: a number before a hanging indent is cut off; a numbered heading is not', () => {
+  const { splitColumns } = require('../../../src/shared/scan-layout');
+  const word = (text, x0, x1, y = 0) => ({ text, conf: 90, bbox: { x0, y0: y, x1, y1: y + 20 } });
+  const mk = (ws) => ({ text: ws.map((w) => w.text).join(' '), conf: 90, words: ws, bbox: { x0: ws[0].bbox.x0, y0: ws[0].bbox.y0, x1: ws[ws.length - 1].bbox.x1, y1: ws[0].bbox.y1 }, baseline: { x0: ws[0].bbox.x0, y0: ws[0].bbox.y0 + 16, x1: ws[ws.length - 1].bbox.x1, y1: ws[0].bbox.y0 + 16 } });
+  const out = splitColumns([
+    mk([word('I.', 98, 113, 30), word('Erläuterungen', 149, 290, 30), word('zur', 296, 325, 30), word('Unfallanzeige', 331, 452, 30)]), // nothing below starts at 149
+    mk([word('Wer', 98, 130, 63), word('muss', 136, 180, 63)]),
+    mk([word('2', 98, 107, 866), word('Anzugeben', 149, 250, 866), word('ist', 256, 275, 866)]),
+    mk([word('oder', 149, 190, 889), word('im', 196, 215, 889), word('Bescheid', 221, 300, 889)]),
+    // a very wide gap needs no other line: a label left of a framed text
+    mk([word('UD', 100, 139, 1000), word('Approx.-Logik', 200, 340, 1000)]),
+  ]);
+  assert.deepStrictEqual(out.map((l) => l.text), ['I. Erläuterungen zur Unfallanzeige', 'Wer muss', '2', 'Anzugeben ist', 'oder im Bescheid', 'UD', 'Approx.-Logik']);
+});
+
+test('splitColumns: a border between two words (table cell, frame) cuts the line', () => {
+  const { splitColumns } = require('../../../src/shared/scan-layout');
+  const word = (text, x0, x1) => ({ text, conf: 90, bbox: { x0, y0: 20, x1, y1: 40 } });
+  const l = { text: 'Up Approx.-Logik', conf: 90, words: [word('Up', 10, 40), word('Approx.-Logik', 60, 200)], bbox: { x0: 10, y0: 20, x1: 200, y1: 40 }, baseline: { x0: 10, y0: 36, x1: 200, y1: 36 } };
+  const W = 220, H = 60;
+  const pic = (ruleX, from = 0, to = H) => { const data = new Uint8ClampedArray(W * H * 4).fill(255); if (ruleX != null) for (let y = from; y < to; y++) for (let x = ruleX; x < ruleX + 2; x++) data.set([20, 20, 20, 255], (y * W + x) * 4); return { width: W, height: H, data }; };
+  assert.deepStrictEqual(splitColumns([l], pic(50)).map((x) => [x.text, !!x.cut]), [['Up', true], ['Approx.-Logik', true]]);
+  assert.deepStrictEqual(splitColumns([l], pic(null)).map((x) => x.text), ['Up Approx.-Logik']); // no border
+  assert.deepStrictEqual(splitColumns([l], pic(50, 24, 36)).map((x) => x.text), ['Up Approx.-Logik']); // a short stroke (a letter, a dash)
+});
+
 // a small ink mask: words with an underline under the 2nd one
 function mask(w, h, fill) {
   const ink = new Uint8Array(w * h);

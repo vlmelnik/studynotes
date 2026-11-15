@@ -129,3 +129,60 @@ test('boldLines: with an unrecognised typeface only the comparison between lines
   // heavier strokes than the stand-in typeface, on every line: not "bold"
   assert.deepStrictEqual(boldLines([1.3, 1.32, 1.28, 1.3], [33, 33, 33, 33], { ps: [0.8, 0.85, 0.7, 0.8], ds: [0.05, 0.06, 0.04, 0.05], soft: 0.007, known: false }), [false, false, false, false]);
 });
+
+test('handwrittenPage: one odd line among two does not make printed text handwriting', () => {
+  const { handwrittenPage } = require('../../../src/shared/scan-text');
+  assert.strictEqual(handwrittenPage([0.37, 0.14], [94, 73]), false); // a label with an index + a clean line
+  assert.strictEqual(handwrittenPage([0, 0.49], [95, 78]), false); // a date + a line full of underscores
+  assert.strictEqual(handwrittenPage([0.45, 0.5], [70, 65]), true); // two handwritten lines
+  assert.strictEqual(handwrittenPage([0.4, 0.35, 0.5, 0.3], [70, 75, 60, 80]), true); // a handwritten page
+  assert.strictEqual(handwrittenPage([0.05, 0.4, 0.1, 0.08], [95, 70, 96, 94]), false); // print with one odd line
+  assert.strictEqual(handwrittenPage([0.5], [60]), false); // (a single line is judged on its own elsewhere)
+});
+
+test('boldByWords: a line with a few bold words is regular with those words in bold', () => {
+  const { boldByWords } = require('../../../src/shared/scan-text');
+  const sizes = [42, 42, 42, 42];
+  const got = boldByWords([
+    [7.2, 7.0, 7.4], // a heading, bold throughout
+    [7.1, 4.6, 4.5, 4.7], // "**Wer** muss den Unfall"
+    [4.6, 4.5, 0, 4.7, 4.4], // regular (one word too short to measure)
+    [7.0, 0, 7.2, 0, 0, 7.3, 4.5, 4.6], // "**Arbeitsunfähigkeit von mehr als 3 Kalendertagen** oder zum"
+  ], sizes, [true, true, true, true]);
+  assert.deepStrictEqual(got.lines, [true, false, false, false]);
+  assert.deepStrictEqual(got.words, [null, [true, false, false, false], null, [true, true, true, true, true, true, false, false]]);
+});
+
+test('boldByWords: words that all weigh the same, or too few of them, leave the line measure as it is', () => {
+  const { boldByWords } = require('../../../src/shared/scan-text');
+  const same = boldByWords([[7, 7.2, 6.9], [7.1, 7, 7.3], [7, 7.1]], [42, 42, 42], [true, true, true]);
+  assert.deepStrictEqual(same.lines, [true, true, true]);
+  const few = boldByWords([[7.2], [4.5, 4.6]], [42, 42], [true, false]);
+  assert.deepStrictEqual([few.lines, few.words], [[true, false], [null, null]]);
+  // a heading in larger letters: thicker strokes for its size only
+  const head = boldByWords([[8.4, 8.6], [4.5, 4.6, 4.4], [4.6, 4.5, 4.7]], [80, 42, 42], [false, false, false]);
+  assert.deepStrictEqual(head.lines, [false, false, false]);
+});
+
+test('strayScript: a few words in Cyrillic letters on a German page are read again in German', () => {
+  const { strayScript } = require('../../../src/shared/scan-text');
+  const t = (text) => ({ text });
+  const page = [t('В Erläuterungen гиг Unfallanzeige'), t('Wer muss den Unfall anzeigen?'), t('Unternehmerinnen und Unternehmer.'), t('(2. В. Gewerbeaufsichtsamt, Amt für Arbeitsschutz)')];
+  assert.deepStrictEqual(strayScript(page), { langs: ['deu', 'eng'], idx: [0, 3] });
+  assert.strictEqual(strayScript([t('Der Mieter zahlt die Kaution für die Wohnung'), t('Спасибо большое за помощь')]), null); // a mixed page
+  assert.strictEqual(strayScript([t('Der Mieter zahlt die Kaution für die Wohnung pünktlich')]), null); // nothing stray
+});
+
+test('romanStart: a Roman numeral read as small L\'s before a heading', () => {
+  const { romanStart } = require('../../../src/shared/scan-text');
+  assert.strictEqual(romanStart('l. Erläuterungen zur Unfallanzeige'), 'I. Erläuterungen zur Unfallanzeige');
+  assert.strictEqual(romanStart('Il. Erläuterungen zu einzelnen Fragen'), 'II. Erläuterungen zu einzelnen Fragen');
+  assert.strictEqual(romanStart('I. Allgemeines'), 'I. Allgemeines');
+  assert.strictEqual(romanStart('l. c. on page 3'), 'l. c. on page 3'); // (no heading follows)
+});
+
+test('evenSizes: lines of one print measured a little differently get one size', () => {
+  const { evenSizes } = require('../../../src/shared/scan-text');
+  assert.deepStrictEqual(evenSizes([10.05, 10.46, 10.12, 11.89, 10.06, null, 17, 10.69]), [10.12, 10.12, 10.12, 11.89, 10.12, null, 17, 10.12]);
+  assert.deepStrictEqual(evenSizes([12, 12.4]), [12, 12.4]); // two lines: may be two sizes
+});
