@@ -153,19 +153,19 @@
   },
   "DejaVu Serif|clean": {
    "cer": 0.008,
-   "fams": "ptserif",
+   "fams": "serif",
    "rot": 0,
    "n": 1
   },
   "DejaVu Serif|tilt+2.5": {
    "cer": 0.008,
-   "fams": "ptserif",
+   "fams": "serif",
    "rot": 2.5,
    "n": 3
   },
   "DejaVu Serif|tilt-4": {
    "cer": 0.008,
-   "fams": "notoserif",
+   "fams": "serif",
    "rot": -4,
    "n": 3
   },
@@ -177,19 +177,19 @@
   },
   "DejaVu Serif|photo": {
    "cer": 0.008,
-   "fams": "notoserif",
+   "fams": "serif",
    "rot": 1.7,
    "n": 3
   },
   "DejaVu Serif|hard": {
    "cer": 0.015,
-   "fams": "notoserif",
+   "fams": "serif",
    "rot": -3.2,
    "n": 3
   },
   "DejaVu Sans|clean": {
    "cer": 0.008,
-   "fams": "notosans",
+   "fams": "sans",
    "rot": 0,
    "n": 1
   },
@@ -201,25 +201,25 @@
   },
   "DejaVu Sans|tilt-4": {
    "cer": 0.008,
-   "fams": "roboto",
+   "fams": "sans",
    "rot": -4,
    "n": 3
   },
   "DejaVu Sans|blur": {
    "cer": 0.008,
-   "fams": "ptsans",
+   "fams": "sans",
    "rot": 0,
    "n": 1
   },
   "DejaVu Sans|photo": {
    "cer": 0.008,
-   "fams": "ptsans",
+   "fams": "sans",
    "rot": 1.8,
    "n": 3
   },
   "DejaVu Sans|hard": {
    "cer": 0.008,
-   "fams": "ptsans",
+   "fams": "sans",
    "rot": -3.2,
    "n": 3
   },
@@ -387,7 +387,7 @@
   },
   "SN Inter|blur": {
    "cer": 0.008,
-   "fams": "inter",
+   "fams": "carlito",
    "rot": 0,
    "n": 3
   },
@@ -399,7 +399,7 @@
   },
   "SN Inter|hard": {
    "cer": 0.008,
-   "fams": "inter",
+   "fams": "carlito",
    "rot": -3.1,
    "n": 3
   },

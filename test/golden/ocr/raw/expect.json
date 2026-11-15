@@ -11,29 +11,29 @@
    {
     "text": "Der Mieter zahlt die Kaution für die Wohnung",
     "al": "left",
-    "b": false,
+    "b": true,
     "i": false,
     "u": false,
     "x": 50.79,
-    "y": 88.56
+    "y": 88.88
    },
    {
     "text": "in drei gleichen Raten bis zum Monatsende.",
     "al": "left",
-    "b": false,
+    "b": true,
     "i": false,
     "u": false,
     "x": 50.18,
-    "y": 116.42
+    "y": 116.6
    },
    {
     "text": "Bitte prüfen Sie die Große der Räume genau.",
     "al": "left",
-    "b": false,
+    "b": true,
     "i": false,
     "u": false,
     "x": 49.08,
-    "y": 144.65
+    "y": 144.85
    }
   ]
  },

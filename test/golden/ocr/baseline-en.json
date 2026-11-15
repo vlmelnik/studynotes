@@ -153,25 +153,25 @@
   },
   "DejaVu Serif|clean": {
    "cer": 0,
-   "fams": "ptsans/notoserif",
+   "fams": "sans/notoserif",
    "rot": 0,
    "n": 3
   },
   "DejaVu Serif|tilt+2.5": {
    "cer": 0,
-   "fams": "fira",
+   "fams": "sans/notoserif",
    "rot": 2.5,
    "n": 3
   },
   "DejaVu Serif|tilt-4": {
    "cer": 0,
-   "fams": "fira",
+   "fams": "sans/notoserif",
    "rot": -4.1,
    "n": 3
   },
   "DejaVu Serif|blur": {
    "cer": 0,
-   "fams": "ptsans",
+   "fams": "carlito",
    "rot": 0,
    "n": 1
   },
@@ -183,43 +183,43 @@
   },
   "DejaVu Serif|hard": {
    "cer": 0,
-   "fams": "ptsans",
+   "fams": "carlito",
    "rot": -3,
    "n": 3
   },
   "DejaVu Sans|clean": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 0,
    "n": 1
   },
   "DejaVu Sans|tilt+2.5": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 2.5,
    "n": 3
   },
   "DejaVu Sans|tilt-4": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": -4.1,
    "n": 3
   },
   "DejaVu Sans|blur": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 0,
    "n": 1
   },
   "DejaVu Sans|photo": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 1.7,
    "n": 3
   },
   "DejaVu Sans|hard": {
    "cer": 0.008,
-   "fams": "inter",
+   "fams": "sans",
    "rot": -3.1,
    "n": 3
   },
@@ -255,7 +255,7 @@
   },
   "SN Caladea|hard": {
    "cer": 0.008,
-   "fams": "cambria",
+   "fams": "serif",
    "rot": -3.2,
    "n": 3
   },
@@ -291,7 +291,7 @@
   },
   "SN Gelasio|hard": {
    "cer": 0.008,
-   "fams": "georgia",
+   "fams": "serif",
    "rot": -3.2,
    "n": 3
   },
@@ -315,9 +315,9 @@
   },
   "SN Open Sans|blur": {
    "cer": 0,
-   "fams": "opensans",
+   "fams": "carlito",
    "rot": 0,
-   "n": 3
+   "n": 1
   },
   "SN Open Sans|photo": {
    "cer": 0,
@@ -327,7 +327,7 @@
   },
   "SN Open Sans|hard": {
    "cer": 0.015,
-   "fams": "opensans",
+   "fams": "carlito",
    "rot": -3.2,
    "n": 3
   },
@@ -393,13 +393,13 @@
   },
   "SN Inter|photo": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 1.7,
    "n": 3
   },
   "SN Inter|hard": {
    "cer": 0.023,
-   "fams": "inter",
+   "fams": "sans",
    "rot": -3.1,
    "n": 3
   },
@@ -471,7 +471,7 @@
   },
   "SN Source Sans|hard": {
    "cer": 0,
-   "fams": "sourcesans",
+   "fams": "carlito",
    "rot": -3.3,
    "n": 3
   },
@@ -507,7 +507,7 @@
   },
   "SN Fira Sans|hard": {
    "cer": 0,
-   "fams": "fira",
+   "fams": "carlito",
    "rot": -3.2,
    "n": 3
   },
@@ -543,7 +543,7 @@
   },
   "SN Montserrat|hard": {
    "cer": 0.023,
-   "fams": "montserrat",
+   "fams": "carlito",
    "rot": -3.2,
    "n": 3
   },
@@ -615,7 +615,7 @@
   },
   "SN Garamond|hard": {
    "cer": 0.076,
-   "fams": "garamond",
+   "fams": "serif",
    "rot": -3.3,
    "n": 3
   },

@@ -171,37 +171,37 @@
   },
   "DejaVu Serif|blur": {
    "cer": 0,
-   "fams": "ptserif",
+   "fams": "serif",
    "rot": 0,
    "n": 1
   },
   "DejaVu Serif|photo": {
    "cer": 0,
-   "fams": "sourcesans/notoserif",
+   "fams": "serif",
    "rot": 1.7,
    "n": 3
   },
   "DejaVu Serif|hard": {
    "cer": 0,
-   "fams": "ptserif",
+   "fams": "serif",
    "rot": -3,
    "n": 3
   },
   "DejaVu Sans|clean": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 0,
    "n": 1
   },
   "DejaVu Sans|tilt+2.5": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 2.4,
    "n": 3
   },
   "DejaVu Sans|tilt-4": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": -4,
    "n": 3
   },
@@ -213,13 +213,13 @@
   },
   "DejaVu Sans|photo": {
    "cer": 0.016,
-   "fams": "sourcesans",
+   "fams": "carlito",
    "rot": 1.7,
    "n": 3
   },
   "DejaVu Sans|hard": {
    "cer": 0,
-   "fams": "opensans",
+   "fams": "sans",
    "rot": -3,
    "n": 3
   },
@@ -315,9 +315,9 @@
   },
   "SN Open Sans|blur": {
    "cer": 0,
-   "fams": "opensans",
+   "fams": "sans",
    "rot": 0,
-   "n": 3
+   "n": 1
   },
   "SN Open Sans|photo": {
    "cer": 0,
@@ -327,7 +327,7 @@
   },
   "SN Open Sans|hard": {
    "cer": 0,
-   "fams": "opensans",
+   "fams": "sans",
    "rot": -3,
    "n": 3
   },
@@ -351,7 +351,7 @@
   },
   "SN Roboto|blur": {
    "cer": 0,
-   "fams": "roboto",
+   "fams": "sans",
    "rot": 0,
    "n": 3
   },
@@ -399,7 +399,7 @@
   },
   "SN Inter|hard": {
    "cer": 0.016,
-   "fams": "inter",
+   "fams": "sans",
    "rot": -3.1,
    "n": 3
   },
@@ -459,19 +459,19 @@
   },
   "SN Source Sans|blur": {
    "cer": 0,
-   "fams": "sourcesans",
+   "fams": "sans",
    "rot": 0,
    "n": 3
   },
   "SN Source Sans|photo": {
    "cer": 0,
-   "fams": "sourcesans",
+   "fams": "sans",
    "rot": 1.8,
    "n": 3
   },
   "SN Source Sans|hard": {
    "cer": 0.008,
-   "fams": "sourcesans",
+   "fams": "sans",
    "rot": -3.2,
    "n": 3
   },
@@ -567,9 +567,9 @@
   },
   "SN Noto Serif|blur": {
    "cer": 0,
-   "fams": "notoserif",
+   "fams": "serif",
    "rot": 0,
-   "n": 3
+   "n": 1
   },
   "SN Noto Serif|photo": {
    "cer": 0,
@@ -579,7 +579,7 @@
   },
   "SN Noto Serif|hard": {
    "cer": 0,
-   "fams": "notoserif",
+   "fams": "serif",
    "rot": -3.1,
    "n": 3
   },
