@@ -2,6 +2,12 @@
 
 ## 1.7.0
 
+**Fixes (re-release, 15 Nov 2026, second)**
+- A text that is bold throughout is now recognised as bold (before, only bold lines next to regular ones were).
+- The same text gets the same typeface every time: when no typeface clearly fits best, the everyday one of its kind (Arial-, Calibri- or Times-like) is used instead of one of several look-alikes.
+- Tall pages are read by up to three recognition workers at once (faster; uses more memory while reading).
+- Alt + mouse wheel shows the size in one message instead of a pile of them.
+
 **Fixes (re-release, 15 Nov 2026)**
 - "Make text editable" keeps table borders, form lines and neighbouring text: only the letters are erased.
 - Form labels and table cells are no longer joined into one "paragraph"; paragraphs, lists and addresses still become one box.
