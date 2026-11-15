@@ -892,7 +892,7 @@ export class Tools {
     const tables = items.filter((it) => it.type === 'table');
     const parts = [
       btn('cut', 'Cut (Ctrl+X)', () => this.cut()),
-      btn('copy', 'Copy (Ctrl+C)', () => this.copy()),
+      btn('copy', 'Copy (Ctrl+C)', () => this.copyAndDeselect()),
       btn('duplicate', 'Duplicate (Ctrl+D)', () => this.duplicate()),
       btn('trash', 'Delete (Del)', () => this.deleteSelection(), 'danger'),
     ];
@@ -1047,7 +1047,8 @@ export class Tools {
       const o = d.texts.find((q) => q.id === el.dataset.id) || d.items.find((q) => q.id === el.dataset.id);
       el._x = o ? o.x : 0; el._y = o ? o.y : 0;
     }
-    this.cur = { kind: 'seltransform', pointerId: e.pointerId, mode, anchor, start: [e.clientX, e.clientY], tx: 0, ty: 0, s: 1 };
+    const sc = this.viewer.scroller;
+    this.cur = { kind: 'seltransform', pointerId: e.pointerId, mode, anchor, start: [e.clientX, e.clientY], scroll0: [sc.scrollLeft, sc.scrollTop], tx: 0, ty: 0, s: 1 };
     if (mode === 'rotate') {
       const [bx0, by0, bx1, by1] = sel.bbox;
       const cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
@@ -1071,8 +1072,10 @@ export class Tools {
   selTransformTo(e) {
     const c = this.cur;
     if (!this.sel) return; // selection was dropped (e.g. undo) while dragging
-    const z = this.viewer.zoom;
-    const dx = (e.clientX - c.start[0]) / z, dy = (e.clientY - c.start[1]) / z;
+    const z = this.viewer.zoom, sc = this.viewer.scroller;
+    c.last = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey };
+    // (the document may scroll under the pointer while dragging: see edgeScroll)
+    const dx = (e.clientX - c.start[0] + sc.scrollLeft - c.scroll0[0]) / z, dy = (e.clientY - c.start[1] + sc.scrollTop - c.scroll0[1]) / z;
     if (c.mode === 'rotate') {
       const a = Math.atan2(e.clientY - c.center[1], e.clientX - c.center[0]);
       let total = c.base + ((a - c.a0) * 180) / Math.PI;
@@ -1086,6 +1089,7 @@ export class Tools {
     if (c.mode === 'move') {
       c.tx = dx; c.ty = dy;
       this.positionSelection(dx, dy);
+      this.edgeScroll(c);
     } else {
       const [x0, y0, x1, y1] = this.sel.bbox;
       const [ax, ay] = c.anchor;
@@ -1097,7 +1101,36 @@ export class Tools {
     }
   }
 
+  // Dragging a selection to the top or bottom edge of the view scrolls the
+  // document (faster the closer to the edge), so that it can be carried to a
+  // place that was not on the screen. The selection stays under the pointer.
+  edgeScroll(c) {
+    const sc = this.viewer.scroller, r = sc.getBoundingClientRect();
+    const ZONE = 56, MAX = 22;
+    const speed = () => {
+      const y = c.last.clientY;
+      const d = y < r.top + ZONE ? y - (r.top + ZONE) : y > r.bottom - ZONE ? y - (r.bottom - ZONE) : 0;
+      return Math.round(Math.max(-1, Math.min(1, d / ZONE)) * MAX);
+    };
+    if (c.raf || !speed()) return;
+    const step = () => {
+      c.raf = 0;
+      if (this.cur !== c || !this.sel) return;
+      const v = speed(), before = sc.scrollTop;
+      if (!v) return;
+      sc.scrollTop = before + v;
+      if (sc.scrollTop === before) return; // the end of the document
+      const z = this.viewer.zoom;
+      c.tx = (c.last.clientX - c.start[0] + sc.scrollLeft - c.scroll0[0]) / z;
+      c.ty = (c.last.clientY - c.start[1] + sc.scrollTop - c.scroll0[1]) / z;
+      this.positionSelection(c.tx, c.ty);
+      c.raf = requestAnimationFrame(step);
+    };
+    c.raf = requestAnimationFrame(step);
+  }
+
   endSelTransform(c, cancelled) {
+    if (c.raf) { cancelAnimationFrame(c.raf); c.raf = 0; }
     if (c.frontEl) c.frontEl.classList.remove('drag-front');
     const sel = this.sel;
     if (!sel) return;
@@ -1376,6 +1409,14 @@ export class Tools {
     this.clip.stamp = Date.now();
     this.editor.onInternalCopy(this.clip);
     this.editor.toast('Copied');
+    return true;
+  }
+
+  // Ctrl+C and the Copy button: copy, then let the selection go (what was
+  // copied is ready to paste; the frame is not in the way any more).
+  copyAndDeselect() {
+    if (!this.copy()) return false;
+    this.clearSelection();
     return true;
   }
 

@@ -1335,7 +1335,7 @@ export class Editor {
       });
       return true;
     }
-    if (ctrl && k === 'c') { if (this.tools.copy()) this.writeClipboardMarker(); return true; }
+    if (ctrl && k === 'c') { if (this.tools.copyAndDeselect()) this.writeClipboardMarker(); return true; }
     if (ctrl && k === 'x') { if (this.tools.sel) { this.tools.copy(); this.writeClipboardMarker(); this.tools.deleteSelection(); } return true; }
     if (ctrl && k === 'd') return this.tools.duplicate(), true;
     if (ctrl && k === 'g') { if (this.tools.sel) this.tools.group(!e.shiftKey); return true; }

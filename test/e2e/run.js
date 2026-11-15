@@ -238,10 +238,41 @@ async function main() {
   check('selection moves', Math.abs(movedP[0] - before[0] - 60 / z) < 1.5 && Math.abs(movedP[1] - before[1] - 60 / z) < 1.5, `${before} → ${movedP}`);
   // copy / paste
   await win.keyboard.press('Control+c');
+  check('Ctrl+C copies and lets the selection go', await win.evaluate(() => !window.__app.active.tools.sel && !!window.__app.active.tools.clip));
   await win.keyboard.press('Control+v');
   const n2 = await win.evaluate(() => { const ed = window.__app.active; return ed.pageData(ed.pages[0].id).strokes.length; });
   check('copy / paste duplicates selection', n2 === strokes1.length + 5 + selCount - 1 || n2 > 5, `${n2} strokes on page`);
   await win.keyboard.press('Escape');
+
+  // ---------- dragging a selection to the bottom edge scrolls the document ----------
+  {
+    const info = await win.evaluate(() => {
+      const ed = window.__app.active, id = ed.pages[0].id, d = ed.pageData(id);
+      ed.viewer.scrollToPage(0);
+      ed.setPageData(id, { ...d, texts: [...d.texts, { id: 'edge-t', x: 60, y: 60, w: 160, fs: 14, ff: 'sans', c: '#222222', text: 'carry me down' }] });
+      ed.tools.select(0, id, new Set(), new Set(['edge-t']));
+      const pr = ed.viewer.pageClientRect(0), z = ed.viewer.zoom, sr = ed.viewer.scroller.getBoundingClientRect();
+      return { x: pr.left + 100 * z, y: pr.top + 70 * z, bottom: sr.bottom, top0: ed.viewer.scroller.scrollTop };
+    });
+    await win.waitForTimeout(200);
+    await win.mouse.move(info.x, info.y);
+    await win.mouse.down();
+    await win.mouse.move(info.x, info.bottom - 12, { steps: 8 });
+    await win.waitForTimeout(900); // (held at the edge: the document keeps scrolling)
+    const mid = await win.evaluate(() => window.__app.active.viewer.scroller.scrollTop);
+    await win.mouse.up();
+    await win.waitForTimeout(200);
+    const after = await win.evaluate(() => {
+      const ed = window.__app.active;
+      const at = ed.pages.findIndex((p) => (ed.pageData(p.id).texts || []).some((t) => t.id === 'edge-t'));
+      const t = at >= 0 ? ed.pageData(ed.pages[at].id).texts.find((q) => q.id === 'edge-t') : null;
+      return { at, y: t && t.y, top: ed.viewer.scroller.scrollTop };
+    });
+    check('drag to the bottom edge: the document scrolls while the pointer is held there', mid > info.top0 + 300, `scrollTop ${info.top0} → ${mid}`);
+    check('drag to the bottom edge: the text is dropped where the pointer is (further down)', after.at > 0 || (after.at === 0 && after.y > 400), JSON.stringify(after));
+    await win.keyboard.press('Escape');
+    await win.evaluate(() => window.__app.active.viewer.scrollToPage(0));
+  }
 
   // ---------- pages: insert, move, delete ----------
   await win.evaluate(() => window.__app.active.insertPage(0, 'grid'));

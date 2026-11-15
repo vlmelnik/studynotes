@@ -2,6 +2,10 @@
 
 ## 1.7.0
 
+**New (not released yet)**
+- Ctrl+C (and the Copy button) copies the selection and then lets it go.
+- Dragging a selection (text, picture, strokes) to the top or bottom edge of the window scrolls the document, so it can be carried to another page.
+
 **Fixes (re-release, 15 Nov 2026, third)**
 - Blocks follow the page: a table cell of several lines is one box, the next row another one; a question and its answer side by side are no longer read as one line; a number in front of an indented note stays apart from the note.
 - Bold: a few bold words inside a regular line stay bold words (the line is not made bold as a whole); a heading above the text is its own box.
