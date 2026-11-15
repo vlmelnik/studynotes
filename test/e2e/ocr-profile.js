@@ -13,7 +13,7 @@ const TEXT = ['Der Mieter zahlt die Kaution für die Wohnung in drei', 'gleichen
   'innerhalb von zwei Wochen nach dem Einzug schriftlich.', 'The tenant agrees to pay the monthly rent before the', 'third working day of each month and keeps the rooms', 'in good order during the whole time of the contract.'];
 
 (async () => {
-  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
+  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_FAKE_INK: '1', ...(process.env.READERS ? { STUDYNOTES_OCR_WORKERS: process.env.READERS } : {}) } });
   await ed(() => { window.__app.settings.editableScans = true; });
   await ed(async () => { const r = await window.api.createNotebook('', { title: 'profile', paper: 'blank', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForTimeout(600);

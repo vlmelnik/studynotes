@@ -13,6 +13,7 @@ import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
 import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
 import { LINE_H, escHtml, medianOr0 } from '../shared/util.js';
+import { bandCuts } from '../shared/scan-bands.js';
 
 const DPI_SCALE = 300 / 72; // page units are points: render at 300 dpi
 const MAX_SIDE = 4200;
@@ -195,6 +196,22 @@ async function pngBlob(c) {
 }
 // (an enlarged copy for reading stays below this many pixels)
 const MAX_READ_PIXELS = 20e6;
+const MIN_BAND = 500; // px: a band read by its own reader is at least this tall
+
+
+// how many readers the app runs side by side (asked once)
+let readers = null;
+/**
+ * The bands a picture is read in: cut between its lines when it is tall and
+ * more than one reader is there ([[0, height]] otherwise).
+ */
+async function bandsOf(cv) {
+  if (readers === null) readers = window.api.ocrStatus().then((st) => st.workers || 1, () => 1);
+  const n = await readers;
+  if (n < 2 || cv.height < MIN_BAND * 2) return [[0, cv.height]];
+  const im = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height);
+  return bandCuts(im, n, { minBand: MIN_BAND });
+}
 
 /**
  * Tesseract reads best when letters are about 25–40 px high. Very large text
@@ -202,28 +219,51 @@ const MAX_READ_PIXELS = 20e6;
  * detail. After a first pass the picture is rescaled for a second one.
  */
 export async function recognizeSized(canvas, blob, langs = LANGS) {
-  const scaled = async (src, f) => {
-    f = Math.min(f, Math.sqrt(MAX_READ_PIXELS / Math.max(1, src.width * src.height)));
-    const c2 = document.createElement('canvas');
-    c2.width = Math.max(1, Math.round(src.width * f)); c2.height = Math.max(1, Math.round(src.height * f));
-    const g = c2.getContext('2d');
-    g.imageSmoothingQuality = 'high';
-    g.drawImage(src, 0, 0, c2.width, c2.height);
-    // (the factor actually used: the coordinates are mapped back with it)
-    try { return [await pngBlob(c2), f]; } finally { c2.width = c2.height = 0; }
-  };
-  const read = async (bl, f, dx = 0, dy = 0) => {
+  // one picture → lines (in its own pixels). A tall picture is cut between
+  // its lines and the bands are read at the same time, one reader each.
+  const readPicture = async (cv, bl) => {
     const t0 = performance.now();
-    const got = await window.api.ocrRecognize(new Uint8Array(await bl.arrayBuffer()), langs);
-    // (tests: every reading with its languages, lines found and time)
-    if (window.__ocrDebug) (window.__ocrDebug.readLog ||= []).push([langs.join('+'), got.length, Math.round(performance.now() - t0)]);
+    const ocr = async (b) => window.api.ocrRecognize(new Uint8Array(await b.arrayBuffer()), langs);
+    const bands = await bandsOf(cv);
+    let got;
+    if (bands.length < 2) got = await ocr(bl || await pngBlob(cv));
+    else {
+      const parts = await Promise.all(bands.map(async ([y0, y1]) => {
+        const c = document.createElement('canvas');
+        c.width = cv.width; c.height = y1 - y0;
+        c.getContext('2d').drawImage(cv, 0, -y0);
+        let b;
+        try { b = await pngBlob(c); } finally { c.width = c.height = 0; }
+        const dy = (q) => ({ ...q, y0: q.y0 + y0, y1: q.y1 + y0 });
+        return (await ocr(b)).map((l) => ({ ...l, bbox: dy(l.bbox), baseline: dy(l.baseline), words: l.words.map((w) => ({ ...w, bbox: dy(w.bbox) })) }));
+      }));
+      got = parts.flat();
+    }
+    // (tests: every reading with its languages, lines found, time and bands)
+    if (window.__ocrDebug) (window.__ocrDebug.readLog ||= []).push([langs.join('+'), got.length, Math.round(performance.now() - t0), bands.length]);
+    return got;
+  };
+  // the picture at another size (f) → lines in the pixels of `src`, moved by dx, dy
+  const read = async (src, bl, f = 1, dx = 0, dy = 0) => {
+    let got;
+    if (f === 1) got = await readPicture(src, bl);
+    else {
+      // (the factor actually used: the coordinates are mapped back with it)
+      f = Math.min(f, Math.sqrt(MAX_READ_PIXELS / Math.max(1, src.width * src.height)));
+      const c2 = document.createElement('canvas');
+      c2.width = Math.max(1, Math.round(src.width * f)); c2.height = Math.max(1, Math.round(src.height * f));
+      const g = c2.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(src, 0, 0, c2.width, c2.height);
+      try { got = await readPicture(c2, null); } finally { c2.width = c2.height = 0; }
+    }
     const sc = (b) => ({ x0: b.x0 / f + dx, y0: b.y0 / f + dy, x1: b.x1 / f + dx, y1: b.y1 / f + dy });
     return got.map((l) => ({ ...l, bbox: sc(l.bbox), baseline: sc(l.baseline), words: l.words.map((w) => ({ ...w, bbox: sc(w.bbox) })) }));
   };
-  let lines = await read(blob, 1);
+  let lines = await read(canvas, blob);
   const hs = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
   const med = hs.length ? hs[hs.length >> 1] : 0;
-  if (med && (med < 22 || med > 48)) lines = await read(...(await scaled(canvas, Math.max(0.2, Math.min(3, TARGET_H / med)))));
+  if (med && (med < 22 || med > 48)) lines = await read(canvas, null, Math.max(0.2, Math.min(3, TARGET_H / med)));
   // lines much taller than the rest (headings) are read once more on their
   // own at the best size; the better reading wins
   const hs2 = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
@@ -238,7 +278,7 @@ export async function recognizeSized(canvas, blob, langs = LANGS) {
     crop.width = x1 - x0; crop.height = y1 - y0;
     crop.getContext('2d').drawImage(canvas, -x0, -y0);
     const f = Math.max(0.2, Math.min(3, HEAD_H / h));
-    const again = (await read(...(await scaled(crop, f)), x0, y0)).filter((q) => q.text.trim());
+    const again = (await read(crop, null, f, x0, y0)).filter((q) => q.text.trim());
     crop.width = crop.height = 0;
     // (the same letters but with umlaut dots read: the dots were seen, take it)
     const plain = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');

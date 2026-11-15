@@ -609,6 +609,8 @@ const getOcr = () => {
     dir: path.join(app.getPath('userData'), 'addons', 'ocr'),
     // (unpacked from the app archive: the recognition worker reads plain files)
     bundledDir: path.join(app.getAppPath(), 'assets', 'ocr').replace(/app\.asar(?=[\\/]|$)/, 'app.asar.unpacked'),
+    // (tests: a fixed number of readers, whatever the machine has)
+    maxWorkers: Number(process.env.STUDYNOTES_OCR_WORKERS) || undefined,
   });
   ocr.forgetDownloaded().catch(() => {});
   return ocr;

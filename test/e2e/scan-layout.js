@@ -35,7 +35,8 @@ const PAGES = {
 
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-layout-'));
-  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
+  // (two readers, so that the long page below is read in two bands on any machine)
+  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_FAKE_INK: '1', STUDYNOTES_OCR_WORKERS: process.env.READERS || '2' } });
   await ed(() => { window.__app.settings.editableScans = true; });
   await ed(async () => { const r = await window.api.createNotebook('', { title: 'layout', paper: 'blank', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForTimeout(600);
@@ -82,6 +83,18 @@ const PAGES = {
   check('text: the next paragraph (after an empty line) is another box', para('Pets are welcome').split('\n').length === 3, show(text));
   check('text: the heading stays apart', has(text, 'House rules'), show(text));
   check('text: a single-spaced list is one box', para('Milk') === 'Milk\nBread and butter\nEggs', show(text));
+
+  // ---------- a long page is read in bands at the same time: same text ----------
+  const SENT = ['The tenant agrees to pay the monthly rent before the third', 'working day of each month and keeps the rooms in good order', 'during the whole time of the contract and tells the owner', 'about any damage within two weeks after moving in.'];
+  // (32 lines: with its 40 units of offset the picture still fits on the page)
+  PAGES.long = { h: 60 + 32 * 22, texts: Array.from({ length: 32 }, (_, k) => [`${k + 1}. ${SENT[k % 4]}`, 20, 40 + k * 22]), rules: [] };
+  await ed(() => { window.__ocrDebug = []; });
+  const long = (await read('long')).join('\n').split('\n');
+  const log = await ed(() => window.__ocrDebug.readLog);
+  check('long page: read in two bands', !!log && log.some((r) => r[3] === 2), JSON.stringify(log));
+  const want = PAGES.long.texts.map((t) => t[0]);
+  const wrong = want.filter((t, k) => long[k] !== t);
+  check('long page: every line is read once, in order, across the cut', long.length === 32 && wrong.length <= 1, `${long.length} lines; differ: ${JSON.stringify(wrong.slice(0, 3))} got ${JSON.stringify(long.filter((t, k) => t !== want[k]).slice(0, 3))}`);
 
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
