@@ -398,8 +398,8 @@
    "n": 3
   },
   "SN Inter|hard": {
-   "cer": 0.023,
-   "fams": "sans",
+   "cer": 0.015,
+   "fams": "roboto",
    "rot": -3.1,
    "n": 3
   },
@@ -542,8 +542,8 @@
    "n": 3
   },
   "SN Montserrat|hard": {
-   "cer": 0.023,
-   "fams": "carlito",
+   "cer": 0.008,
+   "fams": "sans",
    "rot": -3.2,
    "n": 3
   },
@@ -578,7 +578,7 @@
    "n": 3
   },
   "SN Noto Serif|hard": {
-   "cer": 0.023,
+   "cer": 0.015,
    "fams": "notoserif",
    "rot": -3.2,
    "n": 3
@@ -602,7 +602,7 @@
    "n": 3
   },
   "SN Garamond|blur": {
-   "cer": 0,
+   "cer": 0.008,
    "fams": "garamond",
    "rot": 0,
    "n": 3
@@ -650,8 +650,8 @@
    "n": 3
   },
   "SN PT Serif|hard": {
-   "cer": 0.03,
-   "fams": "serif",
+   "cer": 0.008,
+   "fams": "ptserif",
    "rot": -3.2,
    "n": 3
   }
