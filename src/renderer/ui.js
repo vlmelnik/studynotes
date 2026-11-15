@@ -162,12 +162,24 @@ export function confirmDialog(title, text, { okLabel = 'OK', cancelLabel = 'Canc
 
 // ---------- toasts ----------
 let toastHost;
-export function toast(message, { error = false, timeout = 3200, action } = {}) {
+// (key: a value that changes quickly – a size while turning the wheel – is
+// shown in one message whose text changes, not as a pile of messages)
+const keyed = new Map();
+export function toast(message, { error = false, timeout = 3200, action, key } = {}) {
   if (!toastHost) { toastHost = h('div', { class: 'toast-host' }); document.body.append(toastHost); }
+  const leave = (t) => setTimeout(() => { t.classList.add('out'); if (key && keyed.get(key) === t) keyed.delete(key); setTimeout(() => t.remove(), 300); }, timeout);
+  const old = key && keyed.get(key);
+  if (old && old.isConnected && !old.classList.contains('out')) {
+    old.firstChild.textContent = message;
+    clearTimeout(old._leave);
+    old._leave = leave(old);
+    return old;
+  }
   const t = h('div', { class: `toast${error ? ' error' : ''}` }, h('span', {}, message));
   if (action) t.append(h('button', { class: 'toast-action', onclick: () => { action.onClick(); t.remove(); } }, action.label));
   toastHost.append(t);
-  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, timeout);
+  if (key) keyed.set(key, t);
+  t._leave = leave(t);
   return t;
 }
 

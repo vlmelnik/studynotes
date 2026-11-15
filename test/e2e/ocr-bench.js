@@ -96,6 +96,8 @@ function lev(a, b) {
       const cer = lev(got, want) / want.length;
       const fams = [...new Set(t.map((q) => q.ff))].join('/');
       const rot = t.length ? (t.reduce((a, q) => a + (q.r || 0), 0) / t.length).toFixed(1) : '-';
+      // (MARGIN=1: how far the chosen typeface is ahead of the everyday one of its kind)
+      if (process.env.MARGIN) { const fi = await ed(() => window.__ocrDebug.fam); console.log(`margin ${css}|${cond} want ${fam} got ${fams} ${JSON.stringify(fi)}`); }
       rows.push({ font: css, cond, cer, fams, want: fam, rot: rot === '-' ? '-' : Number(rot), n: t.length });
       const soft = t.length ? Math.max(...t.map((q) => q.look || 0)) : 0;
       console.log(`${css.padEnd(15)} ${cond.padEnd(9)} soft ${soft.toFixed(2)} CER ${(cer * 100).toFixed(1).padStart(5)}%  font ${fams.padEnd(14)} (want ${fam})  angle ${rot}  lines ${t.length}`);

@@ -208,7 +208,7 @@ export class Editor {
     ts[kind].size = pick(L.list, ts[kind].size);
     this.renderOptions();
     this.app.saveToolState();
-    this.toast(`Size ${ts[kind].size}${kind === 'eraser' ? ' px' : ''}`);
+    this.toast(`Size ${ts[kind].size}${kind === 'eraser' ? ' px' : ''}`, 'size');
   }
 
   backToCenter() {
@@ -933,7 +933,7 @@ export class Editor {
   }
 
   onSelectionChange() { if (this.textBar) this.textBar.update(); }
-  toast(msg) { toast(msg, { timeout: 1200 }); }
+  toast(msg, key) { toast(msg, { timeout: 1200, key }); }
 
   toggleSidebar() {
     if (this.isBoard) return;

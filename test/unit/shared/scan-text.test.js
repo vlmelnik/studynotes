@@ -80,3 +80,52 @@ test('sampleLines: all lines of a short text; a spread sample plus the headings 
   assert.strictEqual(got.length, 11);
   assert.deepStrictEqual(got.slice(1), [2, 6, 10, 14, 18, 22, 26, 30, 34, 38]);
 });
+
+test('boldLines: a text that is bold throughout is bold (nothing thinner to compare with)', () => {
+  const { boldLines } = require('../../../src/shared/scan-text');
+  const sizes = [36, 36, 36, 36];
+  // sharp picture: the strokes stand at the bold letters (p ≈ 1), not the regular ones (p ≈ 0.1)
+  assert.deepStrictEqual(boldLines([1.6, 1.58, 1.62, 1.6], sizes, { ps: [0.92, 0.9, 1.05, 0.95], ds: [0.03, 0.02, 0.04, 0.03], soft: 0.007 }), [true, true, true, true]);
+  assert.deepStrictEqual(boldLines([1.05, 1.08, 1.03, 1.06], sizes, { ps: [0.1, 0.2, 0.08, 0.15], ds: [-0.4, -0.3, -0.4, -0.35], soft: 0.007 }), [false, false, false, false]);
+  // sharp, mixed: every line by its own strokes
+  assert.deepStrictEqual(boldLines([1.6, 1.05, 1.06, 1.04], sizes, { ps: [0.95, 0.1, 0.12, 0.08], ds: [0.03, -0.4, -0.4, -0.4], soft: 0.007 }), [true, false, false, false]);
+});
+
+test('boldLines: on a blurred picture the fit of the bold letters decides, not the smeared strokes', () => {
+  const { boldLines } = require('../../../src/shared/scan-text');
+  const sizes = [33, 33, 33, 33];
+  // regular small print, blurred: strokes look thick (p > 1) but the bold letters fit worse
+  assert.deepStrictEqual(boldLines([1.27, 1.3, 1.25, 1.28], sizes, { ps: [1.2, 1.25, 1.16, 1.21], ds: [-0.19, -0.2, -0.15, -0.18], soft: 0.04 }), [false, false, false, false]);
+  // bold, photographed: strokes look thin (p ≈ 0.05) but the bold letters fit better
+  assert.deepStrictEqual(boldLines([1.01, 1.02, 1.0, 1.01], sizes, { ps: [0.05, 0.08, -0.01, 0.05], ds: [0.09, 0.1, 0.08, 0.094], soft: 0.039 }), [true, true, true, true]);
+  // a monospaced typeface: its bold letters always fit a little better – no decision from that
+  assert.deepStrictEqual(boldLines([1.02, 1.01, 1.03, 1.02], sizes, { ps: [0.17, 0.12, 0.25, 0.17], ds: [0.04, 0.05, 0.04, 0.043], soft: 0.035, mono: true }), [false, false, false, false]);
+  // a bold page with one regular line: clearly thinner than the rest
+  assert.deepStrictEqual(boldLines([1.2, 1.22, 0.85, 1.19], sizes, { ps: [0.6, 0.62, 0.0, 0.6], ds: [0.04, 0.05, -0.2, 0.04], soft: 0.035 }), [true, true, false, true]);
+});
+
+test('boldLines: without the extra measures it is the old comparison with the typical line', () => {
+  const { boldLines } = require('../../../src/shared/scan-text');
+  assert.deepStrictEqual(boldLines([1.0, 1.02, 1.4, 0.98], [30, 30, 30, 30]), [false, false, true, false]);
+  assert.deepStrictEqual(boldLines([1.5], [30]), [true]);
+});
+
+test('mainFamily: a clear winner is taken; among near-equal look-alikes the everyday typeface of the kind', () => {
+  const { mainFamily } = require('../../../src/shared/scan-text');
+  const line = (o) => Object.entries(o).map(([ff, score]) => ({ ff, score, prior: 0, b: false, i: false }));
+  // Source Sans clearly ahead of the other sans typefaces: recognised
+  assert.strictEqual(mainFamily([line({ sourcesans: 0.8, ptsans: 0.7, sans: 0.65, serif: 0.4 }), line({ sourcesans: 0.82, ptsans: 0.71, sans: 0.66, serif: 0.4 })]), 'sourcesans');
+  // an unknown sans: PT Sans, Noto Sans and Roboto within a hair – whichever leads, the answer is the same
+  const a = mainFamily([line({ ptsans: 0.70, notosans: 0.695, roboto: 0.69, sans: 0.6, carlito: 0.55, serif: 0.4 })]);
+  const b = mainFamily([line({ ptsans: 0.69, notosans: 0.70, roboto: 0.695, sans: 0.6, carlito: 0.55, serif: 0.4 })]);
+  assert.deepStrictEqual([a, b], ['sans', 'sans']);
+  // the same for serifs, and an everyday typeface that wins is kept as it is
+  assert.strictEqual(mainFamily([line({ ptserif: 0.7, notoserif: 0.69, serif: 0.62, sans: 0.3 })]), 'serif');
+  assert.strictEqual(mainFamily([line({ carlito: 0.7, lato: 0.695, sans: 0.6 })]), 'carlito');
+});
+
+test('boldLines: with an unrecognised typeface only the comparison between lines counts', () => {
+  const { boldLines } = require('../../../src/shared/scan-text');
+  // heavier strokes than the stand-in typeface, on every line: not "bold"
+  assert.deepStrictEqual(boldLines([1.3, 1.32, 1.28, 1.3], [33, 33, 33, 33], { ps: [0.8, 0.85, 0.7, 0.8], ds: [0.05, 0.06, 0.04, 0.05], soft: 0.007, known: false }), [false, false, false, false]);
+});

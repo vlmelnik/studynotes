@@ -97,12 +97,31 @@ function boldWords(li, words) {
  */
 const bestOf = (sc, ff, pred = () => true) => sc.filter((c) => c.ff === ff && pred(c)).sort((x, y) => y.score - x.score)[0];
 
-/** The typeface that fits the whole text best. */
-function mainFamily(all) {
+/**
+ * The typeface for the whole text: the one that fits best – when it is
+ * clearly ahead of the next one of its kind. A text set in a typeface the
+ * app does not have fits several similar ones about equally, and which of
+ * them wins changes with the picture (PT Sans, then Noto Sans, then
+ * Roboto …): then the everyday typeface of that kind is taken instead, the
+ * same one every time.
+ */
+function familyChoice(all) {
   const fams = [...new Set(all.flat().map((c) => c.ff))];
   const total = (ff) => all.reduce((sum, sc) => { const c = bestOf(sc, ff); return sum + (c ? c.score + c.prior : 0); }, 0);
-  return fams.slice().sort((x, y) => total(y) - total(x))[0];
+  const ranked = fams.slice().sort((x, y) => total(y) - total(x));
+  const best = ranked[0];
+  if (!best || !FONTS[best]) return { ff: best, sure: false };
+  const kind = FONTS[best].kind;
+  const second = ranked.find((f) => f !== best && FONTS[f] && FONTS[f].kind === kind);
+  // sure: recognised, not just the nearest of several look-alikes
+  const sure = !second || (total(best) - total(second)) / Math.max(1, all.length) >= CLEAR_LEAD;
+  const everyday = ranked.find((f) => CLASSIC.has(f) && FONTS[f] && FONTS[f].kind === kind);
+  return { ff: sure || CLASSIC.has(best) || !everyday ? best : everyday, sure };
 }
+const mainFamily = (all) => familyChoice(all).ff;
+// lead over the next typeface of the kind (correlation per line) from which
+// the best fit counts as recognised
+const CLEAR_LEAD = 0.025;
 
 /**
  * Which lines are bold. q = real stroke thickness ÷ the regular letters'
@@ -110,21 +129,47 @@ function mainFamily(all) {
  * strokes a little, so compare with the typical line): clearly thicker →
  * bold; headings much larger than the text are usually set bold, so less is
  * needed there; small print looks thicker without being bold.
+ *
+ * That comparison alone misses a text that is bold throughout. Two measures
+ * that need no other line (m, all optional):
+ * - ps: where the strokes stand between the regular (0) and the bold (1)
+ *   letters – sure on a sharp picture (soft = blur ÷ letter size is small),
+ *   useless on a blurred one (small blurred print looks bolder than bold);
+ * - ds: how much better the bold letters fit than the regular ones (score
+ *   difference) – holds on blurred pictures too, but not for monospaced
+ *   typefaces (mono), whose bold letters always fit a little better.
+ * Both compare with the letters of the chosen typeface, so they count only
+ * when that typeface was recognised (m.known): the strokes of an unknown,
+ * heavier typeface would pass for bold.
  */
-function boldLines(qs, sizes) {
+function boldLines(qs, sizes, m = {}) {
   const ok = qs.map((q, k) => (q > 0 && sizes[k] > 0 ? k : -1)).filter((k) => k >= 0);
   if (!ok.length) return qs.map(() => null);
   const mq = median(ok.map((k) => qs[k])), ms = median(ok.map((k) => sizes[k]));
-  return qs.map((q, k) => {
-    if (!(q > 0) || !(sizes[k] > 0)) return null;
+  const relative = (q, k) => {
     if (ok.length < 3) return q > 1.45; // nothing to compare with: only clearly bold
     const r = q / mq, s = sizes[k] / ms;
     if (s >= 1.6) return r > 0.95;
     if (s >= 1.2) return r > 1.08;
     if (s < 0.85) return r > 1.4;
     return r > 1.25;
+  };
+  const ps = m.ps || [], ds = m.ds || [];
+  const known = m.known !== false;
+  const sharp = known && m.soft != null && m.soft < SHARP;
+  // a blurred picture: is the typical line bold?
+  const dOk = ok.map((k) => ds[k]).filter((d) => d != null);
+  const allBold = known && !sharp && !m.mono && dOk.length > 0 && median(dOk) > 0.004;
+  return qs.map((q, k) => {
+    if (!(q > 0) || !(sizes[k] > 0)) return null;
+    if (sharp && ps[k] != null) return ps[k] >= 0.55;
+    // the typical line is bold: so is this one, unless clearly thinner
+    if (allBold) return q / mq > 0.82 || relative(q, k);
+    return relative(q, k);
   });
 }
+// blur ÷ letter size below which stroke thickness can be trusted
+const SHARP = 0.015;
 
 function chooseFonts(all, bolds) {
   const main = mainFamily(all);
@@ -140,7 +185,12 @@ function chooseFonts(all, bolds) {
     // another kind of typeface (serif / sans / mono) only when it clearly fits
     // better – never switch between two similar sans fonts line by line
     const kind = (f) => FONTS[f].kind;
-    if (own && inMain && kind(own.ff) !== kind(main) && own.score - inMain.score > 0.08) ff = own.ff;
+    if (own && inMain && kind(own.ff) !== kind(main) && own.score - inMain.score > 0.08) {
+      // … and then that kind's everyday typeface, unless one of its kind is clearly ahead on this line
+      const next = sc.filter((c) => c.ff !== own.ff && kind(c.ff) === kind(own.ff)).sort((x, y) => y.score - x.score)[0];
+      const everyday = sc.filter((c) => CLASSIC.has(c.ff) && kind(c.ff) === kind(own.ff)).sort((x, y) => y.score - x.score)[0];
+      ff = !next || own.score - next.score >= CLEAR_LEAD || !everyday ? own.ff : everyday.ff;
+    }
     // bold: the real strokes compared with the regular and the bold letters
     // drawn at the same size and blur (0 = as thin as regular, 1 = as thick
     // as bold); semibold headings count as bold
@@ -325,4 +375,4 @@ function joinParagraphs(texts, lines, fonts, r, S) {
   return { boxes, lineOf };
 }
 
-module.exports = { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };
+module.exports = { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, familyChoice, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs };

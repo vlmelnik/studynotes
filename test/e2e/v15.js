@@ -151,6 +151,15 @@ const launch = (extraArgs = []) => launchApp({ tmp, args: extraArgs });
     const w = (s) => { const xs = s.p.filter((_, i) => i % 3 === 0); return Math.max(...xs) - Math.min(...xs); };
     const undo1 = await ed(() => window.__app.active.undoStack.length);
     check('D: Alt+wheel: no selection → pen size; selection → resized, one undo step', ps === 2.5 && w(st1) > w(st0) * 1.2 && undo1 === undo0 + 1, `pen ${ps}, width ${w(st0).toFixed(1)}→${w(st1).toFixed(1)}, undo +${undo1 - undo0}`);
+    // turning on: the size is shown in one message that changes, not in a pile of them
+    await ed(() => { const e = window.__app.active; e.tools.clearSelection && e.tools.clearSelection(); e.setTool('pen'); });
+    await win.waitForTimeout(1500); // (earlier messages are gone)
+    await win.keyboard.down('Alt');
+    for (let i = 0; i < 4; i++) { await win.mouse.wheel(0, -100); await win.waitForTimeout(60); }
+    await win.keyboard.up('Alt');
+    const sizeToasts = await win.locator('.toast:not(.out)').allTextContents();
+    const penNow = await ed(() => window.__app.toolState.pen.size);
+    check('D: Alt+wheel shows the size in one changing message', sizeToasts.length === 1 && sizeToasts[0].includes(String(penNow)), JSON.stringify({ sizeToasts, penNow }));
     await ed(() => { window.__app.active.tools.clearSelection(); window.__app.toolState.pen.size = 2; });
   }
 

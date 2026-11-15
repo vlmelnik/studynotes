@@ -11,7 +11,7 @@ import { FONTS } from '../shared/fonts.js';
 import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
-import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, mainFamily, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
+import { sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, bestOf, familyChoice, boldLines, chooseFonts, narrowLangs, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
 import { LINE_H, escHtml, medianOr0 } from '../shared/util.js';
 import { bandCuts } from '../shared/scan-bands.js';
 
@@ -553,6 +553,9 @@ async function editableRun(editor, index, page, area) {
     // the 3 best, plus the best of each other kind (a serif heading in a sans text)
     const top = new Set(ranked.slice(0, 3));
     for (const kd of ['sans', 'serif', 'mono']) { const f = ranked.find((q) => FONTS[q].kind === kd); if (f) top.add(f); }
+    // … and the everyday typefaces: a text that is bold throughout fits no
+    // regular letters well, so the order above says little about it
+    for (const f of CLASSIC) if (fams.includes(f)) top.add(f);
     const inSample = new Set(sample);
     for (let k = 0; k < lines.length; k++) {
       if (inSample.has(k) || !inks[k]) continue;
@@ -601,12 +604,30 @@ async function editableRun(editor, index, page, area) {
     if (window.__ocrDebug) window.__ocrDebug.soft = lineSoft;
     const kAll = scores.filter((_, k) => keep[k]);
     const kScores = kAll.map((sc, k) => (kHand[k] ? sc.filter((c) => !isHand(c)) : sc));
-    const fam = mainFamily(kScores);
+    const { ff: fam, sure: famSure } = familyChoice(kScores);
+    // (tests: how far the chosen typeface is ahead of the everyday one of its kind, per line)
+    if (window.__ocrDebug) {
+      const tot = (ff) => kScores.reduce((a, sc) => { const c = bestOf(sc, ff); return a + (c ? c.score : 0); }, 0) / Math.max(1, kScores.length);
+      const classic = [...CLASSIC].filter((f) => FONTS[f].kind === FONTS[fam].kind).sort((x, y) => tot(y) - tot(x))[0];
+      const second = Object.keys(FONTS).filter((f) => f !== fam && FONTS[f].kind === FONTS[fam].kind && kScores.some((sc) => bestOf(sc, f))).sort((x, y) => tot(y) - tot(x))[0];
+      window.__ocrDebug.fam = { fam, classic, ahead: classic ? +(tot(fam) - tot(classic)).toFixed(3) : null, second, lead: second ? +(tot(fam) - tot(second)).toFixed(3) : null };
+    }
     const regs = kScores.map((sc) => bestOf(sc, fam, (c) => !c.b && !c.i));
     // (the page's typical blur: a single line's measure is too noisy here)
     const qs = regs.map((rc, k) => { if (!rc || !kInks[k] || !kWeights[k]) return 0; const wr = renderedWeight(rc, lines[k], kInks[k], softPx); return wr > 0 ? kWeights[k] / wr : 0; });
-    const bolds = boldLines(qs, regs.map((rc) => (rc ? rc.px : 0)));
-    if (window.__ocrDebug) window.__ocrDebug.w = qs.map((q, k) => [+q.toFixed(2), regs[k] && +regs[k].px.toFixed(1), bolds[k]]);
+    // where the real strokes stand between the regular (0) and the bold (1)
+    // letters of the typeface, drawn at the same size and blur
+    const ps = regs.map((rc, k) => {
+      const bc = rc && bestOf(kScores[k], fam, (c) => c.b);
+      if (!rc || !bc || !kInks[k] || !kWeights[k]) return null;
+      const wr = renderedWeight(rc, lines[k], kInks[k], softPx), wb = renderedWeight(bc, lines[k], kInks[k], softPx);
+      return wr > 0 && wb > wr * 1.05 ? (kWeights[k] - wr) / (wb - wr) : null;
+    });
+    // … and how much better the bold letters fit than the regular ones
+    const ds = regs.map((rc, k) => { const bc = rc && bestOf(kScores[k], fam, (c) => c.b); return rc && bc ? bc.score - rc.score : null; });
+    const pxs = regs.filter(Boolean).map((rc) => rc.px).sort((x, y) => x - y);
+    const bolds = boldLines(qs, regs.map((rc) => (rc ? rc.px : 0)), { ps, ds, soft: pxs.length ? softPx / pxs[pxs.length >> 1] : null, mono: FONTS[fam] && FONTS[fam].kind === 'mono', known: famSure });
+    if (window.__ocrDebug) window.__ocrDebug.w = qs.map((q, k) => [+q.toFixed(2), regs[k] && +regs[k].px.toFixed(1), bolds[k], ps[k] === null ? null : +ps[k].toFixed(2), ds[k] === null ? null : +ds[k].toFixed(3)]);
     const fonts = chooseFonts(kScores, bolds);
     // handwritten lines: the handwriting font that fits the page's writing best
     if (kHand.some(Boolean)) {
