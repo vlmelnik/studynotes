@@ -10,6 +10,7 @@ import { stacked } from '../shared/stacking.js';
 import { FONTS } from '../shared/fonts.js';
 import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
+import { findBlocks } from '../shared/scan-blocks.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
 import { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
 import { LINE_H, escHtml } from '../shared/util.js';
@@ -121,6 +122,10 @@ async function fontScores(li, line, gray, cands) {
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   const inkW = line.bbox.x1 - line.bbox.x0;
   const baseY = ((line.baseline.y0 + line.baseline.y1) / 2) - li.box.y0;
+  // (the words as read, when they still are the line's text)
+  const lw = line.words || [];
+  const words = lw.length > 1 && lw.every((wd) => wd.bbox && wd.text) && lw.map((wd) => wd.text).join(' ') === text ? lw : null;
+  const wordsW = words ? words.reduce((sum, wd) => sum + (wd.bbox.x1 - wd.bbox.x0), 0) : 0;
   const out = [];
   // how blurred the line is does not depend on the typeface: the first
   // candidates are compared at every blur, the others only at the blurs that
@@ -131,13 +136,28 @@ async function fontScores(li, line, gray, cands) {
     if (levels === BLURS && out.length >= BLUR_PROBE) levels = BLURS.filter((bk, i) => wins.has(bk) || wins.has(BLURS[i - 1]) || wins.has(BLURS[i + 1]));
     await document.fonts.load(cssFont(c, 40), text).catch(() => {});
     ctx.font = cssFont(c, 100);
-    const m = ctx.measureText(text);
-    const mw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
-    if (!(mw > 0)) continue;
-    const px = (100 * inkW) / mw;
+    // the size: from the widths of the words, not of the whole line – in a
+    // justified paragraph the gaps are stretched, the letters are not
+    let px;
+    if (words) {
+      let sum = 0;
+      for (const wd of words) { const m = ctx.measureText(wd.text); sum += m.actualBoundingBoxLeft + m.actualBoundingBoxRight; }
+      if (!(sum > 0)) continue;
+      px = (100 * wordsW) / sum;
+    } else {
+      const m = ctx.measureText(text);
+      const mw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+      if (!(mw > 0)) continue;
+      px = (100 * inkW) / mw;
+    }
     ctx.font = cssFont(c, px);
-    const mm = ctx.measureText(text);
+    const mm = ctx.measureText(words ? words[0].text : text);
     const ox = line.bbox.x0 - li.box.x0 + mm.actualBoundingBoxLeft;
+    // (every word where it stands in the picture)
+    const draw = () => {
+      if (!words) { ctx.fillText(text, ox, baseY); return; }
+      for (const wd of words) ctx.fillText(wd.text, wd.bbox.x0 - li.box.x0 + ctx.measureText(wd.text).actualBoundingBoxLeft, baseY);
+    };
     ctx.fillStyle = '#000';
     // a blurry photo loses thin details (serifs): compare with the candidate
     // drawn sharp and blurred as much as the photo might be, keep the best
@@ -146,7 +166,7 @@ async function fontScores(li, line, gray, cands) {
       const blur = bk * px;
       ctx.clearRect(0, 0, w, h);
       ctx.filter = blur ? `blur(${blur.toFixed(2)}px)` : 'none';
-      ctx.fillText(text, ox, baseY);
+      draw();
       ctx.filter = 'none';
       // correlation of the grey values: no threshold, so blur and faint ink
       // don't decide the result
@@ -185,6 +205,7 @@ function renderedWeight(c, line, li, blur) {
 // ---------- recognition ----------
 const LANGS = ['deu', 'eng', 'rus'];
 const TARGET_H = 34; // line height (px) Tesseract reads best
+const BLOCK_LETTER_H = 18; // small letters (px) of a block when it is read on its own
 const HEAD_H = 28; // headings: big bold letters lose umlaut dots when larger // German first: umlauts (ü, ä, ß) are read right, English and Russian too
 
 // canvas → PNG blob; a canvas too large for the browser gives null instead
@@ -218,7 +239,7 @@ async function bandsOf(cv) {
  * (screenshots, zoomed scans) loses umlaut dots; very small text loses
  * detail. After a first pass the picture is rescaled for a second one.
  */
-export async function recognizeSized(canvas, blob, langs = LANGS) {
+export async function recognizeSized(canvas, blob, langs = LANGS, { blocks = false } = {}) {
   // one picture → lines (in its own pixels). A tall picture is cut between
   // its lines and the bands are read at the same time, one reader each.
   const readPicture = async (cv, bl) => {
@@ -260,6 +281,39 @@ export async function recognizeSized(canvas, blob, langs = LANGS) {
     const sc = (b) => ({ x0: b.x0 / f + dx, y0: b.y0 / f + dy, x1: b.x1 / f + dx, y1: b.y1 / f + dy });
     return got.map((l) => ({ ...l, bbox: sc(l.bbox), baseline: sc(l.baseline), words: l.words.map((w) => ({ ...w, bbox: sc(w.bbox) })) }));
   };
+  // A page: its blocks of text are found in the picture first, then every
+  // block is read on its own, at the size that suits its letters, all of them
+  // side by side. (No blocks to be had: the page is read as a whole, below.)
+  if (blocks && window.__scanBlocks !== false) {
+    const im = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
+    const t0 = performance.now();
+    const found = findBlocks(im);
+    if (found) {
+      const paper = paperColor(im);
+      const got = await Promise.all(found.map(async (b, i) => {
+        const pad = Math.round(b.h * 0.8) + 6;
+        const x0 = Math.max(0, b.x0 - pad), y0 = Math.max(0, b.y0 - pad), x1 = Math.min(canvas.width, b.x1 + pad), y1 = Math.min(canvas.height, b.y1 + pad);
+        const crop = document.createElement('canvas');
+        crop.width = x1 - x0; crop.height = y1 - y0;
+        const g = crop.getContext('2d');
+        g.drawImage(canvas, -x0, -y0);
+        // what belongs to a neighbour is painted over: only this block is read
+        g.fillStyle = `rgb(${paper[0]},${paper[1]},${paper[2]})`;
+        for (const o of found) {
+          if (o === b || o.x1 <= x0 || o.x0 >= x1 || o.y1 <= y0 || o.y0 >= y1) continue;
+          if (o.x0 < b.x1 && o.x1 > b.x0 && o.y0 < b.y1 && o.y1 > b.y0) continue; // (boxes overlap: leave it)
+          g.fillRect(o.x0 - 1 - x0, o.y0 - 1 - y0, o.x1 - o.x0 + 2, o.y1 - o.y0 + 2);
+        }
+        try {
+          const ls = await read(crop, null, Math.max(0.25, Math.min(3, BLOCK_LETTER_H / b.h)), x0, y0);
+          return ls.filter((l) => l.text.trim()).map((l) => ({ ...l, blk: i, zone: b.zone }));
+        } finally { crop.width = crop.height = 0; }
+      }));
+      if (window.__ocrDebug) { window.__ocrDebug.blocks = found; (window.__ocrDebug.blockLog ||= []).push([found.length, Math.round(performance.now() - t0)]); }
+      const all = got.flat().sort((p, q) => (p.bbox.y0 + p.bbox.y1) - (q.bbox.y0 + q.bbox.y1));
+      if (all.length) return fixUmlauts(all);
+    }
+  }
   let lines = await read(canvas, blob);
   const hs = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y);
   const med = hs.length ? hs[hs.length >> 1] : 0;
@@ -419,12 +473,12 @@ async function editableRun(editor, index, page, area) {
     if (!norm.uneven) norm = orig;
     const pngOf = async (im) => { const c = imageCanvas(im); const bl = await pngBlob(c); return { c, bl }; };
     let n0 = await pngOf(norm);
-    let lines = await recognizeSized(n0.c, n0.bl);
+    let lines = await recognizeSized(n0.c, n0.bl, LANGS, { blocks: true });
     mark('read1');
     // (tests: the first reading as recorded input for the layout rules)
-    if (window.__ocrDebug) window.__ocrDebug.first = lines.map((l) => ({ text: l.text, conf: l.conf, bbox: l.bbox, baseline: l.baseline, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf, bbox: w.bbox })) }));
+    if (window.__ocrDebug) window.__ocrDebug.first = lines.map((l) => ({ text: l.text, blk: l.blk, conf: l.conf, bbox: l.bbox, baseline: l.baseline, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf, bbox: w.bbox })) }));
     const langs = narrowLangs(lines) || LANGS;
-    if (langs !== LANGS && Math.abs(skewOf(lines)) <= 0.35) lines = await recognizeSized(n0.c, n0.bl, langs);
+    if (langs !== LANGS && Math.abs(skewOf(lines)) <= 0.35) lines = await recognizeSized(n0.c, n0.bl, langs, { blocks: true });
     if (editor.destroyed) { busy.remove(); return; }
     // 2. a tilted page (photo, crooked scan): straighten it, read again,
     //    and give the text boxes the same tilt
@@ -437,7 +491,7 @@ async function editableRun(editor, index, page, area) {
       work = rotateImage(orig, -angle, paperColor(orig));
       norm = norm0 === orig ? work : rotateImage(norm0, -angle, [255, 255, 255]);
       n0 = await pngOf(norm);
-      lines = await recognizeSized(n0.c, n0.bl, langs);
+      lines = await recognizeSized(n0.c, n0.bl, langs, { blocks: true });
       if (editor.destroyed) { busy.remove(); return; }
     }
     // a few "words" in the letters of another script than the page's: those
@@ -462,7 +516,7 @@ async function editableRun(editor, index, page, area) {
           const text = got.map((q) => q.text.trim()).join(' ');
           const first = got[0], last = got[got.length - 1];
           if (!other.test(text) && conf >= l.conf - 15) {
-            lines[k] = { ...first, text, conf, words: ws, bbox: mv({ x0: first.bbox.x0, y0: Math.min(...got.map((q) => q.bbox.y0)), x1: last.bbox.x1, y1: Math.max(...got.map((q) => q.bbox.y1)) }),
+            lines[k] = { ...first, blk: l.blk, zone: l.zone, text, conf, words: ws, bbox: mv({ x0: first.bbox.x0, y0: Math.min(...got.map((q) => q.bbox.y0)), x1: last.bbox.x1, y1: Math.max(...got.map((q) => q.bbox.y1)) }),
               baseline: mv({ x0: first.baseline.x0, y0: first.baseline.y0, x1: last.baseline.x1, y1: last.baseline.y1 }) };
           }
         } finally { crop.width = crop.height = 0; }
@@ -623,7 +677,10 @@ async function editableRun(editor, index, page, area) {
     const sure = lines.map((l, k) => !l.weak && jitter[k] !== null);
     const js = jitter.filter((_, k) => sure[k]);
     const handPage = handwrittenPage(js, lines.filter((l, k) => sure[k]).map((l) => l.conf));
-    const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3)));
+    // (a single line on a printed page: its letters must also look more like
+    // handwriting than like print – small grey print and formulas jitter too)
+    const handFits = (k) => { const top = (hand) => Math.max(-1, ...scores[k].filter((c) => isHand(c) === hand).map((c) => c.score)); return top(true) >= top(false); };
+    const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3 && handFits(k))));
     if (window.__ocrDebug) window.__ocrDebug.hand = lines.map((l, k) => [jitter[k] === null ? null : +jitter[k].toFixed(2), Math.round(l.conf), handLine[k]]);
     const keep = scores.map((sc, k) => sc.length > 0 && (!lines[k].weak || handLine[k]));
     lines = lines.filter((_, k) => keep[k]);
@@ -669,7 +726,7 @@ async function editableRun(editor, index, page, area) {
     const byWords = boldByWords(lines.map((l, k) => (kInks[k] && regs[k] && l.words && l.words.length ? wordWeights(kInks[k], l.words) : null)), regs.map((rc) => (rc ? rc.px : 0)), bolds0);
     const bolds = byWords.lines;
     if (window.__ocrDebug) window.__ocrDebug.ww = lines.map((l, k) => (kInks[k] && regs[k] && l.words ? wordWeights(kInks[k], l.words).map((v) => +(v / regs[k].px).toFixed(3)) : null));
-    const fonts = chooseFonts(kScores, bolds);
+    const fonts = chooseFonts(kScores, bolds, lines.map((l) => l.blk));
     // handwritten lines: the handwriting font that fits the page's writing best
     if (kHand.some(Boolean)) {
       const hTotal = (ff) => kAll.reduce((a, sc, k) => a + (kHand[k] ? ((bestOf(sc, ff) || { score: 0 }).score) : 0), 0);

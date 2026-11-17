@@ -137,7 +137,7 @@ function underlinedWords(li, words, base, hgt, line = null) {
 /**
  * Lines that belong together: one under the other at an even spacing, the
  * same font, size and colour, aligned on the left, the right or centred.
- * items: [{ x0, x1, cy, fs, ff, c, b, text, hand, warp }] (page units, cy: centre of
+ * items: [{ x0, x1, cy, fs, ff, c, b, blk, zone, text, hand, warp }] (page units, cy: centre of
  * the line). Returns groups [{ idx: [line numbers top → bottom], al, pitch }];
  * a single line is a group of its own.
  */
@@ -155,6 +155,12 @@ function paragraphs(items) {
   const wOf = (q) => q.x1 - q.x0;
   const single = (q) => { const x = String(q.text || '').trim(); return !!x && !/\s/.test(x); };
   const numeric = (q) => { const x = String(q.text || '').replace(/\s/g, ''); return !!x && (x.match(/[\d.,:%€$£+\-–]/g) || []).length >= x.length * 0.6; };
+  // the edge (or the middle) the lines of a block share best
+  const alignOf = (idx) => {
+    const spread = (f) => { const v = idx.map((i) => f(items[i])).sort((p, q) => p - q), m = v[v.length >> 1]; return v.reduce((sum, x) => sum + Math.abs(x - m), 0) / v.length; };
+    const l = spread((q) => q.x0), c = spread((q) => (q.x0 + q.x1) / 2), r = spread((q) => q.x1);
+    return l <= c * 1.2 && l <= r * 1.2 ? 'left' : c <= r ? 'center' : 'right';
+  };
   for (const k of order) {
     const t = items[k];
     let joined = false;
@@ -166,18 +172,26 @@ function paragraphs(items) {
         if (last.hand || last.warp || last.ff !== t.ff || !near(last.fs, t.fs, Math.min(last.fs, t.fs) * 0.15) || !sameColour(last.c, t.c)) continue;
         const pitch = t.cy - last.cy;
         const fs = Math.max(t.fs, last.fs);
-        if (pitch < fs * 0.95 || pitch > fs * 2.1) continue;
-        if (g.pitch && !near(pitch, g.pitch, g.pitch * 0.12)) continue;
+        // lines found in one block of the picture (blk, see scan-blocks) hang
+        // together there: the checks for "is this one text?" are not needed
+        const same = t.blk != null && t.blk === last.blk;
+        // … and a border between two blocks (the cells of a table) keeps them apart
+        if (!same && t.zone != null && last.zone != null && t.zone !== last.zone) continue;
+        if (pitch < fs * 0.95 || pitch > fs * (same ? 2.6 : 2.1)) continue;
+        if (!same && g.pitch && !near(pitch, g.pitch, g.pitch * 0.12)) continue;
         // (one above the other)
         const ov = Math.min(last.x1, t.x1) - Math.max(last.x0, t.x0);
-        if (ov < Math.min(last.x1 - last.x0, t.x1 - t.x0) * 0.3) continue;
+        if (!same && ov < Math.min(last.x1 - last.x0, t.x1 - t.x0) * 0.3) continue;
         const tol = t.fs * 0.6;
         const left = near(t.x0, first.x0, tol), right = near(t.x1, first.x1, tol), centre = near((t.x0 + t.x1) / 2, (first.x0 + first.x1) / 2, tol);
         // the alignment found with the 2nd line must hold for the next ones
         // (a justified paragraph: left – its last line is shorter)
-        const al = g.al ? (g.al === 'left' && left ? 'left' : g.al === 'right' && right ? 'right' : g.al === 'center' && centre ? 'center' : null)
+        let al = g.al ? (g.al === 'left' && left ? 'left' : g.al === 'right' && right ? 'right' : g.al === 'center' && centre ? 'center' : null)
           : left ? 'left' : centre ? 'center' : right ? 'right' : null;
-        if (!al) continue;
+        if (!al && !same) continue;
+        // (one block whose lines do not keep the alignment its first two
+        // showed – two left edges met by chance: what do all lines share?)
+        if (!al) al = alignOf([...g.idx, k]);
         // running text or single entries? Lines of a paragraph are full up
         // to its last one. Not joined:
         // - cells of a table (a row neighbour; single words or numbers) –
@@ -186,8 +200,8 @@ function paragraphs(items) {
         // - widely spaced lines after a short one or after a colon (the
         //   labels of a form). Single-spaced short lines stay together (a
         //   list, an address).
-        if (beside[k] && beside[lastK] && ((single(t) && single(last)) || numeric(t) || numeric(last))) continue;
-        if (pitch > fs * 1.45) {
+        if (!same && beside[k] && beside[lastK] && ((single(t) && single(last)) || numeric(t) || numeric(last))) continue;
+        if (!same && pitch > fs * 1.45) {
           const widest = Math.max(wOf(t), ...g.idx.map((i) => wOf(items[i])));
           if (al !== 'center' && wOf(last) < widest * 0.72) continue;
           if (/:\s*$/.test(String(last.text || ''))) continue;

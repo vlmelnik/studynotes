@@ -87,6 +87,21 @@ test('paragraphs: a bold line a row above regular text is its heading, not its f
   assert.deepStrictEqual(g.map((x) => x.idx), [[0], [1, 2]]);
 });
 
+test('paragraphs: lines found in one block are one box; a border between two blocks keeps them apart', () => {
+  // a table cell of centred lines of very different widths, then the cell below (same line pitch across the border)
+  const cell = [line(100, 300, 20, { blk: 4, zone: 7, text: 'One of the forms' }), line(98, 302, 34, { blk: 4, zone: 7, text: 'of human contact,' }), line(60, 340, 48, { blk: 4, zone: 7, text: 'by which people shape each other' }), line(170, 230, 62, { blk: 5, zone: 7, text: 'both.' })];
+  const below = [line(90, 310, 76, { blk: 6, zone: 9, text: 'A process in which' }), line(120, 280, 90, { blk: 6, zone: 9, text: 'two exchange' })];
+  const g = paragraphs([...cell, ...below]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0, 1, 2, 3], [4, 5]]);
+  // (the first two lines start at nearly the same place by chance: the block is centred all the same)
+  assert.strictEqual(g[0].al, 'center');
+});
+
+test('paragraphs: two columns that grew into one block are still not joined line after line', () => {
+  const g = paragraphs([line(20, 200, 20, { blk: 1, text: 'left column, line one' }), line(240, 420, 20, { blk: 1, text: 'right column, line one' }), line(20, 200, 34, { blk: 1, text: 'left column, line two' }), line(240, 420, 34, { blk: 1, text: 'right column, line two' })]);
+  assert.deepStrictEqual(g.map((x) => x.idx), [[0, 2], [1, 3]]);
+});
+
 test('splitColumns: a line read across two columns is cut where the other column starts', () => {
   const { splitColumns } = require('../../../src/shared/scan-layout');
   const word = (text, x0, x1, y = 0) => ({ text, conf: 90, bbox: { x0, y0: y, x1, y1: y + 20 } });

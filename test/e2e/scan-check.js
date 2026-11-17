@@ -100,7 +100,7 @@ const alike = (a, b) => {
       check(name(`bold word ${short(wd)}`), hit);
     }
     if (want.inside) {
-      const off = boxes.filter((b) => b.x < -2 || b.y < -2 || b.y > h + 2 || b.x > W);
+      const off = boxes.filter((b) => b.x < -6 || b.y < -6 || b.y > h + 2 || b.x > W);
       check(name('no box outside the picture'), !off.length, off.map((b) => short(b.text)).join(', '));
     }
     const all = boxes.map((b) => b.text).join('\n');

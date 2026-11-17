@@ -52,7 +52,7 @@ const out = path.join(__dirname, '..', 'out');
     if (process.env.DBG) console.log(JSON.stringify(await ed(() => ({ hand: window.__ocrDebug.hand, best: window.__ocrDebug.best, fam: window.__ocrDebug.fam, w: window.__ocrDebug.w, first: (window.__ocrDebug.first || []).map((l) => [l.text, Math.round(l.conf)]) }))));
   }
   // DUMP=<file>: everything the recognition noted on its way (for a look at why)
-  if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify(await ed(() => { const d = window.__ocrDebug; return { t: d.t, readLog: d.readLog, stray: d.stray, ww: d.ww, first: d.first, raw: d.raw, w: d.w, fam: d.fam, hand: d.hand, join: d.join }; })));
+  if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify(await ed(() => { const d = window.__ocrDebug; return { t: d.t, readLog: d.readLog, stray: d.stray, blocks: d.blocks, ww: d.ww, first: d.first, raw: d.raw, w: d.w, fam: d.fam, hand: d.hand, join: d.join }; })));
   await win.waitForTimeout(700);
   await win.screenshot({ path: path.join(out, `img-${tag}-after.png`), clip: await clip() });
   await app.close();

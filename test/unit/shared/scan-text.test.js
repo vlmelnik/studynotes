@@ -186,3 +186,22 @@ test('evenSizes: lines of one print measured a little differently get one size',
   assert.deepStrictEqual(evenSizes([10.05, 10.46, 10.12, 11.89, 10.06, null, 17, 10.69]), [10.12, 10.12, 10.12, 11.89, 10.12, null, 17, 10.12]);
   assert.deepStrictEqual(evenSizes([12, 12.4]), [12, 12.4]); // two lines: may be two sizes
 });
+
+test('boldLines: two lines of a label, both nearly at the mark, are judged alike', () => {
+  const { boldLines } = require('../../../src/shared/scan-text');
+  assert.deepStrictEqual(boldLines([1.43, 1.48], [106, 110], { ps: [0.98, 1.03], ds: [0.069, 0.039], soft: 0.02, known: false }), [true, true]);
+  assert.deepStrictEqual(boldLines([1.3, 1.33], [154, 153], { ps: [0.84, 0.87], ds: [-0.015, 0.134], soft: 0.02, known: false }), [true, true]);
+  assert.deepStrictEqual(boldLines([1.35, 1.2], [106, 110], { ps: [0.5, 0.4], ds: [-0.1, -0.2], soft: 0.02, known: false }), [false, false]);
+});
+
+test('chooseFonts: a line changes the kind of typeface only with most of its block; alone it needs a clear lead', () => {
+  const { chooseFonts } = require('../../../src/shared/scan-text');
+  const sc = (serif, sans) => [{ ff: 'serif', score: serif, prior: 0, b: false, i: false }, { ff: 'sans', score: sans, prior: 0, b: false, i: false }];
+  const all = [sc(0.8, 0.5), sc(0.8, 0.5), sc(0.8, 0.5), sc(0.6, 0.7), sc(0.8, 0.5), sc(0.5, 0.62), sc(0.5, 0.7)];
+  const bolds = all.map(() => false);
+  // without blocks: as before, every line by its own lead (> 0.08)
+  assert.deepStrictEqual(chooseFonts(all, bolds).map((f) => f.ff), ['serif', 'serif', 'serif', 'sans', 'serif', 'sans', 'sans']);
+  // line 3 stands in a paragraph of serif lines: it stays serif (a justified line fits badly);
+  // line 5, alone in its block, is only a little ahead: serif; line 6, alone and far ahead: sans
+  assert.deepStrictEqual(chooseFonts(all, bolds, [0, 0, 0, 0, 0, 1, 2]).map((f) => f.ff), ['serif', 'serif', 'serif', 'serif', 'serif', 'serif', 'sans']);
+});

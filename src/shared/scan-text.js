@@ -213,7 +213,9 @@ function boldLines(qs, sizes, m = {}) {
   if (!ok.length) return qs.map(() => null);
   const mq = median(ok.map((k) => qs[k])), ms = median(ok.map((k) => sizes[k]));
   const relative = (q, k) => {
-    if (ok.length < 3) return q > 1.45; // nothing to compare with: only clearly bold
+    // nothing to compare with: only clearly bold – or nearly so, when the
+    // strokes stand at the bold letters rather than the regular ones
+    if (ok.length < 3) return q > 1.45 || (q > 1.28 && !!m.ps && m.ps[k] >= 0.8);
     const r = q / mq, s = sizes[k] / ms;
     if (s >= 1.6) return r > 0.95;
     if (s >= 1.2) return r > 1.08;
@@ -237,8 +239,25 @@ function boldLines(qs, sizes, m = {}) {
 // blur ÷ letter size below which stroke thickness can be trusted
 const SHARP = 0.015;
 
-function chooseFonts(all, bolds) {
+function chooseFonts(all, bolds, blks = null) {
   const main = mainFamily(all);
+  // a line that fits another kind of typeface better: how far ahead
+  const kindOf = (f) => FONTS[f].kind;
+  const leads = all.map((sc) => {
+    const own = sc.slice().sort((x, y) => y.score - x.score)[0], inMain = bestOf(sc, main);
+    return own && inMain && kindOf(own.ff) !== kindOf(main) ? own.score - inMain.score : 0;
+  });
+  // … the lines of one block are set in one typeface: a line changes kind
+  // only together with most of its block; a line on its own (a heading, a
+  // caption) needs a much clearer lead than a line among others
+  const others = new Map();
+  if (blks) blks.forEach((b, k) => { if (b == null) return; const e = others.get(b) || [0, 0]; e[0]++; if (leads[k] > 0.08) e[1]++; others.set(b, e); });
+  const maySwitch = (k) => {
+    if (leads[k] <= 0.08) return false;
+    const e = blks && blks[k] != null ? others.get(blks[k]) : null;
+    if (!e) return true;
+    return e[0] === 1 ? leads[k] > 0.16 : e[1] * 2 > e[0];
+  };
   // italic: clearly better than upright, and more than in the other lines (a
   // photo taken at a slant leans every line a little – that is not italic)
   const gainOf = (sc) => { const r = bestOf(sc, main, (c) => !c.b && !c.i), it = bestOf(sc, main, (c) => c.i); return r && it ? it.score - r.score : 0; };
@@ -251,7 +270,7 @@ function chooseFonts(all, bolds) {
     // another kind of typeface (serif / sans / mono) only when it clearly fits
     // better – never switch between two similar sans fonts line by line
     const kind = (f) => FONTS[f].kind;
-    if (own && inMain && kind(own.ff) !== kind(main) && own.score - inMain.score > 0.08) {
+    if (own && inMain && kind(own.ff) !== kind(main) && maySwitch(k)) {
       // … and then that kind's everyday typeface, unless one of its kind is clearly ahead on this line
       const next = sc.filter((c) => c.ff !== own.ff && kind(c.ff) === kind(own.ff)).sort((x, y) => y.score - x.score)[0];
       const everyday = sc.filter((c) => CLASSIC.has(c.ff) && kind(c.ff) === kind(own.ff)).sort((x, y) => y.score - x.score)[0];
@@ -461,9 +480,20 @@ function joinParagraphs(texts, lines, fonts, r, S) {
   // (straight printed lines only; the line stays centred where it was)
   const even = evenSizes(texts.map((t, k) => (fonts[k].hand || t.q || t.r ? null : t.fs)));
   texts = texts.map((t, k) => (even[k] && even[k] !== t.fs ? { ...t, fs: even[k], y: round2(t.y + ((t.fs - even[k]) * LINE_H) / 2) } : t));
+  // a line fitted with a bend among the straight lines of its block (an
+  // underline below it, a stroke through it) is as straight as they are
+  const bent = new Map();
+  texts.forEach((t, k) => { const b = lines[k].blk; if (b == null) return; const e = bent.get(b) || [0, 0]; e[0]++; if (t.q && !t.r) e[1]++; bent.set(b, e); });
+  texts = texts.map((t, k) => {
+    const e = bent.get(lines[k].blk);
+    if (!t.q || t.r || !e || e[0] < 2 || e[1] * 3 > e[0]) return t;
+    const straight = { ...t };
+    delete straight.q; delete straight.qw; delete straight.qh;
+    return straight;
+  });
   const items = texts.map((t, k) => ({
     x0: r.x0 + lines[k].bbox.x0 / S, x1: r.x0 + lines[k].bbox.x1 / S, cy: t.y + (t.fs * LINE_H) / 2,
-    fs: t.fs, ff: t.ff, c: t.c, b: !!t.b, text: t.text, hand: !!fonts[k].hand, warp: !!(t.q || t.r),
+    fs: t.fs, ff: t.ff, c: t.c, b: !!t.b, blk: lines[k].blk, zone: lines[k].zone, text: t.text, hand: !!fonts[k].hand, warp: !!(t.q || t.r),
   }));
   const groups = paragraphs(items);
   const boxes = [], lineOf = texts.map((t) => ({ id: t.id, j: 0 }));
