@@ -22,7 +22,7 @@
   "SN Sans|tilt-4": {
    "cer": 0,
    "fams": "sans",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Sans|blur": {
@@ -94,7 +94,7 @@
   "SN Carlito|tilt-4": {
    "cer": 0,
    "fams": "carlito",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Carlito|blur": {
@@ -124,13 +124,13 @@
   "SN Mono|tilt+2.5": {
    "cer": 0,
    "fams": "mono",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Mono|tilt-4": {
    "cer": 0,
    "fams": "mono",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Mono|blur": {
@@ -165,8 +165,8 @@
   },
   "DejaVu Serif|tilt-4": {
    "cer": 0,
-   "fams": "sans/notoserif",
-   "rot": -4.1,
+   "fams": "fira",
+   "rot": -3.9,
    "n": 3
   },
   "DejaVu Serif|blur": {
@@ -202,7 +202,7 @@
   "DejaVu Sans|tilt-4": {
    "cer": 0,
    "fams": "sans",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "DejaVu Sans|blur": {
@@ -232,13 +232,13 @@
   "SN Caladea|tilt+2.5": {
    "cer": 0,
    "fams": "cambria",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Caladea|tilt-4": {
    "cer": 0,
    "fams": "cambria",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Caladea|blur": {
@@ -268,13 +268,13 @@
   "SN Gelasio|tilt+2.5": {
    "cer": 0,
    "fams": "georgia",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Gelasio|tilt-4": {
    "cer": 0,
    "fams": "georgia",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Gelasio|blur": {
@@ -382,14 +382,14 @@
   "SN Inter|tilt-4": {
    "cer": 0,
    "fams": "inter",
-   "rot": -4,
+   "rot": -3.9,
    "n": 3
   },
   "SN Inter|blur": {
    "cer": 0,
-   "fams": "inter",
+   "fams": "sans",
    "rot": 0,
-   "n": 3
+   "n": 1
   },
   "SN Inter|photo": {
    "cer": 0,
@@ -412,7 +412,7 @@
   "SN Lato|tilt+2.5": {
    "cer": 0,
    "fams": "lato",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Lato|tilt-4": {
@@ -448,7 +448,7 @@
   "SN Source Sans|tilt+2.5": {
    "cer": 0,
    "fams": "sourcesans",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Source Sans|tilt-4": {
@@ -495,9 +495,9 @@
   },
   "SN Fira Sans|blur": {
    "cer": 0,
-   "fams": "fira",
+   "fams": "carlito",
    "rot": 0,
-   "n": 3
+   "n": 1
   },
   "SN Fira Sans|photo": {
    "cer": 0,
@@ -520,7 +520,7 @@
   "SN Montserrat|tilt+2.5": {
    "cer": 0,
    "fams": "montserrat",
-   "rot": 2.6,
+   "rot": 2.5,
    "n": 3
   },
   "SN Montserrat|tilt-4": {
@@ -556,7 +556,7 @@
   "SN Noto Serif|tilt+2.5": {
    "cer": 0,
    "fams": "notoserif",
-   "rot": 2.5,
+   "rot": 2.4,
    "n": 3
   },
   "SN Noto Serif|tilt-4": {
@@ -598,7 +598,7 @@
   "SN Garamond|tilt-4": {
    "cer": 0,
    "fams": "garamond",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Garamond|blur": {
@@ -628,13 +628,13 @@
   "SN PT Serif|tilt+2.5": {
    "cer": 0,
    "fams": "ptserif",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN PT Serif|tilt-4": {
    "cer": 0,
    "fams": "ptserif",
-   "rot": -4,
+   "rot": -4.1,
    "n": 3
   },
   "SN PT Serif|blur": {

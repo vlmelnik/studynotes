@@ -3,6 +3,7 @@
 ## 1.7.0
 
 **New (not released yet)**
+- Make text editable: the blocks of a page (paragraph, table cell, heading, column) are found in the picture first, then every block is read on its own, several at a time. Table cells stay whole and are never joined across a border; a justified paragraph gets the same letter size as the rest; lines of one block keep one typeface. (Photos with shadows are read as before.)
 - Ctrl+C (and the Copy button) copies the selection and then lets it go.
 - Dragging a selection (text, picture, strokes) to the top or bottom edge of the window scrolls the document, so it can be carried to another page.
 

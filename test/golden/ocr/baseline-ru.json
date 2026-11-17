@@ -8,7 +8,7 @@
  "note": "written by UPDATE_GOLDEN=1 node test/e2e/ocr-bench.js",
  "cases": {
   "SN Sans|clean": {
-   "cer": 0,
+   "cer": 0.008,
    "fams": "sans",
    "rot": 0,
    "n": 3
@@ -16,7 +16,7 @@
   "SN Sans|tilt+2.5": {
    "cer": 0,
    "fams": "sans",
-   "rot": 2.5,
+   "rot": 2.4,
    "n": 3
   },
   "SN Sans|tilt-4": {
@@ -52,13 +52,13 @@
   "SN Serif|tilt+2.5": {
    "cer": 0,
    "fams": "serif",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Serif|tilt-4": {
    "cer": 0,
    "fams": "serif",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Serif|blur": {
@@ -94,7 +94,7 @@
   "SN Carlito|tilt-4": {
    "cer": 0,
    "fams": "carlito",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Carlito|blur": {
@@ -116,7 +116,7 @@
    "n": 3
   },
   "SN Mono|clean": {
-   "cer": 0,
+   "cer": 0.008,
    "fams": "mono",
    "rot": 0,
    "n": 3
@@ -130,7 +130,7 @@
   "SN Mono|tilt-4": {
    "cer": 0,
    "fams": "mono",
-   "rot": -3.9,
+   "rot": -4,
    "n": 3
   },
   "SN Mono|blur": {
@@ -165,8 +165,8 @@
   },
   "DejaVu Serif|tilt-4": {
    "cer": 0,
-   "fams": "inter",
-   "rot": -3.9,
+   "fams": "notoserif",
+   "rot": -4,
    "n": 3
   },
   "DejaVu Serif|blur": {
@@ -196,13 +196,13 @@
   "DejaVu Sans|tilt+2.5": {
    "cer": 0,
    "fams": "sans",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "DejaVu Sans|tilt-4": {
    "cer": 0,
    "fams": "sans",
-   "rot": -4,
+   "rot": -3.9,
    "n": 3
   },
   "DejaVu Sans|blur": {
@@ -232,13 +232,13 @@
   "SN Caladea|tilt+2.5": {
    "cer": 0,
    "fams": "serif",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Caladea|tilt-4": {
    "cer": 0,
    "fams": "serif",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Caladea|blur": {
@@ -268,7 +268,7 @@
   "SN Gelasio|tilt+2.5": {
    "cer": 0,
    "fams": "serif",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Gelasio|tilt-4": {
@@ -304,11 +304,11 @@
   "SN Open Sans|tilt+2.5": {
    "cer": 0,
    "fams": "opensans",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Open Sans|tilt-4": {
-   "cer": 0,
+   "cer": 0.039,
    "fams": "opensans",
    "rot": -4,
    "n": 3
@@ -351,7 +351,7 @@
   },
   "SN Roboto|blur": {
    "cer": 0,
-   "fams": "sans",
+   "fams": "roboto",
    "rot": 0,
    "n": 3
   },
@@ -368,7 +368,7 @@
    "n": 3
   },
   "SN Inter|clean": {
-   "cer": 0,
+   "cer": 0.008,
    "fams": "inter",
    "rot": 0,
    "n": 3
@@ -412,7 +412,7 @@
   "SN Lato|tilt+2.5": {
    "cer": 0,
    "fams": "serif",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN Lato|tilt-4": {
@@ -459,7 +459,7 @@
   },
   "SN Source Sans|blur": {
    "cer": 0,
-   "fams": "sans",
+   "fams": "sourcesans",
    "rot": 0,
    "n": 3
   },
@@ -526,14 +526,14 @@
   "SN Montserrat|tilt-4": {
    "cer": 0,
    "fams": "montserrat",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Montserrat|blur": {
    "cer": 0,
-   "fams": "montserrat",
+   "fams": "carlito",
    "rot": 0,
-   "n": 3
+   "n": 1
   },
   "SN Montserrat|photo": {
    "cer": 0,
@@ -562,14 +562,14 @@
   "SN Noto Serif|tilt-4": {
    "cer": 0,
    "fams": "notoserif",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN Noto Serif|blur": {
    "cer": 0,
-   "fams": "serif",
+   "fams": "notoserif",
    "rot": 0,
-   "n": 1
+   "n": 3
   },
   "SN Noto Serif|photo": {
    "cer": 0,
@@ -628,13 +628,13 @@
   "SN PT Serif|tilt+2.5": {
    "cer": 0,
    "fams": "ptserif",
-   "rot": 2.4,
+   "rot": 2.5,
    "n": 3
   },
   "SN PT Serif|tilt-4": {
    "cer": 0,
    "fams": "ptserif",
-   "rot": -4.1,
+   "rot": -4,
    "n": 3
   },
   "SN PT Serif|blur": {
