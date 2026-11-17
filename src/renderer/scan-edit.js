@@ -12,7 +12,7 @@ import { lineWarp, pageWarps, lineLight } from './scan-geo.js';
 import { lineInk, cleanLines, normalizeLight } from '../shared/scan-clean.js';
 import { findBlocks } from '../shared/scan-blocks.js';
 import { pointInPolygon, round2 } from '../shared/geometry.js';
-import { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
+import { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixCase, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, joinParagraphs } from '../shared/scan-text.js';
 import { LINE_H, escHtml } from '../shared/util.js';
 import { bandCuts } from '../shared/scan-bands.js';
 
@@ -589,7 +589,10 @@ async function editableRun(editor, index, page, area) {
     const medH = lh.length ? lh[lh.length >> 1] : 0;
     lines = lines.filter((l) => {
       const n = (l.text.match(/[\p{L}\p{N}]/gu) || []).length;
-      if (n <= 3 && l.conf < 80) return false;
+      // (… unless it is the short end of the text above it: starts where that
+      // line starts, right below it, letters of the same height)
+      const ends = (o) => { const h = o.bbox.y1 - o.bbox.y0, dy = l.bbox.y0 - o.bbox.y0; return o !== l && dy > h * 0.6 && dy < h * 2.2 && Math.abs(o.bbox.x0 - l.bbox.x0) < h * 0.5 && (o.text.match(/[\p{L}\p{N}]/gu) || []).length >= 8 && o.conf >= 80; };
+      if (n <= 3 && l.conf < 80 && !(n >= 2 && l.conf >= 60 && lines.some(ends))) return false;
       return !(lines.length >= 3 && l.bbox.y1 - l.bbox.y0 > medH * 2.5 && (l.conf < 85 || n < 4));
     });
     // a logo: its name next to a solid sign stays as it is (a logo is a picture)
@@ -619,6 +622,7 @@ async function editableRun(editor, index, page, area) {
       lines = lines.map((l, k) => ({ ...l, text: fixed.lines[k].text, words: (l.words || []).map((w, i) => ({ ...w, text: fixed.lines[k].words[i].text })) }));
     } catch (err) { console.warn('spelling check failed', err); }
 
+    lines = fixCase(lines);
     lines = lines.map((l) => { const text = romanStart(l.text); return text === l.text ? l : { ...l, text, words: l.words && l.words.length ? [{ ...l.words[0], text: romanStart(l.words[0].text) }, ...l.words.slice(1)] : l.words }; });
     mark('spell');
     // 3. font (needs the ink), then clean the paper
@@ -687,7 +691,10 @@ async function editableRun(editor, index, page, area) {
     // (a single line on a printed page: its letters must also look more like
     // handwriting than like print – small grey print and formulas jitter too)
     const handFits = (k) => { const top = (hand) => Math.max(-1, ...scores[k].filter((c) => isHand(c) === hand).map((c) => c.score)); return top(true) >= top(false); };
-    const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3 && handFits(k))));
+    // (… and are not much smaller than the print: what is filled in by hand
+    // is as large as the form's text or larger, a tiny caption is print)
+    const lhs = lines.map((l) => l.bbox.y1 - l.bbox.y0).sort((x, y) => x - y), lhMed = lhs.length ? lhs[lhs.length >> 1] : 0;
+    const handLine = lines.map((l, k) => scores[k].length > 0 && (handPage || (js.length >= 3 && !l.weak && l.conf < 78 && jitter[k] > 0.3 && l.bbox.y1 - l.bbox.y0 >= lhMed * 0.8 && handFits(k))));
     if (window.__ocrDebug) window.__ocrDebug.hand = lines.map((l, k) => [jitter[k] === null ? null : +jitter[k].toFixed(2), Math.round(l.conf), handLine[k]]);
     const keep = scores.map((sc, k) => sc.length > 0 && (!lines[k].weak || handLine[k]));
     lines = lines.filter((_, k) => keep[k]);

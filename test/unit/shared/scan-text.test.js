@@ -205,3 +205,13 @@ test('chooseFonts: a line changes the kind of typeface only with most of its blo
   // line 5, alone in its block, is only a little ahead: serif; line 6, alone and far ahead: sans
   assert.deepStrictEqual(chooseFonts(all, bolds, [0, 0, 0, 0, 0, 1, 2]).map((f) => f.ff), ['serif', 'serif', 'serif', 'serif', 'serif', 'serif', 'sans']);
 });
+
+test('fixCase: small Cyrillic letters read as capitals take the case of the same word elsewhere, when no higher', () => {
+  const { fixCase } = require('../../../src/shared/scan-text');
+  const w = (text, h) => ({ text, bbox: { x0: 0, y0: 0, x1: 50, y1: h } });
+  const lines = [{ text: 'ч 30 мин. Перерыв', words: [w('ч', 20), w('30', 28), w('мин.', 20), w('Перерыв', 28)] }, { text: 'МИН.', words: [w('МИН.', 21)] }, { text: 'МИН. ОБЪЁМ', words: [w('МИН.', 29), w('ОБЪЁМ', 29)] }];
+  const got = fixCase(lines);
+  assert.deepStrictEqual(got.map((l) => l.text), ['ч 30 мин. Перерыв', 'мин.', 'МИН. ОБЪЁМ']); // real capitals stand higher: kept
+  assert.strictEqual(got[1].words[0].text, 'мин.');
+  assert.strictEqual(got[0], lines[0]);
+});

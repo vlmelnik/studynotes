@@ -217,10 +217,12 @@ function boldLines(qs, sizes, m = {}) {
     // strokes stand at the bold letters rather than the regular ones
     if (ok.length < 3) return q > 1.45 || (q > 1.28 && !!m.ps && m.ps[k] >= 0.8);
     const r = q / mq, s = sizes[k] / ms;
-    if (s >= 1.6) return r > 0.95;
-    if (s >= 1.2) return r > 1.08;
+    // larger lines (headings) need less: their strokes are thicker anyway,
+    // and a heading is bold more often than not. No steps: a line a hair
+    // below a step must not be judged differently from one a hair above
     if (s < 0.85) return r > 1.4;
-    return r > 1.25;
+    const need = s <= 1 ? 1.25 : s <= 1.2 ? 1.25 - ((s - 1) / 0.2) * 0.17 : s <= 1.6 ? 1.08 - ((s - 1.2) / 0.4) * 0.13 : 0.95;
+    return r > need;
   };
   const ps = m.ps || [], ds = m.ds || [];
   const known = m.known !== false;
@@ -370,6 +372,42 @@ function strayScript(lines) {
 
 /** "l. Heading", "Il. Heading": a Roman numeral read as small L's. */
 const romanStart = (text) => String(text).replace(/^([Il]{1,3})\.(?=\s+\p{Lu})/u, (m, n) => (n.includes('l') ? n.replace(/l/g, 'I') + '.' : m));
+
+/**
+ * Small Cyrillic letters read as capitals: most of them have the same shape
+ * in both cases ("мин." → "МИН."), only the height tells them apart. A word
+ * in capitals takes the small letters of the same word elsewhere on the page
+ * when it stands as high as that one (capitals would stand clearly higher).
+ * lines: [{ text, words: [{ text, bbox }] }]; returns the lines (changed ones copied).
+ */
+function fixCase(lines) {
+  const CAPS = /^[\u0410-\u042f\u0401]{2,}$/, tall = /[бфвдйё\u0410-\u042f\u0401руцщ]/; // (letters that reach above or below the small ones)
+  const core = (t) => String(t).replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
+  const seen = new Map(); // small-letter word → heights
+  for (const l of lines) for (const w of l.words || []) {
+    const c = core(w.text);
+    if (!w.bbox || c.length < 2 || c !== c.toLowerCase() || !/^[\u0430-\u044f\u0451]+$/.test(c) || tall.test(c)) continue;
+    if (!seen.has(c)) seen.set(c, []);
+    seen.get(c).push(w.bbox.y1 - w.bbox.y0);
+  }
+  if (!seen.size) return lines;
+  return lines.map((l) => {
+    let changed = false;
+    const words = (l.words || []).map((w) => {
+      const c = core(w.text), hs = seen.get(c.toLowerCase());
+      if (!w.bbox || !CAPS.test(c) || !hs) return w;
+      const h = w.bbox.y1 - w.bbox.y0, m = hs.slice().sort((a, b) => a - b)[hs.length >> 1];
+      if (h > m * 1.15) return w;
+      changed = true;
+      return { ...w, text: w.text.replace(c, c.toLowerCase()) };
+    });
+    if (!changed) return l;
+    // (the line's text: the same words in the same order)
+    let text = l.text;
+    (l.words || []).forEach((w, i) => { if (words[i] !== w) text = text.replace(w.text, words[i].text); });
+    return { ...l, text, words };
+  });
+}
 
 function fixUmlauts(lines) {
   const plain = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -533,4 +571,4 @@ function joinParagraphs(texts, lines, fonts, r, S) {
   return { boxes, lineOf };
 }
 
-module.exports = { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, mainFamily, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, evenSizes, joinParagraphs };
+module.exports = { handwrittenPage, sampleLines, CLASSIC, PRIOR, familiesFor, HAND, edgeSoftness, strokeWeight, boldWords, wordWeights, boldByWords, bestOf, mainFamily, familyChoice, boldLines, chooseFonts, narrowLangs, strayScript, romanStart, fixCase, fixUmlauts, paperColor, isDark, darkShare, mergeLines, invert, invertHex, skewOf, dilateMask, evenSizes, joinParagraphs };

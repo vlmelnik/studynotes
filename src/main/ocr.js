@@ -16,6 +16,22 @@ const FILES = [
   { lang: 'rus', name: 'Русский', file: 'rus.traineddata.gz', size: 2679598 },
 ];
 
+// One reader with the three languages holds 100–140 MB (measured: 176 MB
+// for the process with one, 268 with two, 441 with four).
+const READER_BYTES = 150e6;
+const MAX_READERS = 8;
+/**
+ * How many readers to run side by side: one core is left for the app, the
+ * readers together take at most 40 % of the memory that is free right now,
+ * eight at most (a page rarely has more blocks waiting than that can use),
+ * and one always.
+ */
+function readerCount(cores, freeBytes) {
+  const byCores = (cores || 1) - 1;
+  const byMemory = Math.floor(((freeBytes || 0) * 0.4) / READER_BYTES);
+  return Math.max(1, Math.min(MAX_READERS, byCores, byMemory));
+}
+
 class Ocr {
   /**
    * @param {{ dir: string, bundledDir: string }} o  dir: the working folder
@@ -24,9 +40,9 @@ class Ocr {
   constructor({ dir, bundledDir, maxWorkers, createWorker }) {
     this.dir = dir;
     this.bundledDir = bundledDir;
-    // several readers at once (a tall page is read in bands): one core is
-    // left for the app, three readers at most (each holds about 200 MB)
-    this.max = Math.max(1, Math.min(3, maxWorkers || (os.availableParallelism ? os.availableParallelism() : os.cpus().length) - 1));
+    // several readers at once (the blocks of a page are read side by side):
+    // as many as this computer carries – see readerCount
+    this.max = maxWorkers ? Math.max(1, Math.min(MAX_READERS, maxWorkers)) : readerCount(os.availableParallelism ? os.availableParallelism() : os.cpus().length, os.freemem());
     this.make = createWorker || null; // (tests: a stand-in for the real reader)
     this.workers = []; // [{ w, busy }]
     this.starting = 0;
@@ -170,4 +186,4 @@ class Ocr {
   }
 }
 
-module.exports = { Ocr, FILES };
+module.exports = { readerCount, Ocr, FILES };

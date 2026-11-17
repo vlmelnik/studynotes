@@ -82,3 +82,14 @@ test('ocr pool: other languages start new readers after the running jobs; a fail
   assert.strictEqual((await ocr.recognize(img(4), ['rus']))[0].text.startsWith('job 4'), true);
   await ocr.stop();
 });
+
+test('readers by device: one core stays free, memory sets a limit, eight at most, one always', () => {
+  const { readerCount } = require('../../../src/main/ocr');
+  const GB = 1e9;
+  assert.strictEqual(readerCount(4, 8 * GB), 3); // a laptop with four cores
+  assert.strictEqual(readerCount(16, 16 * GB), 8); // many cores: eight at most
+  assert.strictEqual(readerCount(12, 1.2 * GB), 3); // little free memory: 40 % of it, 150 MB each
+  assert.strictEqual(readerCount(8, 0.2 * GB), 1); // almost none: still one
+  assert.strictEqual(readerCount(1, 8 * GB), 1);
+  assert.strictEqual(readerCount(2, 8 * GB), 1);
+});
