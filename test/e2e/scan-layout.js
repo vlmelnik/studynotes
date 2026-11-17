@@ -84,14 +84,14 @@ const PAGES = {
   check('text: the heading stays apart', has(text, 'House rules'), show(text));
   check('text: a single-spaced list is one box', para('Milk') === 'Milk\nBread and butter\nEggs', show(text));
 
-  // ---------- a long page is read in bands at the same time: same text ----------
+  // ---------- a long page is read block by block, side by side: same text ----------
   const SENT = ['The tenant agrees to pay the monthly rent before the third', 'working day of each month and keeps the rooms in good order', 'during the whole time of the contract and tells the owner', 'about any damage within two weeks after moving in.'];
   // (32 lines: with its 40 units of offset the picture still fits on the page)
   PAGES.long = { h: 60 + 32 * 22, texts: Array.from({ length: 32 }, (_, k) => [`${k + 1}. ${SENT[k % 4]}`, 20, 40 + k * 22]), rules: [] };
   await ed(() => { window.__ocrDebug = []; });
   const long = (await read('long')).join('\n').split('\n');
-  const log = await ed(() => window.__ocrDebug.readLog);
-  check('long page: read in two bands', !!log && log.some((r) => r[3] === 2), JSON.stringify(log));
+  const log = await ed(() => window.__ocrDebug.blockLog);
+  check('long page: its blocks are found first and read one by one', !!log && log[0] && log[0][0] >= 2, JSON.stringify(log));
   const want = PAGES.long.texts.map((t) => t[0]);
   const wrong = want.filter((t, k) => long[k] !== t);
   check('long page: every line is read once, in order, across the cut', long.length === 32 && wrong.length <= 1, `${long.length} lines; differ: ${JSON.stringify(wrong.slice(0, 3))} got ${JSON.stringify(long.filter((t, k) => t !== want[k]).slice(0, 3))}`);

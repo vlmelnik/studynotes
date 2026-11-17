@@ -118,7 +118,8 @@ function findBlocks(im, { maxSide = 1500, maxBlocks = 400 } = {}) {
   if (!nInk || nInk > ink.length * 0.5) return null;
 
   // letter height: the typical height of the pieces of ink
-  const heightsOf = (lab, n) => { const b = boxes(lab, W, H, n); const hs = []; for (let k = 1; k <= n; k++) { const h = b[k * 4 + 3] - b[k * 4 + 1] + 1; if (h >= 3 && h <= H / 6) hs.push(h); } return hs; };
+  // (not the long thin ones: borders, a line down the page)
+  const heightsOf = (lab, n) => { const b = boxes(lab, W, H, n); const hs = []; for (let k = 1; k <= n; k++) { const h = b[k * 4 + 3] - b[k * 4 + 1] + 1, w = b[k * 4 + 2] - b[k * 4] + 1; if (h >= 3 && h <= w * 8 && w <= h * 12) hs.push(h); } return hs; };
   const first = label(ink, W, H);
   let h = median(heightsOf(first.lab, first.n));
   if (!h) return null;

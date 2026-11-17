@@ -49,6 +49,12 @@ test('findBlocks: an underline across the page divides no zone; a title in large
   assert.strictEqual(new Set(b.map((q) => q.zone)).size, 1);
 });
 
+test('findBlocks: one line of large letters in a low strip (a selected part of a page) is one block', () => {
+  const b = findBlocks(page(900, 90, ({ rect }) => { for (let w = 0; w < 3; w++) for (let l = 0; l < 6; l++) rect(30 + w * 280 + l * 40, 20, 28, 50); }));
+  assert.strictEqual(b.length, 1);
+  assert.strictEqual(b[0].h, 50);
+});
+
 test('findBlocks: an empty or a black picture gives no blocks (the page is read as a whole)', () => {
   assert.strictEqual(findBlocks(page(200, 100, () => {})), null);
   assert.strictEqual(findBlocks(page(200, 100, ({ rect }) => rect(0, 0, 200, 100))), null);
