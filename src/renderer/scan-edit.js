@@ -3,7 +3,7 @@
 // lines come back as normal text boxes in the closest font, size and colour.
 // Works for a lasso area or the whole page.
 import { googleLine } from '../shared/ocr-text.js';
-import { splitColumns, graphicMarks, besideMark, underlinedWords } from '../shared/scan-layout.js';
+import { splitColumns, justifiedLines, graphicMarks, besideMark, underlinedWords } from '../shared/scan-layout.js';
 import { toast, confirmDialog, errorText } from './ui.js';
 import { uid } from './tools.js';
 import { stacked } from '../shared/stacking.js';
@@ -122,9 +122,11 @@ async function fontScores(li, line, gray, cands) {
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   const inkW = line.bbox.x1 - line.bbox.x0;
   const baseY = ((line.baseline.y0 + line.baseline.y1) / 2) - li.box.y0;
-  // (the words as read, when they still are the line's text)
+  // the words as read, when they still are the line's text
+  // … for a line of a justified paragraph only (line.just): there the gaps
+  // between the words are stretched, and the line's width says nothing
   const lw = line.words || [];
-  const words = lw.length > 1 && lw.every((wd) => wd.bbox && wd.text) && lw.map((wd) => wd.text).join(' ') === text ? lw : null;
+  const words = line.just && lw.length > 1 && lw.every((wd) => wd.bbox && wd.text) && lw.map((wd) => wd.text).join(' ') === text ? lw : null;
   const wordsW = words ? words.reduce((sum, wd) => sum + (wd.bbox.x1 - wd.bbox.x0), 0) : 0;
   const out = [];
   // how blurred the line is does not depend on the typeface: the first
@@ -473,12 +475,15 @@ async function editableRun(editor, index, page, area) {
     if (!norm.uneven) norm = orig;
     const pngOf = async (im) => { const c = imageCanvas(im); const bl = await pngBlob(c); return { c, bl }; };
     let n0 = await pngOf(norm);
-    let lines = await recognizeSized(n0.c, n0.bl, LANGS, { blocks: true });
+    // (blocks first on an evenly lit page; a photo with shadows is read as a
+    // whole: its faint parts break the blocks apart)
+    const blocks = norm === orig;
+    let lines = await recognizeSized(n0.c, n0.bl, LANGS, { blocks });
     mark('read1');
     // (tests: the first reading as recorded input for the layout rules)
     if (window.__ocrDebug) window.__ocrDebug.first = lines.map((l) => ({ text: l.text, blk: l.blk, conf: l.conf, bbox: l.bbox, baseline: l.baseline, words: (l.words || []).map((w) => ({ text: w.text, conf: w.conf, bbox: w.bbox })) }));
     const langs = narrowLangs(lines) || LANGS;
-    if (langs !== LANGS && Math.abs(skewOf(lines)) <= 0.35) lines = await recognizeSized(n0.c, n0.bl, langs, { blocks: true });
+    if (langs !== LANGS && Math.abs(skewOf(lines)) <= 0.35) lines = await recognizeSized(n0.c, n0.bl, langs, { blocks });
     if (editor.destroyed) { busy.remove(); return; }
     // 2. a tilted page (photo, crooked scan): straighten it, read again,
     //    and give the text boxes the same tilt
@@ -491,7 +496,7 @@ async function editableRun(editor, index, page, area) {
       work = rotateImage(orig, -angle, paperColor(orig));
       norm = norm0 === orig ? work : rotateImage(norm0, -angle, [255, 255, 255]);
       n0 = await pngOf(norm);
-      lines = await recognizeSized(n0.c, n0.bl, langs, { blocks: true });
+      lines = await recognizeSized(n0.c, n0.bl, langs, { blocks });
       if (editor.destroyed) { busy.remove(); return; }
     }
     // a few "words" in the letters of another script than the page's: those
@@ -633,6 +638,8 @@ async function editableRun(editor, index, page, area) {
     // a long text: every typeface is tried on a sample of the lines only (and
     // on all lines of another size – headings), the rest just with the ones
     // that fit the sample best. Short texts: every line with every typeface.
+    // (lines of justified paragraphs are measured word by word: see fontScores)
+    justifiedLines(lines).forEach((j, k) => { if (j) lines[k] = { ...lines[k], just: true }; });
     const regular = (ffs) => ffs.concat(HAND).map((ff) => ({ ff, b: false, i: false }));
     const sample = sampleLines(lines);
     for (const k of sample) {

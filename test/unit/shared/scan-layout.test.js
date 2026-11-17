@@ -102,6 +102,16 @@ test('paragraphs: two columns that grew into one block are still not joined line
   assert.deepStrictEqual(g.map((x) => x.idx), [[0, 2], [1, 3]]);
 });
 
+test('justifiedLines: the full lines of a justified paragraph, not its last line, not a ragged one', () => {
+  const { justifiedLines } = require('../../../src/shared/scan-layout');
+  const l = (x0, x1, y, blk) => ({ blk, bbox: { x0, y0: y, x1, y1: y + 20 } });
+  const got = justifiedLines([l(60, 500, 0, 1), l(40, 500, 30, 1), l(40, 499, 60, 1), l(40, 180, 90, 1), // justified, first line indented
+    l(40, 480, 150, 2), l(40, 420, 180, 2), l(40, 495, 210, 2), l(40, 200, 240, 2), // ragged right
+    l(40, 500, 300, 3), l(40, 500, 330, 3), // two lines: too few to tell
+    { bbox: { x0: 40, y0: 400, x1: 500, y1: 420 } }]); // (read without blocks)
+  assert.deepStrictEqual(got, [true, true, true, false, false, false, false, false, false, false, false]);
+});
+
 test('splitColumns: a line read across two columns is cut where the other column starts', () => {
   const { splitColumns } = require('../../../src/shared/scan-layout');
   const word = (text, x0, x1, y = 0) => ({ text, conf: 90, bbox: { x0, y0: y, x1, y1: y + 20 } });

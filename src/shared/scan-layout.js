@@ -174,10 +174,12 @@ function paragraphs(items) {
         const fs = Math.max(t.fs, last.fs);
         // lines found in one block of the picture (blk, see scan-blocks) hang
         // together there: the checks for "is this one text?" are not needed
-        const same = t.blk != null && t.blk === last.blk;
+        // (single- to 1.5-spaced; wider apart, a smeared picture may have
+        // run separate lines into one block)
+        const same = t.blk != null && t.blk === last.blk && pitch <= fs * 1.6;
         // … and a border between two blocks (the cells of a table) keeps them apart
         if (!same && t.zone != null && last.zone != null && t.zone !== last.zone) continue;
-        if (pitch < fs * 0.95 || pitch > fs * (same ? 2.6 : 2.1)) continue;
+        if (pitch < fs * 0.95 || pitch > fs * 2.1) continue;
         if (!same && g.pitch && !near(pitch, g.pitch, g.pitch * 0.12)) continue;
         // (one above the other)
         const ov = Math.min(last.x1, t.x1) - Math.max(last.x0, t.x0);
@@ -278,6 +280,28 @@ function splitColumns(lines, img = null) {
   });
 }
 
+/**
+ * The lines of justified paragraphs: in a block of three lines or more, all
+ * lines but the last start and end at the same places. In such a line the
+ * gaps between the words are stretched, so its width does not give the size
+ * of its letters. lines: [{ bbox, blk }]; returns one flag per line.
+ */
+function justifiedLines(lines) {
+  const out = lines.map(() => false);
+  const byBlock = new Map();
+  lines.forEach((l, k) => { if (l.blk == null || !l.bbox) return; if (!byBlock.has(l.blk)) byBlock.set(l.blk, []); byBlock.get(l.blk).push(k); });
+  for (const idx of byBlock.values()) {
+    if (idx.length < 3) continue;
+    idx.sort((a, b) => lines[a].bbox.y0 - lines[b].bbox.y0);
+    const body = idx.slice(0, -1);
+    const h = body.reduce((sum, k) => sum + lines[k].bbox.y1 - lines[k].bbox.y0, 0) / body.length;
+    const x0 = Math.min(...body.map((k) => lines[k].bbox.x0)), x1 = Math.max(...body.map((k) => lines[k].bbox.x1));
+    // (the first line may be indented)
+    if (body.every((k, i) => x1 - lines[k].bbox.x1 <= h * 0.5 && (i === 0 || lines[k].bbox.x0 - x0 <= h * 0.5))) for (const k of body) out[k] = true;
+  }
+  return out;
+}
+
 const r2 = (v) => Math.round(v * 100) / 100;
 
 /**
@@ -342,4 +366,4 @@ function combineBoxes(texts) {
   return out;
 }
 
-module.exports = { graphicMarks, besideMark, underlinedWords, paragraphs, splitColumns, combineBoxes };
+module.exports = { graphicMarks, besideMark, underlinedWords, paragraphs, splitColumns, justifiedLines, combineBoxes };
