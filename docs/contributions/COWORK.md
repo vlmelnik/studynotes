@@ -1,8 +1,20 @@
-# Help StudyNotes from Claude on iPhone
+# Connect to StudyNotes and take a task
 
-The participant uses their own Claude account with Cowork access. The project
+The participant uses their own model account. The project
 hosts intake, validation and GitHub publication. A participant supplies no
 GitHub account, fork, local checkout, command line or API key.
+
+Copy this address into the client's **MCP server URL** field:
+
+    https://studynotes-contributions.studynotes-vlmelnik.workers.dev/mcp
+
+Opening that address in a browser can return HTTP 405. Share this guide with participants.
+
+## ChatGPT and Gemini
+
+- **ChatGPT web:** Open Plugins, select **+**, then **Add custom MCP server**. Enter the address above, select no authentication and enable StudyNotes in the conversation. Full MCP access depends on plan and workspace permissions. [OpenAI setup and availability](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt-beta)
+- **Gemini web and mobile:** Eligible accounts can add a custom app in Gemini web under **Settings → Connected Apps**, then select it in a supported conversation on mobile. Google lists US, age, language and account restrictions. [Google setup and availability](https://support.google.com/gemini/answer/17209137)
+- **Gemini CLI:** Run `gemini mcp add --transport http studynotes https://studynotes-contributions.studynotes-vlmelnik.workers.dev/mcp`, then check discovery with `gemini mcp list`. [Gemini CLI reference](https://geminicli.com/docs/tools/mcp-server/)
 
 ## Codex and other MCP clients
 
@@ -27,9 +39,9 @@ custom connector setup, add it using Claude settings in a browser with the same
 account, then reopen the app. Enable the connector in the Cowork session.
 Organization settings may require an administrator to enable custom connectors.
 
-Paste this reusable prompt into Claude or Codex for each new contribution:
+Prefer a strong coding model available in your account. Once connected, paste this prompt for each contribution:
 
-> Use the StudyNotes connector to take the next ready task with take_next_task. Read its instructions and pinned context, complete only that task, and submit the full changed files and an English handoff. Keep the receipt private. If no task is available, stop. If you cannot finish before submitting, call release_task. Return the draft PR link or the queued status. Leave merging to the maintainer.
+> Use StudyNotes to claim the next task, read its pinned AGENTS.md, finish the task, and submit it with test results and a brief English handoff. Return the draft PR link or queue status.
 
 Open claims follow the deployed task list in order and wait for merged prerequisites.
 A reservation lasts two hours. At most one unfinished public claim and six reservations
