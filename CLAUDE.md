@@ -3,7 +3,8 @@
 @AGENTS.md
 
 ## Guest contributions
-For a maintainer-issued invitation, read the [guest contribution skill](.claude/skills/guest-contribution/SKILL.md) and [public task queue](docs/contributions/tasks.json).
+In mobile Cowork, use the connected StudyNotes tools described in [the mobile pilot](docs/contributions/COWORK.md).
+For a command-line invitation, read the [guest contribution skill](.claude/skills/guest-contribution/SKILL.md) and [public task queue](docs/contributions/tasks.json).
 
 ## Code map (graphify)
 A knowledge graph of the code is in `graphify-out/` (`GRAPH_REPORT.md`, `graph.html`, `graph.json`).

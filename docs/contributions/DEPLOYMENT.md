@@ -97,7 +97,7 @@ limit_req_zone $binary_remote_addr zone=studynotes_guest_ip:10m rate=30r/m;
 limit_conn_zone $binary_remote_addr zone=studynotes_guest_conn:10m;
 
 # TLS server block
-location /v1/ {
+location ~ ^/(v1/|mcp$) {
     limit_req zone=studynotes_guest_ip burst=12 nodelay;
     limit_req_status 429;
     limit_conn studynotes_guest_conn 4;

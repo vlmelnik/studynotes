@@ -1,0 +1,8 @@
+Use only the configured StudyNotes connector at {ORIGIN}/mcp for this invitation.
+Call claim_task for {TASK} with this private one-use invitation: {INVITATION}
+Keep the invitation and receipt out of all files, reports and other tools. Read the
+task and its pinned files using read_context. Complete only this task. Submit
+the complete changed files and a short English report using submit_work.
+Describe behavior, dependencies affected and tests actually run. If tests must
+run on the project worker, say so. Stop if blocked or after one submission.
+Return the receipt status and the draft PR link if available; never merge.

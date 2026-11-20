@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import { isClaimToken, maximumBody, repository, shaPattern, submission, verifyInvite } from './policy.mjs';
 
+import { mcp } from './mcp.mjs';
+
 class RequestError extends Error {
   constructor(code) {
     super('Invalid request');
@@ -8,11 +10,11 @@ class RequestError extends Error {
   }
 }
 
-async function jsonBody(req) {
+async function jsonBody(req, allowChunked = false) {
   if (req.headers['content-type']?.split(';')[0].toLowerCase() !== 'application/json' ||
       req.headers['content-encoding']) throw new RequestError(415);
   const expected = req.headers['content-length'];
-  if (!expected || !/^\d+$/.test(expected)) throw new RequestError(411);
+  if ((!expected && !allowChunked) || (expected && !/^\d+$/.test(expected))) throw new RequestError(411);
   if (Number(expected) > maximumBody) throw new RequestError(413);
   const chunks = [];
   let size = 0;
@@ -39,7 +41,8 @@ const errors = {
   503: 'Temporarily unavailable. Retry the same request.',
 };
 
-export function createApi({ queue, tasks, inviteKey, head }) {
+export function createApi(options) {
+  const { queue, tasks, inviteKey, head } = options;
   const server = createServer({ requestTimeout: 15_000, headersTimeout: 10_000,
     connectionsCheckingInterval: 1_000, maxHeaderSize: 4096, keepAliveTimeout: 1000 },
   async (req, res) => {
@@ -54,6 +57,16 @@ export function createApi({ queue, tasks, inviteKey, head }) {
     const id = /^\/v1\/claims\/([0-9a-f-]{36})$/.exec(req.url)?.[1];
 
     try {
+      if (req.url === '/mcp') {
+        if (req.headers.origin) return send(403, { error: 'Browser origins are disabled.' });
+        if (req.method !== 'POST') {
+          res.setHeader('allow', 'POST');
+          return send(405, { error: 'Use a JSON-RPC POST.' });
+        }
+        const reply = await mcp(await jsonBody(req, true), options);
+        if (reply === null) { res.writeHead(202); return res.end(); }
+        return send(200, reply);
+      }
       if (req.method === 'GET' && req.url === '/v1/tasks') {
         return send(200, { repository, tasks: [...tasks.values()] });
       }

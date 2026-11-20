@@ -106,7 +106,7 @@ The e2e suites drive the real app with Playwright; on Linux prefix them with `xv
 
 ## Contributing
 
-See [guest contributions](docs/contributions/README.md) for the Claude Code workflow and the current public task queue.
+See the [Claude on iPhone pilot](docs/contributions/COWORK.md) and the [public task queue](docs/contributions/tasks.json). The pilot requires a deployed StudyNotes connector and a maintainer-issued invitation.
 
 ## Licence
 

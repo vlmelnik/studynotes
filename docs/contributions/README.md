@@ -1,6 +1,8 @@
 # Contributing without a GitHub account
 
-A maintainer can issue one paste-ready prompt for a specific public task.
+**Claude on iPhone:** Use the [Cowork connector pilot](COWORK.md) to receive files and submit work in the app.
+
+For the command-line client, a maintainer can issue one paste-ready prompt for a specific public task.
 Paste it into Claude Code and let it work in a fresh checkout. The service
 reserves the task and its files. It turns a submission that passes offline
 checks into a draft PR with a link in the private receipt. GitHub account
