@@ -116,3 +116,19 @@ export function gitRepository(directory) {
     },
   };
 }
+
+export async function changedFiles(git, base, head, task) {
+  const delta = (await git(['diff-tree', '--no-commit-id', '--no-renames', '-r', '-z', base, head]))
+    .toString('utf8').split('\0');
+  delta.pop();
+  const files = [];
+  for (let i = 0; i < delta.length; i += 2) {
+    const metadata = /^:(000000|100644) 100644 [0-9a-f]{40} ([0-9a-f]{40}) [AM]$/.exec(delta[i]);
+    const path = delta[i + 1];
+    if (!metadata || !task.paths.includes(path)) throw new Error('Change outside task scope');
+    const blob = await git(['cat-file', 'blob', metadata[2]], { maxOutput: 96 * 1024 });
+    const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(blob);
+    files.push({ path, content });
+  }
+  return files;
+}

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { gitAt, InvalidChange, prepareCommit } from './git.mjs';
+import { changedFiles, gitAt, InvalidChange, prepareCommit } from './git.mjs';
 import { readTasks } from './policy.mjs';
 import { openQueue } from './queue.mjs';
 import { createWorker } from './worker.mjs';
@@ -86,4 +86,11 @@ test('snapshot creation rejects casing collisions, non-regular files and empty d
     'commit-tree', tree, '-m', 'Symlink fixture'])).toString().trim();
   await assert.rejects(prepareCommit(git, { ...job, base: linkBase },
     [{ path: 'link.md', content: 'replacement' }]), InvalidChange);
+});
+
+test('the guest verifier reads nested regular files and rejects an unapproved path', async t => {
+  const { git, base } = await fixture(t);
+  const head = await prepareCommit(git, { base, task: task.id, created: date }, [submittedFile]);
+  assert.deepEqual(await changedFiles(git, base, head, task), [submittedFile]);
+  await assert.rejects(changedFiles(git, base, head, { paths: [] }), /outside task scope/);
 });
