@@ -62,6 +62,8 @@ jobs:
         with:
           node-version: 24
       - run: node --test "tools/guest-contributions/*.test.mjs"
+      - name: Build the Cloudflare connector without deploying
+        run: npx --yes wrangler@4.166.0 deploy --dry-run --config tools/guest-contributions/cloudflare/wrangler.jsonc
 
   guest-sandbox:
     runs-on: ubuntu-latest

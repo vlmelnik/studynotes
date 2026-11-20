@@ -6,7 +6,7 @@ export function githubApp({ appId, installationId, privateKey }) {
   let expires = 0;
   async function api(path, token, { method = 'GET', body, missing = false } = {}) {
     const response = await fetch('https://api.github.com' + path, {
-      method, redirect: 'error', signal: AbortSignal.timeout(15_000),
+      method, redirect: 'manual', signal: AbortSignal.timeout(15_000),
       headers: { authorization: 'Bearer ' + token, accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28', 'user-agent': 'studynotes-guest-contributions',
         ...(body && { 'content-type': 'application/json' }) },
@@ -43,6 +43,7 @@ export function githubApp({ appId, installationId, privateKey }) {
   }
   return {
     token,
+    request: get,
     async head() {
       return (await get('/git/ref/heads/' + baseBranch)).object.sha;
     },
@@ -56,9 +57,9 @@ export function githubApp({ appId, installationId, privateKey }) {
       return pulls.find(pr => pr.head.repo?.full_name === repository && pr.head.ref === branch);
     },
     pull: number => get('/pulls/' + number),
-    openPull(branch, job, report) {
+    openPull(branch, job, report, checked = true) {
       const body = 'Task: ' + job.task + '\nBase: ' + job.base + '\n' +
-        'The intake service ran the offline unit and build checks. Review the changes and wait for CI before merging.\n' +
+        (checked ? 'The intake service ran the offline unit and build checks.' : 'The guest-sandbox GitHub Actions check validates this draft.') + ' Review the changes and wait for CI before merging.\n' +
         (report ? '\nContributor report (self-reported):\n\n' +
           report.split(/\r?\n/).map(line => '    ' + line.replace(/\r/g, ' ')).join('\n') + '\n' : '');
       return get('/pulls', { method: 'POST', body: {

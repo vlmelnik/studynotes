@@ -16,23 +16,21 @@ Organization settings may require an administrator to enable custom connectors.
 Paste the private prompt into Cowork. Approve requested tool actions if Claude
 asks. Each prompt contains a one-use invitation for a specific open task; use
 a new invitation for the next contribution. Keep the conversation private.
-After submission the project worker continues validation independently.
+After submission the Worker prepares a draft. GitHub Actions runs the offline checks on it.
 Ask Claude to check the receipt again later in the same conversation.
-A queued receipt means validation is pending. A published receipt links to
+A queued receipt means publication is pending. A published receipt links to
 the draft. The provider account uses its own model allowance. The invitation
 identifies an authorized submission; it does not verify the human's identity.
 
 ## Maintainer setup and acceptance test
 
-Complete [the deployment guide](DEPLOYMENT.md), including the offline validator,
-main protection and project GitHub App. Expose POST /mcp on the same dedicated
-HTTPS origin behind the documented rate limits. Disable body and header logging.
+Complete the [Cloudflare setup](CLOUDFLARE.md), including main protection and the project GitHub App.
 The connector uses stateless MCP over HTTP with JSON responses. Tool discovery
 is public. Claiming needs a signed invitation, subsequent operations need the
 private receipt, and file reads are restricted to approved paths at the claimed
 public revision. The validator and GitHub credentials remain on the project side.
 
-Generate a participant prompt on the service host:
+Generate a participant prompt privately on the owner computer:
 
     node tools/guest-contributions/server.mjs cowork-invite sn-docs-test-guide https://contribute.example.org
 

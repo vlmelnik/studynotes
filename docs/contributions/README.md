@@ -30,6 +30,6 @@ Queue rules for maintainers:
   confirm the acceptance criteria before approving. A human marks the draft
   ready and merges after review and required checks.
 
-See [deployment and operations](DEPLOYMENT.md) for the owner setup and
+See the [Cloudflare setup](CLOUDFLARE.md) for the mobile pilot, [Linux deployment](DEPLOYMENT.md) for the CLI service and
 [Claude's contributor instructions](../../.claude/skills/guest-contribution/SKILL.md)
 for the participant commands.

@@ -18,7 +18,7 @@ const versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const context = ['AGENTS.md', 'package.json', '.github/workflows/ci.yml'];
 async function publicFile(base, path) {
   const response = await fetch('https://raw.githubusercontent.com/' + repository + '/' + base + '/' + path, {
-    redirect: 'error', signal: AbortSignal.timeout(8000),
+    redirect: 'manual', signal: AbortSignal.timeout(8000),
   });
   if (response.status === 404) return { path, exists: false };
   if (!response.ok) throw new Error('Public file unavailable');

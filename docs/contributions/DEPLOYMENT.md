@@ -1,5 +1,8 @@
 # Deploy the StudyNotes guest contribution service
 
+For the mobile pilot, use the [Cloudflare Worker deployment](CLOUDFLARE.md).
+The following instructions cover the alternative Linux installation.
+
 Use a dedicated Linux VM. Run the intake service and rootless Docker under a
 dedicated operating system account. Put HTTPS and request limits in front of
 the loopback listener. Use a hardened container runtime such as gVisor where
