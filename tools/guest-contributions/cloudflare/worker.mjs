@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { DurableObject } from 'cloudflare:workers';
 import tasksJson from '../../../docs/contributions/tasks.json';
 import { readTasks, maximumBody } from '../policy.mjs';
@@ -37,14 +38,16 @@ export default {
     }
     // Discovery and malformed requests do not allocate durable storage.
     if (rpc?.method !== 'tools/call') {
-      const reply = await mcp(rpc, {});
+      const reply = await mcp(rpc, { openQueue: true });
       return reply === null ? new Response(null, { status: 202 }) : json(200, reply);
     }
     if (!/^[a-f0-9]{64}$/i.test(env.GUEST_INVITE_KEY || '') || !env.GUEST_APP_KEY ||
         !env.GUEST_APP_ID || !env.GUEST_INSTALLATION_ID) return json(503, { error: 'Intake is not configured.' });
     const stub = env.QUEUE.getByName('studynotes');
     try {
-      return json(200, await stub.call(rpc));
+      const source = createHmac('sha256', env.GUEST_INVITE_KEY)
+        .update(request.headers.get('cf-connecting-ip') || 'unknown').digest('hex');
+      return json(200, await stub.call(rpc, source));
     } catch {
       return json(503, { error: 'Temporarily unavailable.' });
     }
@@ -67,8 +70,8 @@ export class Intake extends DurableObject {
     this.github = githubApp({ appId: env.GUEST_APP_ID, installationId: env.GUEST_INSTALLATION_ID, privateKey: env.GUEST_APP_KEY });
   }
 
-  async call(rpc) {
-    const result = await mcp(rpc, { queue: this.queue, tasks,
+  async call(rpc, source) {
+    const result = await mcp(rpc, { queue: this.queue, tasks, openQueue: true, source,
       inviteKey: Buffer.from(this.env.GUEST_INVITE_KEY, 'hex'), head: this.github.head });
     if (this.queue.next()) {
       const due = await this.ctx.storage.getAlarm();

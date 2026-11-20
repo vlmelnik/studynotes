@@ -48,3 +48,7 @@ never pushed. If it exists:
 - **Releases** are done by the maintainer's agent only: build exe + zip, push an
   `upload/v<version>-r<N>` branch (see `.github/workflows/publish-prebuilt.yml`).
   A fixed version is re-published under the same number.
+
+## External contributions via MCP
+
+When asked to take the next StudyNotes contribution, use the configured StudyNotes MCP connector and follow [the shared participant prompt](docs/contributions/COWORK.md). Keep receipts private and submit through the connector for maintainer review.
