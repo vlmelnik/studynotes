@@ -1,0 +1,8 @@
+[
+  {
+    "id": "sn-docs-test-guide",
+    "title": "Document how to verify a StudyNotes change",
+    "instructions": "Add docs/TESTING.md for a first-time contributor. Explain when to use npm test, npm run build and the Electron smoke test. Include the prerequisites for the Linux smoke job and how to interpret a skipped optional test. Verify commands against AGENTS.md, package.json and the CI workflow. Keep examples neutral and in English.",
+    "paths": ["docs/TESTING.md"]
+  }
+]
