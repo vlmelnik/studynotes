@@ -33,3 +33,25 @@ Queue rules for maintainers:
 See the [Cloudflare setup](CLOUDFLARE.md) for the mobile pilot, [Linux deployment](DEPLOYMENT.md) for the CLI service and
 [Claude's contributor instructions](../../.claude/skills/guest-contribution/SKILL.md)
 for the participant commands.
+
+## Task chains and handover notes
+
+Tasks in [tasks.json](tasks.json) are small enough for one session and fit the
+service's file scope (`docs/*.md`, `src/shared`, `test/unit/shared`). Two
+optional fields, ignored by the service, keep the work moving between
+sessions that do not know each other:
+
+- `chain`: the feature a task belongs to (clipboard, layout, outline, dark,
+  paste, handwriting, android, recognition). Every task of a chain appends a
+  dated section to that chain's notes file (`docs/NOTES-<CHAIN>.md`, listed in
+  its paths): what was done, decisions, what is open, what the next task needs.
+  The next contributor reads it as part of the task's files.
+- `after`: task IDs that must be merged first. Issue an invitation only when
+  they are; a task started too early stops and reports "blocked".
+
+Chains are independent, so several people can work at the same time, one
+task per chain. The maintainer's part stays: review and merge the draft PR,
+then invite for the next ready task (any task whose `after` tasks are merged
+and that has no open PR). Wiring the pure modules into the app (renderer,
+main process) is done by the maintainer afterwards; each notes file collects
+what that wiring needs.
