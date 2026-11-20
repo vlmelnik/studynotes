@@ -1,11 +1,11 @@
 # Unit tests on Linux and Windows, plus build and a smoke e2e (real Electron
 # app under xvfb) on Linux. Runs on every push and pull request except the
-# upload/** branches (those only publish a prebuilt release).
+# upload/** branches. Same-repository guest proposals use the offline job.
 name: CI
 
 on:
   push:
-    branches-ignore: ['upload/**']
+    branches-ignore: ['upload/**', 'guest-contrib/**']
   pull_request:
     branches-ignore: ['upload/**']
 
@@ -14,14 +14,17 @@ permissions:
 
 jobs:
   linux:
+    if: ${{ !(github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/')) }}
     runs-on: ubuntu-latest
     env:
       # onnxruntime-node's install script downloads extra binaries; the CPU
       # binary ships in the package, so skip it.
       ONNXRUNTIME_NODE_INSTALL: skip
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -34,12 +37,59 @@ jobs:
         run: xvfb-run -a -s "-screen 0 1600x1000x24" npm run test:e2e:smoke
 
   windows:
+    if: ${{ !(github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/')) }}
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm test
+
+  guest-service:
+    if: ${{ !(github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - run: node --test "tools/guest-contributions/*.test.mjs"
+      - name: Build the Cloudflare connector without deploying
+        run: npx --yes wrangler@4.166.0 deploy --dry-run --config tools/guest-contributions/cloudflare/wrangler.jsonc
+
+  guest-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out the trusted base
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/') }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - if: ${{ github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/') }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Check file scope and run unit tests and build offline
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/') }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GUEST_BRANCH: ${{ github.head_ref }}
+        run: |
+          image="$(node tools/guest-contributions/build-image.mjs .)"
+          node tools/guest-contributions/verify-pr.mjs "$BASE_SHA" "$HEAD_SHA" "$GUEST_BRANCH" "$image"
+      - name: Confirm this is a regular change
+        if: ${{ !(github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'guest-contrib/')) }}
+        run: echo 'Regular changes use the Linux and Windows jobs.'

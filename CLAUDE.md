@@ -1,7 +1,10 @@
 # StudyNotes – notes for Claude
 
-Shared rules, commands and the workflow with the private `dev-notes/` folder:
-see [AGENTS.md](AGENTS.md). Read it first.
+@AGENTS.md
+
+## Guest contributions
+In mobile Cowork, use the connected StudyNotes tools described in [the mobile pilot](docs/contributions/COWORK.md).
+For a command-line invitation, read the [guest contribution skill](.claude/skills/guest-contribution/SKILL.md) and [public task queue](docs/contributions/tasks.json).
 
 ## Code map (graphify)
 A knowledge graph of the code is in `graphify-out/` (`GRAPH_REPORT.md`, `graph.html`, `graph.json`).

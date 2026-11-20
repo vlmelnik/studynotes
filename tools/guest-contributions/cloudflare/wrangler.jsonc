@@ -1,0 +1,12 @@
+{
+  "name": "studynotes-contributions",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "ratelimits": [{ "name": "LIMIT", "namespace_id": "4137", "simple": { "limit": 60, "period": 60 } }],
+  "observability": { "enabled": false },
+  "durable_objects": { "bindings": [{ "name": "QUEUE", "class_name": "Intake" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Intake"] }]
+}

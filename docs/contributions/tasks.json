@@ -1,0 +1,22 @@
+[
+  {
+    "id": "sn-docs-test-guide",
+    "title": "Document how to verify a StudyNotes change",
+    "instructions": "Add docs/TESTING.md for a first-time contributor. Explain when to use npm test, npm run build and the Electron smoke test. Include the prerequisites for the Linux smoke job and how to interpret a skipped optional test. Verify commands against AGENTS.md, package.json and the CI workflow. Keep examples neutral and in English.",
+    "paths": [
+      "docs/TESTING.md"
+    ]
+  },
+  {
+    "id": "sn-stacking-immutable-test",
+    "title": "Verify restacking preserves the original notebook objects",
+    "instructions": "Read the stacking helper and its tests. Add an isolated Node test for restack with a selected picture and text. Snapshot the input first, verify the input remains deeply equal and verify the returned order changes. Only submit the new test file. Report the affected helper and distinguish tests run from tests requested.",
+    "paths": [
+      "test/unit/shared/stacking-immutable.test.js"
+    ],
+    "context": [
+      "src/shared/stacking.js",
+      "test/unit/shared/stacking.test.js"
+    ]
+  }
+]

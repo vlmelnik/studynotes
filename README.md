@@ -104,6 +104,10 @@ The e2e suites drive the real app with Playwright; on Linux prefix them with `xv
 
 </details>
 
+## Contributing
+
+See the [Claude on iPhone pilot](docs/contributions/COWORK.md) and the [public task queue](docs/contributions/tasks.json). The pilot requires a deployed StudyNotes connector and a maintainer-issued invitation.
+
 ## Licence
 
 StudyNotes is MIT-licensed © 2026 vlmelnik. It bundles open-source software and fonts under their own licences – see [THIRD-PARTY-NOTICES](assets/THIRD-PARTY-NOTICES.txt) (also in the app: Settings → About StudyNotes → Licences).
