@@ -53,6 +53,6 @@ never pushed. If it exists:
 
 When asked to take the next StudyNotes contribution, use the configured StudyNotes MCP connector and follow [the shared participant prompt](docs/contributions/COWORK.md). Keep receipts private and submit through the connector for maintainer review.
 
-Prefer a strong coding model available in the participant's account, such as GPT-5.5 or a comparable Claude or Gemini model. The participant selects the model in their client. Carry one claim through implementation, relevant checks and submission. Report the checks actually run, any checks left for CI, and the draft PR link or queued status. Release an unfinished claim if blocked.
+Prefer a strong coding model available in the participant's account, such as Claude Opus 5.5 if available, or a comparable model in the chosen client. The participant selects the model in their client. Carry one claim through implementation, relevant checks and submission. Report the checks actually run, any checks left for CI, and the draft PR link or queued status. Release an unfinished claim if blocked.
 
 When designing queue tasks, aim for one independently reviewable outcome that uses roughly 70% of a typical participant's five-hour usage allowance, including verification and handoff. This is a sizing estimate: model quotas vary and the connector cannot measure the participant's balance. Keep each task feasible within the two-hour reservation. Split larger changes at testable boundaries and submit smaller completed tasks promptly.
