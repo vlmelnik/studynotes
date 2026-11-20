@@ -104,6 +104,10 @@ The e2e suites drive the real app with Playwright; on Linux prefix them with `xv
 
 </details>
 
+## Contributing
+
+Use the [Claude Code contribution prompt](CONTRIBUTING.md#copy-this-prompt) to take one item from the [public task queue](TASKS.md).
+
 ## Licence
 
 StudyNotes is MIT-licensed © 2026 vlmelnik. It bundles open-source software and fonts under their own licences – see [THIRD-PARTY-NOTICES](assets/THIRD-PARTY-NOTICES.txt) (also in the app: Settings → About StudyNotes → Licences).

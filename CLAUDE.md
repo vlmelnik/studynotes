@@ -1,7 +1,12 @@
 # StudyNotes – notes for Claude
 
-Shared rules, commands and the workflow with the private `dev-notes/` folder:
-see [AGENTS.md](AGENTS.md). Read it first.
+@AGENTS.md
+
+## Public contribution workflow
+
+For an external contribution, read [TASKS.md](TASKS.md) and follow
+[the contribution skill](.claude/skills/contribute/SKILL.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) has the paste-ready prompt.
 
 ## Code map (graphify)
 A knowledge graph of the code is in `graphify-out/` (`GRAPH_REPORT.md`, `graph.html`, `graph.json`).
