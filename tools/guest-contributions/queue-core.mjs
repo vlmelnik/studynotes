@@ -10,6 +10,7 @@ export function createQueue(db, transaction) {
     'CREATE TABLE IF NOT EXISTS locks (path TEXT PRIMARY KEY, job TEXT NOT NULL REFERENCES jobs(id));' +
     'CREATE INDEX IF NOT EXISTS jobs_state ON jobs(state, created);'
   );
+  db.exec('CREATE TABLE IF NOT EXISTS public_claims (job TEXT PRIMARY KEY REFERENCES jobs(id), source TEXT NOT NULL, created INTEGER NOT NULL)');
   const get = id => db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
   const unlock = id => db.prepare('DELETE FROM locks WHERE job = ?').run(id);
   const expire = now => {
@@ -23,24 +24,50 @@ export function createQueue(db, transaction) {
   const authenticated = (id, token) =>
     db.prepare('SELECT * FROM jobs WHERE id = ? AND token_hash = ?').get(id, hash(token));
 
+  function reserve(task, base, nonce, now) {
+    if (db.prepare("SELECT 1 FROM jobs WHERE nonce = ? OR (task = ? AND state IN " +
+      "('claimed','queued','validated','published','merged'))").get(nonce, task.id)) return null;
+    for (const file of task.paths) {
+      if (db.prepare('SELECT 1 FROM locks WHERE path = ?').get(file.toLowerCase())) return null;
+    }
+    const id = randomUUID();
+    const token = newToken();
+    db.prepare("INSERT INTO jobs (id,nonce,token_hash,task,base,created,expires,state) " +
+      "VALUES (?,?,?,?,?,?,?,'claimed')").run(id, nonce, hash(token), task.id, base, now, now + claimLifetime);
+    const lock = db.prepare('INSERT INTO locks (path,job) VALUES (?,?)');
+    for (const file of task.paths) lock.run(file.toLowerCase(), id);
+    return { ...visible(get(id)), token };
+  }
+
   return {
     close: () => db.close(),
     internalState: id => get(id)?.state,
     claim({ task, base, nonce, now = Date.now() }) {
       return transaction(() => {
         expire(now);
-        if (db.prepare("SELECT 1 FROM jobs WHERE nonce = ? OR (task = ? AND state IN " +
-          "('claimed','queued','validated','published','merged'))").get(nonce, task.id)) return null;
-        for (const file of task.paths) {
-          if (db.prepare('SELECT 1 FROM locks WHERE path = ?').get(file.toLowerCase())) return null;
+        return reserve(task, base, nonce, now);
+      });
+    },
+    takeNext(tasks, base, source, now = Date.now()) {
+      return transaction(() => {
+        expire(now);
+        const since = now - 86400000;
+        db.prepare('DELETE FROM public_claims WHERE created <= ?').run(since);
+        if (db.prepare('SELECT COUNT(*) AS n FROM public_claims').get().n >= 24 ||
+            db.prepare('SELECT COUNT(*) AS n FROM public_claims WHERE source=?').get(source).n >= 6 ||
+            db.prepare("SELECT 1 FROM public_claims c JOIN jobs j ON j.id=c.job WHERE c.source=? AND j.state='claimed'").get(source)) {
+          return { status: 'limit_reached' };
         }
-        const id = randomUUID();
-        const token = newToken();
-        db.prepare("INSERT INTO jobs (id,nonce,token_hash,task,base,created,expires,state) " +
-          "VALUES (?,?,?,?,?,?,?,'claimed')").run(id, nonce, hash(token), task.id, base, now, now + claimLifetime);
-        const lock = db.prepare('INSERT INTO locks (path,job) VALUES (?,?)');
-        for (const file of task.paths) lock.run(file.toLowerCase(), id);
-        return { ...visible(get(id)), token };
+        for (const task of tasks.values()) {
+          if (task.invite_only || task.after?.some(id =>
+            !db.prepare("SELECT 1 FROM jobs WHERE task=? AND state='merged'").get(id))) continue;
+          if (db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE task=? AND state='rejected'").get(task.id).n >= 3) continue;
+          const claim = reserve(task, base, randomUUID(), now);
+          if (!claim) continue;
+          db.prepare('INSERT INTO public_claims(job,source,created) VALUES(?,?,?)').run(claim.id, source, now);
+          return claim;
+        }
+        return { status: 'no_ready_task' };
       });
     },
     status(id, token, now = Date.now()) {

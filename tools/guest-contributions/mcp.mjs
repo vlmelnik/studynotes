@@ -14,6 +14,10 @@ const tools = [
   }),
   tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt),
 ];
+const publicTools = [
+  tool('take_next_task', 'Claim one ready StudyNotes task. No invitation required. Call once and keep the receipt private.', {}),
+  tool('release_task', 'Release an unfinished claim using its private receipt.', receipt),
+];
 const versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const context = ['AGENTS.md', 'package.json', '.github/workflows/ci.yml'];
 async function publicFile(base, path) {
@@ -32,7 +36,8 @@ async function publicFile(base, path) {
   return { path, exists: true, content: Buffer.concat(parts).toString('utf8') };
 }
 
-export async function mcp(message, { queue, tasks, inviteKey, head, readFile = publicFile }) {
+export async function mcp(message, { queue, tasks, inviteKey, head, readFile = publicFile, openQueue = false, source }) {
+  const available = openQueue ? [...tools, ...publicTools] : tools;
   const id = message?.id;
   const reply = result => ({ jsonrpc: '2.0', id, result });
   const error = (code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
@@ -47,16 +52,25 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
       capabilities: { tools: {} }, serverInfo: { name: 'StudyNotes', version: '1.0' },
     });
     case 'ping': return reply({});
-    case 'tools/list': return reply({ tools });
+    case 'tools/list': return reply({ tools: available });
     case 'tools/call': break;
     default: return error(-32601, 'Unknown method');
   }
-  const spec = tools.find(t => t.name === params?.name);
-  const args = params?.arguments;
+  const spec = available.find(t => t.name === params?.name);
+  const args = params?.arguments ?? {};
   if (!spec || !args || typeof args !== 'object' ||
       Object.keys(args).length !== spec.inputSchema.required.length ||
       !spec.inputSchema.required.every(key => Object.hasOwn(args, key) &&
         (key === 'files' ? Array.isArray(args[key]) : typeof args[key] === 'string'))) return error(-32602, 'Invalid tool arguments');
+  const describe = (claim, task) => output({ ...claim, instructions: task.instructions, paths: task.paths,
+    readable: [...new Set([...context, ...(task.context || []), ...task.paths])] });
+  if (spec.name === 'take_next_task') {
+    if (!source) return output('Public intake unavailable.', true);
+    const base = await head();
+    if (!shaPattern.test(base)) throw new Error('Invalid revision');
+    const claim = queue.takeNext(tasks, base, source);
+    return claim.id ? describe(claim, tasks.get(claim.task)) : output(claim);
+  }
   if (spec.name === 'claim_task') {
     const task = tasks.get(args.task);
     const invite = task && verifyInvite(inviteKey, args.invitation, task.id);
@@ -64,11 +78,13 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
     const base = await head();
     if (!shaPattern.test(base)) throw new Error('Invalid revision');
     const claim = queue.claim({ task, base, nonce: invite.nonce });
-    return claim ? output({ ...claim, instructions: task.instructions, paths: task.paths,
-      readable: [...new Set([...context, ...(task.context || []), ...task.paths])] }) : output('Task or invitation already used.', true);
+    return claim ? describe(claim, task) : output('Task or invitation already used.', true);
   }
   const claim = isClaimToken(args.token) && queue.status(args.id, args.token);
   if (!claim) return output('Invalid receipt.', true);
+  if (spec.name === 'release_task') {
+    return queue.cancel(args.id, args.token) === 200 ? output({ status: 'cancelled' }) : output('Only unfinished claims can be released.', true);
+  }
   if (spec.name === 'check_status') return output(claim);
   const task = tasks.get(claim.task);
   if (!task) return output('Task retired.', true);

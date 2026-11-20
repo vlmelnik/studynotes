@@ -34,6 +34,8 @@ export function readTasks(list) {
         !task.instructions.trim() || task.instructions.length > 4000 ||
         !Array.isArray(task.paths) || task.paths.length === 0 || task.paths.length > 12 ||
         !task.paths.every(permittedPath) ||
+        (task.invite_only !== undefined && typeof task.invite_only !== 'boolean') ||
+        (task.after !== undefined && (!Array.isArray(task.after) || !task.after.every(id => typeof id === 'string' && taskId.test(id)))) ||
         (task.context !== undefined && (!Array.isArray(task.context) || task.context.length > 12 ||
           !task.context.every(permittedPath))) ||
         new Set(task.paths.map(path => path.toLowerCase())).size !== task.paths.length) {
