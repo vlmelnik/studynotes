@@ -1,23 +1,33 @@
-import { isClaimToken, repository, shaPattern, submission, verifyInvite } from './policy.mjs';
+import { isClaimToken, repository, shaPattern, validateSubmission, verifyInvite } from './policy.mjs';
 
 const string = { type: 'string' };
 const receipt = { id: string, token: string };
 const schema = properties => ({
   type: 'object', properties, required: Object.keys(properties), additionalProperties: false,
 });
-const tool = (name, description, properties) => ({ name, description, inputSchema: schema(properties) });
+const tool = (name, description, properties, readOnly = false) => ({
+  name, description, inputSchema: schema(properties), annotations: { readOnlyHint: readOnly },
+});
 const tools = [
   tool('claim_task', 'Reserve the invited task. Keep the receipt private.', { task: string, invitation: string }),
-  tool('read_context', 'Read an approved public file at the claimed revision.', { ...receipt, path: string }),
-  tool('submit_work', 'Queue the listed complete files and a brief public report for offline checks and draft PR review.', {
+  tool('read_context', 'Read an approved public file at the claimed revision.', { ...receipt, path: string }, true),
+  tool('submit_work', 'Queue the listed complete files and a public report (maximum 1200 UTF-8 bytes) for offline checks and draft PR review.', {
     ...receipt, files: { type: 'array', items: schema({ path: string, content: string }) }, report: string,
   }),
-  tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt),
+  tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt, true),
 ];
 const publicTools = [
-  tool('take_next_task', 'Claim one ready StudyNotes task. No invitation required. Call once and keep the receipt private.', {}),
+  tool('take_next_task', 'Claim one ready StudyNotes task. No invitation required. Claim one task at a time and keep the receipt private.', {}),
   tool('release_task', 'Release an unfinished claim using its private receipt.', receipt),
 ];
+const sessionInstructions = [
+  'For an open contribution session, finish and submit one task at a time. Keep routine updates and per-task handoffs out of chat.',
+  'After a confirmed queue entry or draft, consult the usage information available in the client before claiming again.',
+  'Continue while enough allowance remains to finish another task within the budget set by the participant. Respect explicit task or spending limits.',
+  'If remaining allowance is unknown, stop after the current submission. Stop on no_ready_task or limit_reached. Never poll for a quota reset.',
+  'At the end send one short message in the language used by the participant. Thank them for contributing their tokens (the party is proud of you!) and name the features submitted for review. If nothing was submitted, simply say why.',
+  'If a failure persists, provide one report the participant can forward to the maintainer: task, failed step, safe error, attempts, tests, last confirmed status, saved work and next action. Exclude receipts, tokens and private files.',
+].join(' ');
 const versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const context = ['AGENTS.md', 'package.json', '.github/workflows/ci.yml'];
 async function publicFile(base, path) {
@@ -49,7 +59,7 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
   switch (message.method) {
     case 'initialize': return reply({
       protocolVersion: versions.includes(params?.protocolVersion) ? params.protocolVersion : versions[0],
-      capabilities: { tools: {} }, serverInfo: { name: 'StudyNotes', version: '1.0' },
+      instructions: sessionInstructions, capabilities: { tools: {} }, serverInfo: { name: 'StudyNotes', version: '1.0' },
     });
     case 'ping': return reply({});
     case 'tools/list': return reply({ tools: available });
@@ -63,6 +73,8 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
       !spec.inputSchema.required.every(key => Object.hasOwn(args, key) &&
         (key === 'files' ? Array.isArray(args[key]) : typeof args[key] === 'string'))) return error(-32602, 'Invalid tool arguments');
   const describe = (claim, task) => output({ ...claim, instructions: task.instructions, paths: task.paths,
+    submissionGuide: 'Keep the receipt in this session and use its id and token only as tool arguments. Read pinned AGENTS.md. Submit the full changed files and a short English report under 1200 UTF-8 bytes. If validation rejects the submission, correct the reported issue and retry the real files yourself. After an uncertain network response, check_status before retrying. If blocked, preserve the files for the participant.',
+    sessionInstructions: spec.name === 'take_next_task' ? sessionInstructions : 'Complete only this invited task.',
     readable: [...new Set([...context, ...(task.context || []), ...task.paths])] });
   if (spec.name === 'take_next_task') {
     if (!source) return output('Public intake unavailable.', true);
@@ -92,8 +104,10 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
     if (claim.status !== 'claimed' || ![...context, ...(task.context || []), ...task.paths].includes(args.path)) return output('Outside task scope.', true);
     return output(await readFile(claim.base, args.path));
   }
-  const data = submission(task, { base: claim.base, files: args.files, report: args.report });
-  if (!data || JSON.stringify(data).includes(args.token) || /[\w-]{40,}\.[\w-]{43}\b/.test(JSON.stringify(data))) return output('Invalid submission or private receipt in files/report.', true);
+  const checked = validateSubmission(task, { base: claim.base, files: args.files, report: args.report });
+  if (checked.error) return output(checked.error, true);
+  const data = checked.data;
+  if (JSON.stringify(data).includes(args.token) || /[\w-]{40,}\.[\w-]{43}\b/.test(JSON.stringify(data))) return output('Private receipt or invitation-like data in files or report.', true);
   const result = queue.submit(claim.id, args.token, data, claim.status === 'claimed' ? await head() : null);
   return result.code === 202 ? output(result.job) : output('Task changed, expired or was already submitted.', true);
 }

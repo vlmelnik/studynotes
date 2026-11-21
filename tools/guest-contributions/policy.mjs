@@ -83,20 +83,30 @@ function safeText(value, limit) {
     !/-----BEGIN [A-Z ]*PRIVATE KEY-----|GOCSPX-[\w-]{10,}|github_pat_[\w]+|gh[pousr]_[\w-]{20,}|sk-ant-[\w-]{12,}|AKIA[A-Z0-9]{16}/.test(value);
 }
 
-export function submission(task, input) {
+export function validateSubmission(task, input) {
   if (!input || typeof input.base !== 'string' || !shaPattern.test(input.base) ||
       !Array.isArray(input.files) || !input.files.length || input.files.length > task.paths.length ||
-      typeof input !== 'object' || Object.keys(input).some(key => !['base', 'files', 'report'].includes(key))) return null;
+      typeof input !== 'object' || Object.keys(input).some(key => !['base', 'files', 'report'].includes(key))) return { error: 'Expected a valid revision and a nonempty list of files within the task limit.' };
   const seen = new Set();
   const files = [];
   for (const file of input.files) {
-    if (!file || !task.paths.includes(file.path) || seen.has(file.path) ||
-        Object.keys(file).length !== 2 || !safeText(file.content, 96 * 1024)) return null;
+    const label = 'File ' + (files.length + 1);
+    if (!file || typeof file !== 'object' || typeof file.content !== 'string' || Object.keys(file).length !== 2)
+      return { error: label + ' must contain only path and content (full file text).' };
+    if (!task.paths.includes(file.path)) return { error: label + ' path must match a path in the claim exactly.' };
+    if (seen.has(file.path)) return { error: label + ' repeats an earlier path.' };
+    if (Buffer.byteLength(file.content) > 96 * 1024) return { error: label + ' exceeds 96 KiB in UTF-8.' };
+    if (!safeText(file.content, 96 * 1024)) return { error: label + ' contains invalid text, a control character or credential-like data.' };
     seen.add(file.path);
     files.push({ path: file.path, content: file.content });
   }
   const report = input.report === undefined ? '' : input.report;
-  if (!safeText(report, 1200)) return null;
+  if (typeof report === 'string' && Buffer.byteLength(report) > 1200) return { error: 'Report exceeds 1200 UTF-8 bytes. Shorten the handoff and resubmit the full files.' };
+  if (!safeText(report, 1200)) return { error: 'Report must be plain text without invalid characters or credential-like data.' };
   files.sort((a, b) => a.path.localeCompare(b.path, 'en'));
-  return { base: input.base, files, report };
+  return { data: { base: input.base, files, report } };
+}
+
+export function submission(task, input) {
+  return validateSubmission(task, input).data ?? null;
 }

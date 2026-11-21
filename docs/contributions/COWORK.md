@@ -27,9 +27,13 @@ custom connector setup, add it using Claude settings in a browser with the same
 account, then reopen the app. Enable the connector in the Cowork session.
 Organization settings may require an administrator to enable custom connectors.
 
-Paste this reusable prompt into Claude or Codex for each new contribution:
+Paste this prompt once per public contribution session:
 
-> Use the StudyNotes connector to take the next ready task with take_next_task. Read its instructions and pinned context, complete only that task, and submit the full changed files and an English handoff. Keep the receipt private. If no task is available, stop. If you cannot finish before submitting, call release_task. Return the draft PR link or the queued status. Leave merging to the maintainer.
+> Use StudyNotes to complete and submit ready tasks one at a time while my remaining allowance permits. Follow the pinned instructions and give me one final summary or a report I can forward to the maintainer.
+
+Read pinned AGENTS.md for each claim. Send test results and a brief English handoff with each submission. Keep routine progress in the submission. After the connector confirms a queue entry or draft, check the host's usage indicator before claiming again. If the host does not expose the remaining allowance, finish the current task and stop. An empty queue or service quota also ends the session. An explicit request for a single task or an invited task ends after that task.
+
+On success, thank the participant in their language and list the features submitted for review in one sentence. For example: “Thank you for contributing your tokens. The party is proud of you! Submitted for review: clipboard format selection and toolbar sizing.” If nothing was submitted, explain why. On persistent failure, give one forwardable report with the task, failed step, safe error, retries, test results, last confirmed status and what can be recovered. Keep all tokens and receipts private.
 
 Open claims follow the deployed task list in order and wait for merged prerequisites.
 A reservation lasts two hours. At most one unfinished public claim and six reservations
@@ -39,7 +43,7 @@ release their tasks on reconciliation; merged tasks stay complete. A maintainer 
 restrict a task with `invite_only: true`. Redeploy the Worker when updating the task list.
 
 After submission the Worker prepares a draft. GitHub Actions runs the offline checks on it.
-Ask Claude to check the receipt again later in the same conversation.
+The agent can check a receipt to resolve uncertainty about submission.
 A queued receipt means publication is pending. A published receipt links to
 the draft. The participant uses their own model allowance.
 
