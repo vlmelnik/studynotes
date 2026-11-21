@@ -1,4 +1,4 @@
-import { isClaimToken, repository, shaPattern, submission, verifyInvite } from './policy.mjs';
+import { isClaimToken, repository, shaPattern, validateSubmission, verifyInvite } from './policy.mjs';
 
 const string = { type: 'string' };
 const receipt = { id: string, token: string };
@@ -9,7 +9,7 @@ const tool = (name, description, properties) => ({ name, description, inputSchem
 const tools = [
   tool('claim_task', 'Reserve the invited task. Keep the receipt private.', { task: string, invitation: string }),
   tool('read_context', 'Read an approved public file at the claimed revision.', { ...receipt, path: string }),
-  tool('submit_work', 'Queue the listed complete files and a brief public report for offline checks and draft PR review.', {
+  tool('submit_work', 'Queue the listed complete files and a public report (maximum 1200 UTF-8 bytes) for offline checks and draft PR review.', {
     ...receipt, files: { type: 'array', items: schema({ path: string, content: string }) }, report: string,
   }),
   tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt),
@@ -92,8 +92,10 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
     if (claim.status !== 'claimed' || ![...context, ...(task.context || []), ...task.paths].includes(args.path)) return output('Outside task scope.', true);
     return output(await readFile(claim.base, args.path));
   }
-  const data = submission(task, { base: claim.base, files: args.files, report: args.report });
-  if (!data || JSON.stringify(data).includes(args.token) || /[\w-]{40,}\.[\w-]{43}\b/.test(JSON.stringify(data))) return output('Invalid submission or private receipt in files/report.', true);
+  const checked = validateSubmission(task, { base: claim.base, files: args.files, report: args.report });
+  if (checked.error) return output(checked.error, true);
+  const data = checked.data;
+  if (JSON.stringify(data).includes(args.token) || /[\w-]{40,}\.[\w-]{43}\b/.test(JSON.stringify(data))) return output('Private receipt or invitation-like data in files or report.', true);
   const result = queue.submit(claim.id, args.token, data, claim.status === 'claimed' ? await head() : null);
   return result.code === 202 ? output(result.job) : output('Task changed, expired or was already submitted.', true);
 }

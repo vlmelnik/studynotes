@@ -39,7 +39,13 @@ test('Cowork discovery, invited pinned read, scoped upload and receipt over HTTP
   assert.equal((await call('read_context', { ...receipt, path: 'AGENTS.md' })).data.content, 'Project instructions');
   assert.equal((await call('read_context', { ...receipt, path: '.git/config' })).error, true);
   const upload = { ...receipt, files: [{ path, content: '# Test guide' }], report: 'Requested offline tests.' };
-  assert.equal((await call('submit_work', { ...upload, report: receipt.token })).error, true);
+  const oversized = await call('submit_work', { ...upload, report: 'é'.repeat(601) });
+  assert.equal(oversized.error, true);
+  assert.match(oversized.data, /1200 UTF-8 bytes/);
+  const privateReport = await call('submit_work', { ...upload, report: receipt.token });
+  assert.equal(privateReport.error, true);
+  assert.match(privateReport.data, /Private receipt/);
+  assert.ok(!privateReport.data.includes(receipt.token));
   assert.equal((await call('submit_work', upload)).data.status, 'queued');
   assert.equal((await call('submit_work', upload)).data.status, 'queued');
   assert.equal((await call('check_status', { ...receipt, token: 'bad' })).error, true);
