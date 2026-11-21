@@ -17,9 +17,17 @@ const tools = [
   tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt, true),
 ];
 const publicTools = [
-  tool('take_next_task', 'Claim one ready StudyNotes task. No invitation required. Call once and keep the receipt private.', {}),
+  tool('take_next_task', 'Claim one ready StudyNotes task. No invitation required. Claim one task at a time and keep the receipt private.', {}),
   tool('release_task', 'Release an unfinished claim using its private receipt.', receipt),
 ];
+const sessionInstructions = [
+  'For an open contribution session, finish and submit one task at a time. Keep routine updates and per-task handoffs out of chat.',
+  'After a confirmed queue entry or draft, consult the usage information available in the client before claiming again.',
+  'Continue while enough allowance remains to finish another task within the budget set by the participant. Respect explicit task or spending limits.',
+  'If remaining allowance is unknown, stop after the current submission. Stop on no_ready_task or limit_reached. Never poll for a quota reset.',
+  'At the end send one short message in the language used by the participant. Thank them for contributing their tokens (the party is proud of you!) and name the features submitted for review. If nothing was submitted, simply say why.',
+  'If a failure persists, provide one report the participant can forward to the maintainer: task, failed step, safe error, attempts, tests, last confirmed status, saved work and next action. Exclude receipts, tokens and private files.',
+].join(' ');
 const versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const context = ['AGENTS.md', 'package.json', '.github/workflows/ci.yml'];
 async function publicFile(base, path) {
@@ -51,7 +59,7 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
   switch (message.method) {
     case 'initialize': return reply({
       protocolVersion: versions.includes(params?.protocolVersion) ? params.protocolVersion : versions[0],
-      capabilities: { tools: {} }, serverInfo: { name: 'StudyNotes', version: '1.0' },
+      instructions: sessionInstructions, capabilities: { tools: {} }, serverInfo: { name: 'StudyNotes', version: '1.0' },
     });
     case 'ping': return reply({});
     case 'tools/list': return reply({ tools: available });
@@ -65,7 +73,8 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
       !spec.inputSchema.required.every(key => Object.hasOwn(args, key) &&
         (key === 'files' ? Array.isArray(args[key]) : typeof args[key] === 'string'))) return error(-32602, 'Invalid tool arguments');
   const describe = (claim, task) => output({ ...claim, instructions: task.instructions, paths: task.paths,
-    submissionGuide: 'Keep the receipt in this session and use its id and token only as tool arguments. Read pinned AGENTS.md. Submit the full changed files and a short English report under 1200 UTF-8 bytes. If validation rejects the submission, correct the reported issue and retry the real files yourself. After an uncertain network response, check_status before retrying. Stop on a draft link or queued status. If blocked, preserve the files for the participant.',
+    submissionGuide: 'Keep the receipt in this session and use its id and token only as tool arguments. Read pinned AGENTS.md. Submit the full changed files and a short English report under 1200 UTF-8 bytes. If validation rejects the submission, correct the reported issue and retry the real files yourself. After an uncertain network response, check_status before retrying. If blocked, preserve the files for the participant.',
+    sessionInstructions: spec.name === 'take_next_task' ? sessionInstructions : 'Complete only this invited task.',
     readable: [...new Set([...context, ...(task.context || []), ...task.paths])] });
   if (spec.name === 'take_next_task') {
     if (!source) return output('Public intake unavailable.', true);

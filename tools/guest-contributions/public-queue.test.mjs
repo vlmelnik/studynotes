@@ -51,3 +51,23 @@ test('released claims count towards rolling quotas and expired claims free the t
   assert.equal(c.status, 'claimed');
   assert.equal(queue.takeNext(tasks, base, 'another', c.expiresAt + 1).status, 'claimed');
 });
+test('one source can continue after a confirmed submission without waiting for merge', async t => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  const tasks = readTasks([task('one'), task('two')]);
+  const options = { queue, tasks, head: async () => base, openQueue: true, source: 'one contributor' };
+  const call = async (name, args = {}) => {
+    const response = await mcp({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, options);
+    assert.equal(response.result.isError, false);
+    return JSON.parse(response.result.content[0].text);
+  };
+  for (const id of ['one', 'two']) {
+    const claim = await call('take_next_task');
+    assert.equal(claim.task, 'sn-' + id);
+    assert.match(claim.sessionInstructions, /allowance is unknown/);
+    const result = await call('submit_work', { id: claim.id, token: claim.token,
+      files: [{ path: claim.paths[0], content: 'Completed task.' }], report: 'Verified.' });
+    assert.equal(result.status, 'queued');
+  }
+  assert.equal((await call('take_next_task')).status, 'no_ready_task');
+});
