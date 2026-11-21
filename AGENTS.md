@@ -51,4 +51,6 @@ never pushed. If it exists:
 
 ## External contributions via MCP
 
-When asked to take the next StudyNotes contribution, use the configured StudyNotes MCP connector and follow [the shared participant prompt](docs/contributions/COWORK.md). Keep receipts private and submit through the connector for maintainer review.
+When a participant asks to work on ready tasks, use the StudyNotes connector to claim, complete and submit one task at a time. Keep receipts private and leave merging to the maintainer.
+
+After a confirmed submission, check the remaining model allowance if the client exposes it. Claim another task only when there is enough to finish it within the participant's budget. If the balance is unknown or insufficient, the queue is empty, or the service limit is reached, end the session. Honor explicit limits such as a request for a single task. See the [participant guide](docs/contributions/COWORK.md) for setup and handoff details.
