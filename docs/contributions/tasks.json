@@ -248,5 +248,63 @@
       "src/shared/util.js",
       "src/shared/scan-blocks.js"
     ]
+  },
+  {
+    "id": "sn-zoom-easing",
+    "title": "Scroll and zoom: frame-rate independent zoom easing and wheel input",
+    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/zoom-motion.js. (1) easeZoom(current, target, dtMs, tauMs = 60): the next zoom after dtMs milliseconds,\nmoving geometrically (in log space) towards target so that the remaining log distance shrinks by exp(-dt/tau); returns\ntarget when the remaining ratio is within 0.4 %. Same result whether a 120 ms move is done in 2, 8 or 15 steps (within\n1e-9 in log space). dtMs is clamped to 0..100 (a stalled tab must not jump). (2) wheelZoomFactor({ deltaY, deltaMode,\nctrlKey }): factor for one wheel event: deltaMode 1 (lines) exp(-deltaY * 0.05), pixels exp(-deltaY * 0.0025), the result\nclamped to 0.5..2 per event. (3) isTouchpadPinch(e): true for pixel-mode events with |deltaY| < 40 (pinches send many tiny\ndeltas and must be followed directly, not animated). (4) clampZoom(z) to 0.1..8. Tests in\ntest/unit/shared/zoom-motion.test.js: step-count independence, convergence time for factor 2 at tau 60 ms (state it),\nclamping, line and pixel wheel events, touchpad detection. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/zoom-motion.js",
+      "test/unit/shared/zoom-motion.test.js",
+      "docs/NOTES-PERFORMANCE.md"
+    ],
+    "chain": "performance"
+  },
+  {
+    "id": "sn-zoom-anchor",
+    "title": "Scroll and zoom: keep the point under the cursor fixed while zooming",
+    "instructions": "Requires sn-zoom-easing merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Extend src/shared/zoom-motion.js with anchorScroll({ zoom, newZoom, scrollLeft, scrollTop, pointX, pointY, pageX, pageY }):\npages are laid out at pageX/pageY (screen units at the current zoom, scaled linearly with zoom, page positions given for\nzoom 1 as layoutX/layoutY: pageX = layoutX * zoom + gapX, pageY = layoutY * zoom + gapY, gaps fixed in screen pixels);\nthe point under the cursor (pointX/pointY relative to the scroller's top-left) must stay under the cursor after the zoom.\nReturn { scrollLeft, scrollTop } for newZoom, never negative. Document the formula in a comment. Tests: zoom in and out\naround the centre, a corner, a point on the second page with a fixed gap between pages, and a round trip (zoom 1 -> 3 -> 1\nreturns to the start within half a pixel). Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/zoom-motion.js",
+      "test/unit/shared/zoom-motion.test.js",
+      "docs/NOTES-PERFORMANCE.md"
+    ],
+    "chain": "performance",
+    "after": [
+      "sn-zoom-easing"
+    ]
+  },
+  {
+    "id": "sn-render-plan",
+    "title": "Scroll and zoom: decide which pages to render, how sharp, in which order",
+    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/render-plan.js with planRender(state). state: { pages: [{ index, top, height, width }] (screen px at the\ncurrent zoom), viewTop, viewHeight, zoom, dpr, moving: boolean (scroll or zoom gesture in progress), velocityY (px per ms,\n+ = down), cached: { [index]: scale }, maxCanvasPx: 16e6 }. Return an ordered list [{ index, scale, reason }]:\npages intersecting the view first (by distance of their centre to the view centre), then up to 2 pages ahead in the\ndirection of motion (velocity sign; both directions when |velocityY| < 0.05), then 1 page behind. Target scale =\nzoom * dpr, reduced so width*height*scale^2 <= maxCanvasPx. While moving: a page with any cached bitmap is skipped (the\nstretched bitmap is shown), and pages without one get scale * 0.5 (fast preview, reason 'preview'). When not moving: a page\nis listed only if its cached scale is outside 0.97..1.04 of the target (reason 'sharp'). Never list a page twice. Tests in\ntest/unit/shared/render-plan.test.js for each rule, including a fast fling (velocity 3) and a huge page hitting the pixel cap. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/render-plan.js",
+      "test/unit/shared/render-plan.test.js",
+      "docs/NOTES-PERFORMANCE.md"
+    ],
+    "chain": "performance"
+  },
+  {
+    "id": "sn-bitmap-cache",
+    "title": "Scroll and zoom: a pixel-budget cache that evicts the right bitmaps",
+    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/bitmap-cache.js exporting class PixelCache(budget, { onEvict }). Rendered pages are canvases; this pure\nclass only does the bookkeeping by key with { px (pixels), scale, value }. set(key, value, px, scale) replaces an entry\n(calling onEvict for the old value unless it is the same value); get(key) marks it recently used; has, delete, clear (onEvict\nfor all), size, used. When used > budget: evict entries not in the protected set (protect(keys) - the pages on screen) by\noldest use first; never evict a protected entry, even if that leaves the cache over budget (report it with overBudget()).\nAn entry larger than the whole budget is not stored (onEvict called at once, set returns false). Tests in\ntest/unit/shared/bitmap-cache.test.js: LRU order, protection, oversize entries, replacing with the same value, clear. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/bitmap-cache.js",
+      "test/unit/shared/bitmap-cache.test.js",
+      "docs/NOTES-PERFORMANCE.md"
+    ],
+    "chain": "performance"
+  },
+  {
+    "id": "sn-scroll-velocity",
+    "title": "Scroll and zoom: a small velocity tracker for prefetching",
+    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/scroll-velocity.js with createVelocityTracker({ windowMs = 120 }): add(t, y) records the scroll position y at\ntime t (ms, increasing); velocity(t) returns px per ms from a least-squares line through the samples of the last windowMs\n(0 with fewer than 2 samples, or when the newest sample is older than windowMs at time t - the scroll has stopped);\nreset(). Keep at most 32 samples. Tests in test/unit/shared/scroll-velocity.test.js: steady scrolling, a stop, a reversal,\nirregular timestamps, many samples. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/scroll-velocity.js",
+      "test/unit/shared/scroll-velocity.test.js",
+      "docs/NOTES-PERFORMANCE.md"
+    ],
+    "chain": "performance"
   }
 ]
