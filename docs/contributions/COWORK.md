@@ -29,7 +29,7 @@ Organization settings may require an administrator to enable custom connectors.
 
 Paste this prompt once per public contribution session:
 
-> Help StudyNotes with ready tasks while my allowance permits.
+> Use the StudyNotes connector to work on ready tasks.
 
 Read pinned AGENTS.md for each claim. Send test results and a brief English handoff with each submission. Keep routine progress in the submission. After the connector confirms a queue entry or draft, check the host's usage indicator before claiming again. If the host does not expose the remaining allowance, finish the current task and stop. An empty queue or service quota also ends the session. An explicit request for a single task or an invited task ends after that task.
 
