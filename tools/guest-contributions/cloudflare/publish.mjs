@@ -1,9 +1,9 @@
-import { botPrefix, submission } from '../policy.mjs';
+import { resolveTask, botPrefix, submission } from '../policy.mjs';
 
 export async function publish(queue, github, tasks, job) {
   const branch = botPrefix + job.task + '/' + job.id;
   const reject = reason => queue.finish(job.id, 'rejected', reason);
-  const data = submission(tasks.get(job.task) || { paths: [] }, JSON.parse(job.payload));
+  const data = submission(resolveTask(tasks, job.task) || { paths: [] }, JSON.parse(job.payload));
   if (!data) return reject('Task scope changed.');
   const existing = await github.findPull(branch);
   if (existing) {

@@ -1,4 +1,4 @@
-import { baseBranch, botPrefix, submission } from './policy.mjs';
+import { resolveTask, baseBranch, botPrefix, submission } from './policy.mjs';
 import { InvalidChange, prepareCommit } from './git.mjs';
 
 export function createWorker({ queue, tasks, github, repository, validate }) {
@@ -28,7 +28,7 @@ export function createWorker({ queue, tasks, github, repository, validate }) {
       const existing = await github.findPull(branch);
       if (existing) return recordPull(existing);
     }
-    const submitted = submission(tasks.get(job.task) || { paths: [] }, JSON.parse(job.payload));
+    const submitted = submission(resolveTask(tasks, job.task) || { paths: [] }, JSON.parse(job.payload));
     if (!submitted) return queue.finish(job.id, 'rejected', 'Task scope changed or is no longer enabled.');
     const stale = () => queue.finish(job.id, 'stale', 'Main changed. Ask for a fresh invitation.');
     if (await github.head() !== job.base) return stale();

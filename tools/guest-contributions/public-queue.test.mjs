@@ -19,8 +19,7 @@ test('public claims respect private tasks, overlapping paths, quotas, dependenci
   };
   const first = await take('A');
   assert.equal(first.task, 'sn-first');
-  assert.equal((await take('A')).status, 'limit_reached');
-  assert.equal((await take('B')).task, 'sn-other');
+  assert.equal((await take('A')).task, 'sn-other');
   assert.equal((await take('C')).status, 'no_ready_task');
   queue.finish(first.id, 'merged');
   const overlap = await take('C');
@@ -70,4 +69,41 @@ test('one source can continue after a confirmed submission without waiting for m
     assert.equal(result.status, 'queued');
   }
   assert.equal((await call('take_next_task')).status, 'no_ready_task');
+});
+
+test('a second contributor resumes the saved work after expiry and can claim a scoped finding', async t => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  const tasks = readTasks([task('first', { chain: 'clipboard' }), task('second')]);
+  const options = { queue, tasks, head: async () => base, openQueue: true, source: 'shared egress' };
+  async function call(name, args = {}) {
+    const response = await mcp({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, options);
+    return { error: response.result.isError, value: JSON.parse(response.result.content[0].text) };
+  }
+  const first = (await call('take_next_task')).value;
+  const second = (await call('take_next_task')).value;
+  assert.equal(second.task, 'sn-second');
+  assert.ok(first.readable.includes('src/renderer/editor-objects.js'));
+  const receipt = { id: first.id, token: first.token };
+  const files = [{ path: first.paths[0], content: 'Draft' }];
+  assert.ok((await call('save_progress', { ...receipt, files, report: first.token })).error);
+  assert.ok((await call('save_progress', { ...receipt, files: [{ path: 'README.md', content: 'x' }], report: 'scope' })).error);
+  assert.equal((await call('save_progress', { ...receipt, files, report: 'Recheck ordering.' })).value.status, 'saved');
+  const finding = { ...receipt, evidence: 'A boundary test loses the last cell; verify empty final rows.' };
+  const review = (await call('record_finding', finding)).value.task;
+  assert.equal((await call('record_finding', finding)).value.task, review);
+  assert.equal((await call('submit_work', { id: second.id, token: second.token,
+    files: [{ path: second.paths[0], content: 'Complete' }], report: '' })).value.status, 'queued');
+  const resumed = queue.takeNext(tasks, base, 'shared egress', first.expiresAt);
+  assert.equal(resumed.task, first.task);
+  assert.deepEqual(resumed.previousWork, { base, files, report: 'Recheck ordering.' });
+  assert.ok((await call('save_progress', { ...receipt, files, report: 'Late edit.' })).error);
+  const next = (await call('take_next_task')).value;
+  assert.equal(next.task, review);
+  assert.equal(next.evidence, finding.evidence);
+  assert.ok(next.readable.includes(first.paths[0]));
+  assert.ok(!next.paths.includes(first.paths[0]));
+  assert.ok((await call('record_finding', { id: next.id, token: next.token, evidence: 'Recursive' })).error);
+  assert.equal((await call('submit_work', { id: next.id, token: next.token,
+    files: [{ path: next.paths[0], content: 'Verified finding.' }], report: 'Verified.' })).value.status, 'queued');
 });

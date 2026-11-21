@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { isClaimToken, maximumBody, repository, shaPattern, submission, verifyInvite } from './policy.mjs';
+import { resolveTask, isClaimToken, maximumBody, repository, shaPattern, submission, verifyInvite } from './policy.mjs';
 
 import { mcp } from './mcp.mjs';
 
@@ -90,7 +90,7 @@ export function createApi(options) {
         return code === 200 ? send(200, { status: 'cancelled' }) : send(code);
       }
       if (req.method !== 'POST') return send(404);
-      const task = tasks.get(claim.task);
+      const task = resolveTask(tasks, claim.task);
       if (!task) return send(409);
       const data = submission(task, await jsonBody(req));
       if (!data) return send(400);
