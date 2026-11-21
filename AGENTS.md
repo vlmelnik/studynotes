@@ -10,6 +10,10 @@ by both (and later by Android) `src/shared`. Data format and migrations:
 `src/shared/format.js`.
 
 ## Private development notes (not in this repository)
+For public roadmap priorities, backlog items and engineering lessons, read
+[the contribution plan](docs/contributions/PLANNING.md) before defining queue tasks.
+Check the task catalog and merged PRs for current implementation status.
+
 The plan, the handoff between sessions, lessons and task history live in
 `dev-notes/` in the developer's local checkout. The folder is git-ignored and
 never pushed. If it exists:

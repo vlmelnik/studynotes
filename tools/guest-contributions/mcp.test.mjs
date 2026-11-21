@@ -36,6 +36,10 @@ test('Cowork discovery, invited pinned read, scoped upload and receipt over HTTP
   const claim = (await call('claim_task', args)).data;
   assert.equal((await call('claim_task', args)).error, true);
   const receipt = { id: claim.id, token: claim.token };
+  const plan = 'docs/contributions/PLANNING.md';
+  assert.ok(claim.readable.includes(plan));
+  assert.equal((await call('read_context', { ...receipt, path: plan })).data.path, plan);
+  assert.equal((await call('read_context', { ...receipt, path: 'dev-notes/todo.md' })).error, true);
   assert.equal((await call('read_context', { ...receipt, path: 'AGENTS.md' })).data.content, 'Project instructions');
   assert.equal((await call('read_context', { ...receipt, path: '.git/config' })).error, true);
   const upload = { ...receipt, files: [{ path, content: '# Test guide' }], report: 'Requested offline tests.' };
