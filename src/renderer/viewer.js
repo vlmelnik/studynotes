@@ -423,10 +423,23 @@ export class Viewer {
     this.scheduleUpdate();
   }
 
+  // Moving the window to a screen with another pixel density re-renders
+  // sharply. The listener is removed in destroy(): a media query with a live
+  // listener stays alive with the page and would keep this viewer – and the
+  // whole closed notebook with its PDF and canvases – in memory.
   watchDpr() {
+    this.unwatchDpr();
+    if (this.destroyedViewer) return;
     const mq = window.matchMedia(`(resolution: ${dpr()}dppx)`);
-    const onChange = () => { this.invalidateAll(); this.watchDpr(); };
+    const onChange = () => { this._dprWatch = null; this.invalidateAll(); this.watchDpr(); };
     mq.addEventListener('change', onChange, { once: true });
+    this._dprWatch = { mq, onChange };
+  }
+
+  unwatchDpr() {
+    if (!this._dprWatch) return;
+    this._dprWatch.mq.removeEventListener('change', this._dprWatch.onChange);
+    this._dprWatch = null;
   }
 
   mount(parent) {
@@ -866,7 +879,11 @@ export class Viewer {
   }
 
   destroy() {
+    this.destroyedViewer = true;
     this.resizeObs.disconnect();
+    this.unwatchDpr();
+    cancelAnimationFrame(this._raf); this._raf = 0;
+    clearTimeout(this._zoomTimer); clearTimeout(this._scrollIdle);
     this._zAnim = null;
     for (const v of this.views.values()) v.destroy();
     this.views.clear();
