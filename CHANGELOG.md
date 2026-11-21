@@ -3,6 +3,7 @@
 ## 1.7.0
 
 **New (not released yet)**
+- Fix: every closed notebook stayed in memory with all its pages and pictures until the app was restarted. After opening and closing notebooks for a while, scrolling, zooming and drawing became slow. Closed notebooks are now freed.
 - Text recognition uses as many readers side by side as the computer carries (cores and free memory; eight at most) instead of three.
 - Make text editable: the short last line of a paragraph is no longer lost; headings a little larger than the text are judged bold by the same measure.
 - Make text editable: the blocks of a page (paragraph, table cell, heading, column) are found in the picture first, then every block is read on its own, several at a time. Table cells stay whole and are never joined across a border; a justified paragraph gets the same letter size as the rest; lines of one block keep one typeface. (Photos with shadows are read as before.)
