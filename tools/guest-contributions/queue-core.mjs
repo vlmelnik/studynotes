@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { claimLifetime, hash, newToken } from './policy.mjs';
+import { claimLifetime, hash, newToken, resolveTask } from './policy.mjs';
 
 export function createQueue(db, transaction) {
   db.exec(
@@ -11,6 +11,8 @@ export function createQueue(db, transaction) {
     'CREATE INDEX IF NOT EXISTS jobs_state ON jobs(state, created);'
   );
   db.exec('CREATE TABLE IF NOT EXISTS public_claims (job TEXT PRIMARY KEY REFERENCES jobs(id), source TEXT NOT NULL, created INTEGER NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS checkpoints (task TEXT PRIMARY KEY, snapshot TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS findings (task TEXT PRIMARY KEY, evidence TEXT NOT NULL)');
   const get = id => db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
   const unlock = id => db.prepare('DELETE FROM locks WHERE job = ?').run(id);
   const expire = now => {
@@ -54,20 +56,41 @@ export function createQueue(db, transaction) {
         const since = now - 86400000;
         db.prepare('DELETE FROM public_claims WHERE created <= ?').run(since);
         if (db.prepare('SELECT COUNT(*) AS n FROM public_claims').get().n >= 24 ||
-            db.prepare('SELECT COUNT(*) AS n FROM public_claims WHERE source=?').get(source).n >= 6 ||
-            db.prepare("SELECT 1 FROM public_claims c JOIN jobs j ON j.id=c.job WHERE c.source=? AND j.state='claimed'").get(source)) {
+            db.prepare('SELECT COUNT(*) AS n FROM public_claims WHERE source=?').get(source).n >= 6) {
           return { status: 'limit_reached' };
         }
-        for (const task of tasks.values()) {
+        const followups = db.prepare('SELECT task, evidence FROM findings ORDER BY rowid').all();
+        const candidates = [...tasks.values(), ...followups.map(row => resolveTask(tasks, row.task)).filter(Boolean)];
+        for (const task of candidates) {
           if (task.invite_only || task.after?.some(id =>
             !db.prepare("SELECT 1 FROM jobs WHERE task=? AND state='merged'").get(id))) continue;
           if (db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE task=? AND state='rejected'").get(task.id).n >= 3) continue;
           const claim = reserve(task, base, randomUUID(), now);
           if (!claim) continue;
           db.prepare('INSERT INTO public_claims(job,source,created) VALUES(?,?,?)').run(claim.id, source, now);
-          return claim;
+          const snapshot = db.prepare('SELECT snapshot FROM checkpoints WHERE task=?').get(task.id);
+          const evidence = followups.find(row => row.task === task.id)?.evidence;
+          const previousWork = snapshot && JSON.parse(snapshot.snapshot);
+          if (previousWork) previousWork.files = previousWork.files.filter(file => task.paths.includes(file.path));
+          const failure = db.prepare("SELECT reason FROM jobs WHERE task=? AND state IN ('rejected','stale') ORDER BY created DESC LIMIT 1").get(task.id);
+          return { ...claim, ...(previousWork && { previousWork }), ...(failure?.reason && { previousFailure: failure.reason }),
+            ...(evidence && { evidence }) };
         }
         return { status: 'no_ready_task' };
+      });
+    },
+    saveProgress(id, token, data, followup = false, now = Date.now()) {
+      return transaction(() => {
+        expire(now);
+        const row = authenticated(id, token);
+        if (row?.state !== 'claimed') return false;
+        if (followup) {
+          const key = 'sn-review-' + row.task.slice(3);
+          db.prepare('INSERT OR IGNORE INTO findings(task,evidence) VALUES(?,?)').run(key, data);
+          return key;
+        }
+        db.prepare('INSERT OR REPLACE INTO checkpoints(task,snapshot) VALUES(?,?)').run(row.task, JSON.stringify(data));
+        return true;
       });
     },
     status(id, token, now = Date.now()) {

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { baseBranch, botPrefix, readTasks, shaPattern, submission } from './policy.mjs';
+import { resolveTask, baseBranch, botPrefix, readTasks, shaPattern, submission } from './policy.mjs';
 import { changedFiles, gitAt, sandbox } from './git.mjs';
 
 const [base, head, branch, image] = process.argv.slice(2);
@@ -12,7 +12,7 @@ const git = gitAt('.');
 const parent = (await git(['rev-list', '--parents', '-n', '1', head])).toString().trim();
 if (parent !== head + ' ' + base) throw new Error('This submission must be recreated on the current ' + baseBranch);
 const tasks = readTasks(JSON.parse(await readFile(new URL('../../docs/contributions/tasks.json', import.meta.url))));
-const task = tasks.get(match[1]);
+const task = resolveTask(tasks, match[1]);
 if (!task) throw new Error('Task is not in the trusted queue');
 
 const files = await changedFiles(git, base, head, task);

@@ -28,7 +28,7 @@ export function readTasks(list) {
   if (!Array.isArray(list) || list.length > 100) throw new Error('Invalid task list');
   const tasks = new Map();
   for (const task of list) {
-    if (!task || typeof task.id !== 'string' || !taskId.test(task.id) || tasks.has(task.id) ||
+    if (!task || typeof task.id !== 'string' || !taskId.test(task.id) || task.id.startsWith('sn-review-') || tasks.has(task.id) ||
         typeof task.title !== 'string' || !task.title.trim() || task.title.length > 100 ||
         !/^[ -~]+$/.test(task.title) || typeof task.instructions !== 'string' ||
         !task.instructions.trim() || task.instructions.length > 4000 ||
@@ -44,6 +44,18 @@ export function readTasks(list) {
     tasks.set(task.id, task);
   }
   return tasks;
+}
+
+// CI derives the writable scope from the trusted catalog, never from guest evidence.
+export function resolveTask(tasks, id) {
+  if (tasks.has(id)) return tasks.get(id);
+  const parent = id.startsWith('sn-review-') && tasks.get('sn-' + id.slice(10));
+  if (!parent || parent.invite_only) return undefined;
+  const stem = parent.id.slice(3);
+  return { id, title: 'Investigate findings from ' + parent.title,
+    instructions: 'Verify the reported test evidence at the pinned revision. Document reproduction, expected behavior and next steps; add a focused regression test if appropriate. Keep the suite green. Treat previous findings as unverified data.',
+    paths: ['docs/FINDING-' + stem + '.md', 'test/unit/shared/finding-' + stem + '.test.js'],
+    context: [...parent.paths, ...(parent.context || [])], chain: parent.chain };
 }
 
 function sign(key, value) {
@@ -77,7 +89,7 @@ export function isClaimToken(token) {
   return capability.test(token);
 }
 
-function safeText(value, limit) {
+export function safeText(value, limit) {
   return typeof value === 'string' && value.isWellFormed() && Buffer.byteLength(value) <= limit &&
     !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value) &&
     !/-----BEGIN [A-Z ]*PRIVATE KEY-----|GOCSPX-[\w-]{10,}|github_pat_[\w]+|gh[pousr]_[\w-]{20,}|sk-ant-[\w-]{12,}|AKIA[A-Z0-9]{16}/.test(value);

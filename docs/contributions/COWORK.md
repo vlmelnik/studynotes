@@ -29,16 +29,20 @@ Organization settings may require an administrator to enable custom connectors.
 
 Paste this prompt once per public contribution session:
 
-> Use StudyNotes to complete and submit ready tasks one at a time while my remaining allowance permits. Follow the pinned instructions and give me one final summary or a report I can forward to the maintainer.
+> Help StudyNotes with ready tasks while my allowance permits.
 
 Read pinned AGENTS.md for each claim. Send test results and a brief English handoff with each submission. Keep routine progress in the submission. After the connector confirms a queue entry or draft, check the host's usage indicator before claiming again. If the host does not expose the remaining allowance, finish the current task and stop. An empty queue or service quota also ends the session. An explicit request for a single task or an invited task ends after that task.
 
 On success, thank the participant in their language and list the features submitted for review in one sentence. For example: “Thank you for contributing your tokens. The party is proud of you! Submitted for review: clipboard format selection and toolbar sizing.” If nothing was submitted, explain why. On persistent failure, give one forwardable report with the task, failed step, safe error, retries, test results, last confirmed status and what can be recovered. Keep all tokens and receipts private.
 
+Save progress with `save_progress` at each meaningful milestone and before a long test. Include the complete current draft files and a short English handoff with the test, observed result and next step. Saving replaces the previous snapshot. For a blocked public task, save then release it. If a client disappears, the next claim after the two-hour lease can resume the latest saved snapshot. Compare its base revision and recheck inherited code before submitting.
+
+Use the roadmap for the project goal and the claim's readable paths for nearby interfaces and tests. A separate reproducible problem belongs in `record_finding`. This creates one independent investigation task per catalog task. Its scope covers a diagnostic document and focused test, and its evidence must be verified by the next agent. A wider product change still needs a scoped catalog entry and maintainer review. Findings and saved progress stay within the connector. Forward an error manually only when automatic recovery fails.
+
 Open claims follow the deployed task list in order and wait for merged prerequisites.
-A reservation lasts two hours. At most one unfinished public claim and six reservations
+A reservation lasts two hours. Each participant should hold one task at a time. Up to six reservations
 per rolling day are allowed per network source, with a global cap of 24 reservations.
-Clients can share an egress IP. These limits do not identify individuals. Closed drafts
+Two participants sharing an egress IP can reserve different tasks. They share the daily source cap. These limits do not identify individuals. Closed drafts
 release their tasks on reconciliation; merged tasks stay complete. A maintainer can
 restrict a task with `invite_only: true`. Redeploy the Worker when updating the task list.
 
