@@ -5,14 +5,16 @@ const receipt = { id: string, token: string };
 const schema = properties => ({
   type: 'object', properties, required: Object.keys(properties), additionalProperties: false,
 });
-const tool = (name, description, properties) => ({ name, description, inputSchema: schema(properties) });
+const tool = (name, description, properties, readOnly = false) => ({
+  name, description, inputSchema: schema(properties), annotations: { readOnlyHint: readOnly },
+});
 const tools = [
   tool('claim_task', 'Reserve the invited task. Keep the receipt private.', { task: string, invitation: string }),
-  tool('read_context', 'Read an approved public file at the claimed revision.', { ...receipt, path: string }),
+  tool('read_context', 'Read an approved public file at the claimed revision.', { ...receipt, path: string }, true),
   tool('submit_work', 'Queue the listed complete files and a public report (maximum 1200 UTF-8 bytes) for offline checks and draft PR review.', {
     ...receipt, files: { type: 'array', items: schema({ path: string, content: string }) }, report: string,
   }),
-  tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt),
+  tool('check_status', 'Read validation status or the resulting draft PR URL. Do not poll continuously.', receipt, true),
 ];
 const publicTools = [
   tool('take_next_task', 'Claim one ready StudyNotes task. No invitation required. Call once and keep the receipt private.', {}),
@@ -63,6 +65,7 @@ export async function mcp(message, { queue, tasks, inviteKey, head, readFile = p
       !spec.inputSchema.required.every(key => Object.hasOwn(args, key) &&
         (key === 'files' ? Array.isArray(args[key]) : typeof args[key] === 'string'))) return error(-32602, 'Invalid tool arguments');
   const describe = (claim, task) => output({ ...claim, instructions: task.instructions, paths: task.paths,
+    submissionGuide: 'Keep the receipt in this session and use its id and token only as tool arguments. Read pinned AGENTS.md. Submit the full changed files and a short English report under 1200 UTF-8 bytes. If validation rejects the submission, correct the reported issue and retry the real files yourself. After an uncertain network response, check_status before retrying. Stop on a draft link or queued status. If blocked, preserve the files for the participant.',
     readable: [...new Set([...context, ...(task.context || []), ...task.paths])] });
   if (spec.name === 'take_next_task') {
     if (!source) return output('Public intake unavailable.', true);
