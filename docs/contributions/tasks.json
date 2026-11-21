@@ -306,5 +306,52 @@
       "docs/NOTES-PERFORMANCE.md"
     ],
     "chain": "performance"
+  },
+  {
+    "id": "sn-overlay-bounds",
+    "title": "Reference reader: keep the floating window on screen, snap and resize",
+    "instructions": "Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Add src/shared/overlay-bounds.js. (1) clampBounds(b, displays, opts): b = { x, y, width, height }, displays = [{ x, y,\nwidth, height }] (work areas of all monitors), opts = { minWidth: 240, minHeight: 180, keepVisible: 80 }. Enforce the minimum\nsize, then move the window so at least keepVisible px of its title strip (the top 32 px) lie on some display; if none, put it\non the display nearest its centre (used after a monitor is unplugged). (2) snapBounds(b, display, threshold = 16): edges within\nthreshold of a display edge snap to it. (3) resizeKeepingAspect(b, edge, dx, dy, aspect | null): resize from an edge or corner\n('n','s','e','w','ne','nw','se','sw'); with an aspect (page width / height) the size follows it, the opposite edge or corner\nstays fixed. (4) defaultBounds(display, aspect): a quarter-width window at the right edge, vertically centred, aspect kept.\nTests in test/unit/shared/overlay-bounds.test.js: two monitors side by side, unplugged monitor, snapping, every resize edge\nwith and without aspect, minimum size. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/overlay-bounds.js",
+      "test/unit/shared/overlay-bounds.test.js",
+      "docs/NOTES-READER.md"
+    ],
+    "chain": "reader"
+  },
+  {
+    "id": "sn-split-layout",
+    "title": "Reference reader: split view layout with a draggable, swappable divider",
+    "instructions": "Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Add src/shared/split-layout.js. State: { mode: 'single'|'split', ratio: 0.5, notesSide: 'left'|'right' }. Functions:\nlayout(state, width, { minPane: 280, divider: 6 }) -> { notes: { x, width }, reader: { x, width } | null, divider: { x, width }\n| null }: in split mode the reader takes (1 - ratio) of the width on the side opposite the notes; the ratio is clamped so\nboth panes keep minPane; below 2 * minPane + divider the reader is hidden (reader null, notes full width, state unchanged).\ndragDivider(state, width, x) -> new state with the ratio for a divider dragged to x (clamped as above). swap(state) flips\nnotesSide. paneAt(layoutResult, x) -> 'notes' | 'reader' | 'divider' (wheel scrolling and Ctrl+wheel zoom go to the pane under\nthe pointer). Pure, no mutation. Tests in test/unit/shared/split-layout.test.js: both sides, clamping, narrow window, swap\nround trip, paneAt at the borders. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/split-layout.js",
+      "test/unit/shared/split-layout.test.js",
+      "docs/NOTES-READER.md"
+    ],
+    "chain": "reader"
+  },
+  {
+    "id": "sn-reader-docs",
+    "title": "Reference reader: accept dropped documents and remember where each was left",
+    "instructions": "Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Add src/shared/reader-docs.js. (1) acceptDocs(files, open): files = [{ name, size, type? }] dropped or picked; accept PDFs\n(.pdf or type application/pdf) and images (.png .jpg .jpeg .webp); ignore other files, empty files and files over 500 MB;\nskip documents already open (same name and size); keep the drop order; return { add: [...], skipped: [{ name, reason }] }.\n(2) A per-document view state store: remember(store, docKey, { page, zoom, scrollY, fit }) and recall(store, docKey) with\nat most 50 documents, least recently used dropped first; zoom clamped to 0.1..8, page >= 0; recall of an unknown key returns\n{ page: 0, zoom: null, scrollY: 0, fit: true }. The store is plain JSON (it is saved with the settings). (3) docKey(file)\n= a stable key from name and size (lower-case name). Tests in test/unit/shared/reader-docs.test.js. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/reader-docs.js",
+      "test/unit/shared/reader-docs.test.js",
+      "docs/NOTES-READER.md"
+    ],
+    "chain": "reader"
+  },
+  {
+    "id": "sn-reader-tabs",
+    "title": "Reference reader: tabs for several open documents",
+    "instructions": "Requires sn-reader-docs merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Requires the reader-docs module. Extend src/shared/reader-docs.js with a tab model: openTabs(state, docs) appends new tabs\nand activates the first new one; closeTab(state, key) activates the right neighbour, else the left one, else none;\nmoveTab(state, key, toIndex); nextTab / prevTab wrap around; at most 12 tabs (opening more closes the least recently active,\nnever the active one). State is plain JSON { tabs: [key], active: key | null, used: { key: counter } }. Tests in\ntest/unit/shared/reader-docs.test.js. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "paths": [
+      "src/shared/reader-docs.js",
+      "test/unit/shared/reader-docs.test.js",
+      "docs/NOTES-READER.md"
+    ],
+    "chain": "reader",
+    "after": [
+      "sn-reader-docs"
+    ]
   }
 ]
