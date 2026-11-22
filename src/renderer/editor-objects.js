@@ -8,6 +8,7 @@ import { richToPlain } from '../shared/richtext.js';
 import { LINE_H, escHtml } from '../shared/util.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
 import { stacked } from '../shared/stacking.js';
+import { clipPlan } from '../shared/clip-plan.js';
 import { boxWarp, cssMatrix3d, validStops } from '../shared/warp.js';
 import { boxStyle, docLook, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
 import { renderFormFields } from './fill-sign.js';
@@ -1049,13 +1050,32 @@ export const objectsMixin = {
     this.app.clip = { ...clip, rel: this.rel };
   },
 
-  writeClipboardMarker() {
+  // The system clipboard gets what other programs can use (clipPlan): a lone
+  // picture as itself, anything else as a picture of how it looks, plus its
+  // text. Our own paste recognises the clip by an HTML comment with its stamp.
+  async writeClipboardMarker() {
     const c = this.app.clip;
     if (!c) return;
-    // Plain text of the copied text boxes, followed by an invisible marker
-    // that tells our paste handler to use the internal clipboard.
-    const text = (c.texts || []).map((t) => t.text).join('\n');
-    navigator.clipboard.writeText(text + MARKER + c.stamp).catch(() => {});
+    const plan = clipPlan({ items: [...(c.strokes || []).map(() => ({ type: 'stroke' })), ...(c.texts || []).map((t) => ({ type: 'text', x: t.x, y: t.y, text: richToPlain(t.html || '') || t.text })), ...(c.items || [])], bbox: c.bbox && { w: c.bbox[2] - c.bbox[0], h: c.bbox[3] - c.bbox[1] }, zoom: this.viewer.zoom });
+    const tag = `<!--${MARKER.slice(1)}${c.stamp}-->`;
+    const out = { text: plan.text, html: tag };
+    try {
+      if (plan.png && plan.png.mode === 'original') {
+        out.png = new Uint8Array(await (await fetch(this.assetUrl(c.items[0].src))).arrayBuffer());
+      } else if (plan.png) {
+        // shortcut: a screenshot of the selection as shown (screen resolution, only its visible part); render off screen if sharper copies are wanted
+        const index = this.pages.findIndex((p) => p.id === c.pageId);
+        const pr = index >= 0 && this.viewer.pageClientRect(index), sr = this.viewer.scroller.getBoundingClientRect(), z = this.viewer.zoom, pad = 4;
+        if (pr) {
+          const x0 = Math.max(sr.left, pr.left + c.bbox[0] * z - pad), y0 = Math.max(sr.top, pr.top + c.bbox[1] * z - pad);
+          const x1 = Math.min(sr.right, pr.left + c.bbox[2] * z + pad), y1 = Math.min(sr.bottom, pr.top + c.bbox[3] * z + pad);
+          if (x1 > x0 && y1 > y0) out.rect = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+        }
+        // (the selection frame was just removed: let the page draw without it)
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      }
+    } catch { /* text only */ }
+    await window.api.copyToClipboard(out).catch(() => navigator.clipboard.writeText(plan.text).catch(() => {}));
   },
 
   async onPaste(e) {
@@ -1091,8 +1111,9 @@ export const objectsMixin = {
   async pasteData({ text, html, files }) {
     const point = this.tools.pastePoint();
     // 1. Our own objects (copied in StudyNotes).
-    const mi = text.indexOf(MARKER);
-    if (mi >= 0 && this.app.clip && text.slice(mi + MARKER.length) === String(this.app.clip.stamp)) {
+    // (older versions put the marker into the plain text)
+    const mark = MARKER.slice(1) + (this.app.clip && this.app.clip.stamp);
+    if (this.app.clip && (html.includes(`<!--${mark}-->`) || text.endsWith(MARKER + this.app.clip.stamp))) {
       await this.pasteInternalClip(this.app.clip);
       return;
     }

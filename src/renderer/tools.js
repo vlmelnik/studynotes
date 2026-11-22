@@ -1417,16 +1417,19 @@ export class Tools {
   copyAndDeselect() {
     if (!this.copy()) return false;
     this.clearSelection();
+    this.editor.writeClipboardMarker();
     return true;
   }
 
   cut() {
+    const sel = this.sel;
     if (!this.copy()) return;
-    this.deleteSelection();
+    this.clearSelection(true);
+    this.editor.writeClipboardMarker().finally(() => this.deleteSelection(sel));
   }
 
-  deleteSelection() {
-    const sel = this.sel;
+  // (sel: a selection that was already let go, see Ctrl+X)
+  deleteSelection(sel = this.sel) {
     if (!sel) return;
     const before = this.editor.pageData(sel.pageId);
     const after = {
@@ -1435,7 +1438,7 @@ export class Tools {
       texts: before.texts.filter((t) => !sel.textIds.has(t.id)),
       items: before.items.filter((it) => !sel.itemIds.has(it.id)),
     };
-    this.clearSelection();
+    if (sel === this.sel) this.clearSelection();
     this.editor.commit(sel.pageId, before, after);
   }
 

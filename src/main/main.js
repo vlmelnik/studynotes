@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, nativeTheme, safeStorage, net, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, ClipboardItem, nativeTheme, safeStorage, net, utilityProcess } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -285,6 +285,23 @@ async function clipboardFilePaths() {
   }
   return [...new Set(files)];
 }
+
+// Copy in StudyNotes: a picture of the selection for other programs (a lone
+// picture as its own bytes, otherwise what the selection shows on screen),
+// its text, and HTML with both plus an HTML comment that tells our own paste
+// to use the internal clip instead.
+handle('clip:write', async ({ png, rect, text, html }) => {
+  let bytes = png ? Buffer.from(png) : null;
+  if (!bytes && rect && win && rect.width >= 1 && rect.height >= 1) {
+    const shot = await win.webContents.capturePage({ x: Math.floor(rect.x), y: Math.floor(rect.y), width: Math.ceil(rect.width), height: Math.ceil(rect.height) });
+    if (!shot.isEmpty()) bytes = shot.toPNG();
+  }
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]).replace(/\n/g, '<br>');
+  const items = { 'text/plain': text || '', 'text/html': (bytes ? `<img src="data:image/png;base64,${bytes.toString('base64')}">` : '') + (text ? `<p>${esc(text)}</p>` : '') + (html || '') };
+  if (bytes) items['image/png'] = new Blob([bytes], { type: 'image/png' });
+  await clipboard.write([new ClipboardItem(items)]);
+  return !!bytes;
+});
 
 handle('clip:files', async () => {
   let files = [];

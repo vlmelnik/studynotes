@@ -1,21 +1,27 @@
 # Changelog
 
-## 1.7.0
+## 1.8.0
 
-**New (not released yet)**
+**Faster and steadier**
 - Fix: every closed notebook stayed in memory with all its pages and pictures until the app was restarted. After opening and closing notebooks for a while, scrolling, zooming and drawing became slow. Closed notebooks are now freed.
 - Text recognition uses as many readers side by side as the computer carries (cores and free memory; eight at most) instead of three.
-- Make text editable: the short last line of a paragraph is no longer lost; headings a little larger than the text are judged bold by the same measure.
-- Make text editable: the blocks of a page (paragraph, table cell, heading, column) are found in the picture first, then every block is read on its own, several at a time. Table cells stay whole and are never joined across a border; a justified paragraph gets the same letter size as the rest; lines of one block keep one typeface. (Photos with shadows are read as before.)
-- Ctrl+C (and the Copy button) copies the selection and then lets it go.
-- Dragging a selection (text, picture, strokes) to the top or bottom edge of the window scrolls the document, so it can be carried to another page.
 
-**Fixes (re-release, 15 Nov 2026, third)**
+**Copy, selection, narrow windows**
+- Copy (Ctrl+C, Ctrl+X, the Copy button) now puts a picture of the selection on the clipboard, so it can be pasted into Word, Paint or a chat; a single picture is copied as itself. Copied text comes along as text. Pasting inside StudyNotes still gives back editable objects.
+- Ctrl+C and the Copy button copy the selection and then let it go.
+- Dragging a selection (text, picture, strokes) to the top or bottom edge of the window scrolls the document, so it can be carried to another page.
+- In a narrow window (for example half the screen) the toolbar buttons no longer run over each other: the ones that do not fit move into "More"; the notebook title shortens.
+
+**Make text editable**
+- The blocks of a page (paragraph, table cell, heading, column) are found in the picture first, then every block is read on its own, several at a time. Table cells stay whole and are never joined across a border; a justified paragraph gets the same letter size as the rest; lines of one block keep one typeface. (Photos with shadows are read as before.)
+- The short last line of a paragraph is no longer lost; headings a little larger than the text are judged bold by the same measure.
 - Blocks follow the page: a table cell of several lines is one box, the next row another one; a question and its answer side by side are no longer read as one line; a number in front of an indented note stays apart from the note.
 - Bold: a few bold words inside a regular line stay bold words (the line is not made bold as a whole); a heading above the text is its own box.
 - Short printed labels (two lines in a frame) are no longer taken for handwriting; a label outside the frame is not pulled into the text.
 - Text of one size gets one size (before, every line was measured on its own and came out a little different).
 - A German or English page no longer gets single "words" in Cyrillic letters ("zur" read as "гиг"); a word read with confidence is not replaced by a similar dictionary word ("Folie" stayed "Folic").
+
+## 1.7.0
 
 **Fixes (re-release, 15 Nov 2026, second)**
 - A text that is bold throughout is now recognised as bold (before, only bold lines next to regular ones were).

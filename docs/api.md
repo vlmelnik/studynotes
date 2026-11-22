@@ -146,6 +146,7 @@ back into the PDF file itself.
 | --- | --- | --- | --- | --- |
 | `screenPixel` | `x`, `y` | colour as `#rrggbb`, or `null` | Captures the window and returns the colour of one pixel (eyedropper). | desktop-only |
 | `clipboardFiles` | none | list of `{ kind, path, name, bytes? }` | Returns image and PDF files copied in the file manager. | desktop-only |
+| `copyToClipboard` | `{ png?, rect?, text, html }` | `true` when a picture was written | Writes a copy to the system clipboard: picture (given PNG bytes or a screenshot of `rect`), text and HTML. | needed |
 | `pathForFile` | `file` (a dropped `File`) | absolute path (synchronous) | Returns the path of a dropped file; runs in the preload script, no handler. | desktop-only |
 
 ## Events (main process to renderer)

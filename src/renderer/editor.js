@@ -19,6 +19,7 @@ import { templatePicker } from './template-picker.js';
 import { PEN_STYLES } from '../shared/ink.js';
 import { FONTS } from '../shared/fonts.js';
 import { makeTextEditable } from './scan-edit.js';
+import { fitToolbar } from '../shared/toolbar-fit.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
 const UNDO_LIMIT = 300;
@@ -490,6 +491,7 @@ export class Editor {
     window.removeEventListener('pointerup', this._onPaintUp, true);
     window.removeEventListener('pointerdown', this._onPaintDown, true);
     if (this._textRO) this._textRO.disconnect();
+    if (this.toolbarRO) this.toolbarRO.disconnect();
     this.tools.unwatchAltKey();
     this.viewer.destroy();
     this.sidebar.destroy();
@@ -528,21 +530,42 @@ export class Editor {
     this.redoBtn = iconButton('redo', 'Redo (Ctrl+Y)', () => this.redo(), 'bar-btn');
     const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, ...this.toolButtons.slice(7));
 
+    // Buttons on the right that move into "More" when the window is narrow
+    // (fitToolbar): lowest rank first. menu: the same action as a menu entry.
+    const opt = (el, rank, label, ic, run) => { if (el) this.foldable.push({ el, rank, label, icon: ic, run }); return el; };
+    this.foldable = [];
+    this.moreBtn = iconButton('more', 'More', (e) => this.moreMenu(e.currentTarget), 'bar-btn');
     const right = h('div', { class: 'tb-right' },
       this.undoBtn, this.redoBtn, h('span', { class: 'tb-sep' }),
-      iconButton('insert', 'Insert picture, table, PDF pages…', (e) => this.insertMenu(e.currentTarget), 'bar-btn'),
-      this.isBoard ? null : h('div', { class: 'split-btn' },
+      opt(iconButton('insert', 'Insert picture, table, PDF pages…', (e) => this.insertMenu(e.currentTarget), 'bar-btn'), 5, 'Insert…', 'insert', () => this.insertMenu(this.moreBtn)),
+      this.isBoard ? null : opt(h('div', { class: 'split-btn' },
         iconButton('addPage', 'Add a page after this one (same style)', () => this.addPageSameStyle(), 'bar-btn'),
-        h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })),
-      this.isBoard ? null : iconButton('scanText', 'Make the text of this page editable (scans, photos, PDFs)', () => this.makePageEditable(this.viewer.currentIndex), 'bar-btn scan-text'),
-      this.isBoard ? null : iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'),
-      iconButton('send', 'Send by e-mail or Telegram', (e) => this.sendMenu(e.currentTarget), 'bar-btn'),
-      iconButton('export', 'Export PDF', (e) => this.exportMenu(e.currentTarget), 'bar-btn'),
-      iconButton('more', 'More', (e) => this.moreMenu(e.currentTarget), 'bar-btn'));
+        h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })), 4, 'Add a page…', 'addPage', () => this.addPageMenu(this.moreBtn)),
+      this.isBoard ? null : opt(iconButton('scanText', 'Make the text of this page editable (scans, photos, PDFs)', () => this.makePageEditable(this.viewer.currentIndex), 'bar-btn scan-text'), 2, 'Make text editable', 'scanText', () => this.makePageEditable(this.viewer.currentIndex)),
+      this.isBoard ? null : opt(iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'), 1, 'Delete this page', 'pageDelete', () => this.deletePage(this.viewer.currentIndex)),
+      opt(iconButton('send', 'Send by e-mail or Telegram', (e) => this.sendMenu(e.currentTarget), 'bar-btn'), 3, 'Send…', 'send', () => this.sendMenu(this.moreBtn)),
+      opt(iconButton('export', 'Export PDF', (e) => this.exportMenu(e.currentTarget), 'bar-btn'), 6, 'Export…', 'export', () => this.exportMenu(this.moreBtn)),
+      this.moreBtn);
     tb.append(left, center, right);
+    this.toolbarRO = new ResizeObserver(() => this.fitToolbarButtons());
+    this.toolbarRO.observe(tb);
 
     this.optionsBar = h('div', { class: 'tool-options' });
     this.updateUndoButtons();
+  }
+
+  // Half a screen wide: the right-hand buttons ran over the tools in the
+  // middle. The two sides share what the middle leaves; buttons that do not
+  // fit on the right go into "More" (undo / redo and "More" always stay).
+  fitToolbarButtons() {
+    const tb = this.topbar, [, center, right] = tb.children;
+    if (!tb.clientWidth) return;
+    for (const f of this.foldable) { f.el.hidden = false; f.w = f.el.offsetWidth + 2; }
+    const fixed = [...right.children].filter((el) => !this.foldable.some((f) => f.el === el)).reduce((sum, el) => sum + el.offsetWidth + 2, 0);
+    const side = (tb.clientWidth - 16 - center.offsetWidth) / 2 - 8;
+    const fit = fitToolbar([{ id: 'right', items: this.foldable.map((f, i) => ({ id: i, w: f.w, rank: f.rank })) }], side - fixed, { gap: 0, minGap: 0, more: 0 });
+    const hidden = new Set(fit.overflow);
+    this.foldable.forEach((f, i) => { f.el.hidden = hidden.has(i); });
   }
 
   updateUndoButtons() {
@@ -1111,7 +1134,10 @@ export class Editor {
 
   moreMenu(anchor) {
     const s = this.settings;
+    const folded = (this.foldable || []).filter((f) => f.el.hidden);
     showMenu([
+      ...folded.map((f) => ({ label: f.label, icon: f.icon, onClick: () => setTimeout(f.run) })),
+      ...(folded.length ? ['sep'] : []),
       { label: this.isBoard ? 'Reset zoom' : 'Fit width', icon: 'fit', onClick: () => this.viewer.fitWidth() },
       { label: 'Actual size (100%)', icon: 'zoomIn', onClick: () => this.viewer.zoomTo(1) },
       'sep',
@@ -1335,8 +1361,8 @@ export class Editor {
       });
       return true;
     }
-    if (ctrl && k === 'c') { if (this.tools.copyAndDeselect()) this.writeClipboardMarker(); return true; }
-    if (ctrl && k === 'x') { if (this.tools.sel) { this.tools.copy(); this.writeClipboardMarker(); this.tools.deleteSelection(); } return true; }
+    if (ctrl && k === 'c') { this.tools.copyAndDeselect(); return true; }
+    if (ctrl && k === 'x') { this.tools.cut(); return true; }
     if (ctrl && k === 'd') return this.tools.duplicate(), true;
     if (ctrl && k === 'g') { if (this.tools.sel) this.tools.group(!e.shiftKey); return true; }
     if (ctrl && k === 'a') return this.selectAll(), true;
