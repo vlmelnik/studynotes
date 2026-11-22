@@ -1,0 +1,54 @@
+name: Build StudyNotes Windows binaries
+on:
+  push:
+    branches: ['build/windows-1.8.0']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: node scripts/notices.js
+      - run: npm run dist:win
+      - name: Verify installer and archive
+        shell: pwsh
+        run: |
+          $installer = Get-Item release/StudyNotes-Setup-1.8.0.exe
+          $archive = Get-Item release/StudyNotes-1.8.0-win-x64.zip
+          7z t $archive.FullName -bso0
+          if ($LASTEXITCODE) { throw 'ZIP integrity check failed' }
+          $dest = Join-Path $env:RUNNER_TEMP 'StudyNotesInstall'
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList '/S',"/D=$dest" -Wait -PassThru
+          if ($proc.ExitCode) { throw "Installer returned $($proc.ExitCode)" }
+          $version = (Get-Item "$dest/StudyNotes.exe").VersionInfo
+          if ($version.ProductVersion -notmatch '^1\.8\.0(?:\.0)?$') { throw "Unexpected installed version $($version.ProductVersion)" }
+          Write-Host "Installed StudyNotes $($version.ProductVersion)"
+          foreach ($file in $installer,$archive) {
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash
+            "$hash  $($file.Name)" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudyNotes-Setup-1.8.0
+          path: release/StudyNotes-Setup-1.8.0.exe
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudyNotes-1.8.0-win-x64
+          path: release/StudyNotes-1.8.0-win-x64.zip
+          compression-level: 0
+          if-no-files-found: error
