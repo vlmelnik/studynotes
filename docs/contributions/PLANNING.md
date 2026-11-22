@@ -20,7 +20,7 @@ Wiring that needs the editor, the viewer or the main process stays with the main
 | Text recognition keeps columns apart | `sn-blocks-ragged` | OCR reference run for three languages | references unchanged or better |
 | Handwriting to typed text | – (decision pending) | recogniser choice, pen switch | – |
 
-Extension tasks are `invite_only` until the host (`src/renderer/extensions.js`) is merged.
+The extension host (`src/renderer/extensions.js`) is in place; `test/e2e/extensions-host.js` shows every hook in use.
 
 ## Android preparation
 

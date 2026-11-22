@@ -335,7 +335,8 @@ handle('lib:trash', async (rel) => {
 });
 handle('lib:search', (q) => searchLibrary(library, q));
 
-handle('lib:export', async (rel, pageIds) => {
+// inline: pictures of extension elements (formulas …) drawn by the renderer
+handle('lib:export', async (rel, pageIds, inline) => {
   const notebook = await library.readNotebook(rel);
   const r = await dialog.showSaveDialog(win, {
     title: tr('Export as PDF'),
@@ -343,32 +344,32 @@ handle('lib:export', async (rel, pageIds) => {
     filters: [{ name: 'PDF', extensions: ['pdf'] }],
   });
   if (r.canceled || !r.filePath) return null;
-  await exportTo(rel, notebook, pageIds, r.filePath);
+  await exportTo(rel, notebook, pageIds, r.filePath, inline);
   shell.showItemInFolder(r.filePath);
   return r.filePath;
 });
 // Export without a dialog: automated tests only (writes to an arbitrary path).
 if (TEST_MODE) {
-  handle('lib:exportTo', async (rel, pageIds, outFile) => {
+  handle('lib:exportTo', async (rel, pageIds, outFile, inline) => {
     const notebook = await library.readNotebook(rel);
-    await exportTo(rel, notebook, pageIds, outFile);
+    await exportTo(rel, notebook, pageIds, outFile, inline);
     return outFile;
   });
 }
 
-async function exportTo(rel, notebook, pageIds, outFile) {
+async function exportTo(rel, notebook, pageIds, outFile, inline = null) {
   // Settings → "Export handwriting as text" (Windows' handwriting recognizer);
   // only for exports, not when a PDF opened from disk is saved back
   const inkTextAll = config.settings.exportInkText ? (groups) => handwriting.recognizeMany(groups, config.settings.inkRecognizer || '') : null;
-  await atomicWrite(outFile, Buffer.from(await buildPdf(rel, notebook, pageIds, undefined, inkTextAll)));
+  await atomicWrite(outFile, Buffer.from(await buildPdf(rel, notebook, pageIds, undefined, inkTextAll, inline)));
 }
 
-async function buildPdf(rel, notebook, pageIds, beforeSave, inkTextAll = null) {
+async function buildPdf(rel, notebook, pageIds, beforeSave, inkTextAll = null, inline = null) {
   const dir = library.abs(rel);
   const ids = await library.listPageFiles(rel);
   const pages = await library.readPages(rel, ids);
   return exportNotebook({
-    notebook, pages, pageIds, beforeSave, inkTextAll,
+    notebook, pages, pageIds, beforeSave, inkTextAll, inline,
     readSource: async (src) => {
       const s = notebook.sources && notebook.sources[src];
       const file = s ? s.file : src === 'main' ? 'source.pdf' : null;

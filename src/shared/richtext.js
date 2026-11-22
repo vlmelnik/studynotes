@@ -34,6 +34,21 @@ function spanStyle(attrs) {
   return st;
 }
 
+const INLINE_KIND = /^[a-z0-9-]+(?::[a-z0-9-]+)?$/;
+function attrOf(attrs, name) {
+  const m = new RegExp(`\\bdata-${name}\\s*=\\s*"([^"]*)"`, 'i').exec(attrs) || new RegExp(`\\bdata-${name}\\s*=\\s*'([^']*)'`, 'i').exec(attrs);
+  return m ? decode(m[1]) : null;
+}
+function inlineOf(attrs) {
+  const x = attrOf(attrs, 'x');
+  if (!x || !INLINE_KIND.test(x)) return null;
+  return { x, v: attrOf(attrs, 'v') || '', disp: attrOf(attrs, 'display') === '1' };
+}
+
+// The export picture of an inline element is looked up by this key (built the
+// same way in the renderer, which draws it, and in the export, which places it).
+const inlineKey = (kind, value, display, fontSize, color) => [kind, value, display ? 1 : 0, Math.round((fontSize || 0) * 100) / 100, (color || '').toLowerCase()].join('|');
+
 // html -> paragraphs: [[{ t, b, i, u, fs?, ff?, c? }]]
 function parseRich(html, base = {}) {
   const paras = [[]];
@@ -50,7 +65,22 @@ function parseRich(html, base = {}) {
   const re = /<(\/?)(b|i|u|br|div|span)\b([^>]*)>|<\/?[a-z][^>]*>|([^<]+)|(<)/gi;
   let m;
   let divOpen = 0;
+  // An extension's inline element (<span data-x="kind" data-v="value">fallback</span>,
+  // docs/EXTENSIONS.md) is one atomic run: its text is the fallback, x / v / disp
+  // tell the export which picture replaces it (runs: ix = kind, iv = value).
+  let inline = null;
   while ((m = re.exec(String(html || '')))) {
+    if (inline) {
+      if (m[2] && m[2].toLowerCase() === 'span' && m[1] === '/') {
+        paras[paras.length - 1].push({ ...style(), t: inline.t, ix: inline.x, iv: inline.v, disp: inline.disp });
+        inline = null;
+      } else if (m[4] !== undefined || m[5] !== undefined) inline.t += decode(m[4] ?? '<').replace(/\n/g, ' ');
+      continue;
+    }
+    if (m[2] && m[2].toLowerCase() === 'span' && m[1] !== '/') {
+      const x = inlineOf(m[3] || '');
+      if (x) { inline = { ...x, t: '' }; continue; }
+    }
     if (m[4] !== undefined || m[5] !== undefined) {
       const t = decode(m[4] ?? '<');
       const parts = t.split('\n');
@@ -89,6 +119,7 @@ function parseRich(html, base = {}) {
       stack.push(tag);
     }
   }
+  if (inline) paras[paras.length - 1].push({ ...style(), t: inline.t, ix: inline.x, iv: inline.v, disp: inline.disp }); // unclosed
   // "<div>a</div><div><br></div>" style empty paragraphs collapse sensibly.
   return paras;
 }
@@ -117,6 +148,7 @@ function layoutRich(paras, maxWidth, measure) {
     // Split into words keeping spaces attached to the following word boundary.
     const tokens = [];
     for (const run of para) {
+      if (run.ix) { tokens.push({ ...run }); continue; } // an inline element never breaks
       for (const tok of run.t.split(/(\s+)/)) if (tok) tokens.push({ ...run, t: tok });
     }
     for (const tok of tokens) {
@@ -130,7 +162,7 @@ function layoutRich(paras, maxWidth, measure) {
       if (isSpace && !line.runs.length && lines.length && para.length) continue; // no leading spaces after a wrap
       let t = tok.t;
       // Words longer than a whole line are broken by characters.
-      while (!isSpace && w > maxWidth && t.length > 1) {
+      while (!isSpace && !tok.ix && w > maxWidth && t.length > 1) {
         let k = t.length - 1;
         while (k > 1 && measure(t.slice(0, k), tok) > maxWidth - line.width) k--;
         if (line.runs.length && measure(t.slice(0, k), tok) > maxWidth - line.width) { push(); continue; }
@@ -150,4 +182,4 @@ function layoutRich(paras, maxWidth, measure) {
   return lines;
 }
 
-module.exports = { parseRich, richToPlain, plainToHtml, plainFromParas, layoutRich, decode };
+module.exports = { inlineKey, inlineOf, parseRich, richToPlain, plainToHtml, plainFromParas, layoutRich, decode };

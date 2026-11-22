@@ -37,7 +37,7 @@ const sessionInstructions = [
 const versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const context = ['AGENTS.md', 'README.md', 'docs/contributions/PLANNING.md', 'test/unit/shared/shared-guard.test.js', 'package.json', '.github/workflows/ci.yml'];
 // extension tasks read the host, its fake for unit tests and the e2e harness
-const hostFiles = ['docs/EXTENSIONS.md', 'src/renderer/extensions.js', 'test/unit/extensions/fake-host.js', 'test/e2e/harness/app.js', 'test/e2e/harness/report.js'];
+const hostFiles = ['docs/EXTENSIONS.md', 'src/renderer/extensions.js', 'test/unit/extensions/fake-host.js', 'test/e2e/extensions-host.js', 'test/e2e/harness/app.js', 'test/e2e/harness/report.js'];
 const areaContext = {
   clipboard: ['src/renderer/editor-objects.js', 'src/shared/textbox.js'],
   layout: ['src/shared/geometry.js'], outline: ['src/shared/format.js', 'src/shared/pdf-text-layout.js'],

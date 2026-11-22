@@ -2,6 +2,7 @@
 import { getOutline, getLiveOutline, getSizedOutline, traceOutline, strokeLook, lighten, isClosedShape } from '../shared/ink.js';
 import { paperGeometry, pageBackground } from '../shared/paper.js';
 import { strokeBBox, capsulePolygon } from '../shared/geometry.js';
+import { extensions } from './extensions.js';
 
 const pathCache = new WeakMap();
 const sizedPathCache = new WeakMap();
@@ -185,7 +186,8 @@ export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, 
       const b = strokeBBox(st);
       const pad = st.ps === 'neon' ? st.s * 2 : 0;
       if (!overlaps([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad], clip)) continue;
-      paintStroke(ctx, st, scale, strokePath(st));
+      // (an extension's ink filter changes only the colour drawn, never the stored one)
+      paintStroke(ctx, extensions.ink ? { ...st, c: extensions.inkColor(st.c) } : st, scale, strokePath(st));
     }
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);

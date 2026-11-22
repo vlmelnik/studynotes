@@ -20,6 +20,7 @@ import { PEN_STYLES } from '../shared/ink.js';
 import { FONTS } from '../shared/fonts.js';
 import { makeTextEditable } from './scan-edit.js';
 import { fitToolbar } from '../shared/toolbar-fit.js';
+import { extensions } from './extensions.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
 const UNDO_LIMIT = 300;
@@ -84,6 +85,7 @@ export class Editor {
     this.images = new Map();
 
     this.el = h('div', { class: `editor${this.isBoard ? ' is-board' : ''}` });
+    extensions.applyClasses(this.el);
     this.buildToolbar();
     this.body = h('div', { class: 'editor-body' });
     this.sidebar = new Thumbs(this);
@@ -1123,13 +1125,26 @@ export class Editor {
     await this.flush();
     const t = toast('Exporting…', { timeout: 60000 });
     try {
-      const file = await window.api.exportPdf(this.rel, ids);
+      const file = await window.api.exportPdf(this.rel, ids, await this.inlineImages(ids));
       t.remove();
       if (file) toast('Exported to ' + file);
     } catch (err) {
       t.remove();
       toast('Export failed: ' + err.message, { error: true });
     }
+  }
+
+  // Pictures of the extensions' inline elements (formulas …) for the PDF export.
+  async inlineImages(ids) {
+    const want = ids ? new Set(ids) : null;
+    const boxes = [];
+    for (const p of this.pages) {
+      if (want && !want.has(p.id)) continue;
+      const d = this.pageData(p.id);
+      for (const t of d.texts || []) if (t.html && t.html.includes('data-x')) boxes.push({ html: t.html, fs: t.fs, color: t.c });
+      for (const it of d.items || []) for (const row of it.cells || []) for (const c of row || []) if (c && c.h && c.h.includes('data-x')) boxes.push({ html: c.h, fs: it.fs || 12, color: c.c || it.c || '#1c1c1e' });
+    }
+    return boxes.length ? extensions.exportImages(boxes) : null;
   }
 
   moreMenu(anchor) {
@@ -1157,6 +1172,7 @@ export class Editor {
       { label: s.mouseDraws ? 'Mouse draws: on' : 'Mouse draws: off', icon: 'pen', checked: s.mouseDraws, onClick: () => { s.mouseDraws = !s.mouseDraws; this.app.saveSettings(); toast(s.mouseDraws ? 'Mouse can draw' : 'Mouse scrolls, only the pen draws'); } },
       { label: s.pasteFormatting ? 'Paste keeps formatting: on' : 'Paste keeps formatting: off', icon: 'text', checked: s.pasteFormatting, onClick: () => { s.pasteFormatting = !s.pasteFormatting; this.app.saveSettings(); toast(s.pasteFormatting ? 'Pasted text keeps bold / italic / lists' : 'Text is pasted as plain text'); } },
       { label: document.documentElement.dataset.theme === 'dark' ? 'Dark mode: on' : 'Dark mode: off', icon: 'moon', checked: document.documentElement.dataset.theme === 'dark', onClick: () => this.app.toggleDark() },
+      ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex })),
       'sep',
       { label: 'Keyboard shortcuts', icon: 'more', onClick: () => this.app.showShortcuts() },
     ], 0, 0, anchor);
@@ -1331,6 +1347,7 @@ export class Editor {
       { label: 'Make text editable (recognise)', icon: 'scanText', onClick: () => this.makePageEditable(index) },
       { label: 'Export this page…', icon: 'export', onClick: () => this.exportPages([this.pages[index].id]) },
       { label: 'Send this page by e-mail', icon: 'mail', onClick: () => this.send('mail', [this.pages[index].id], `page ${index + 1}`) },
+      ...extensions.menuItems('page-more', Object.freeze({ notebook: this.rel, pageIndex: index })),
       'sep',
       { label: 'Delete page', icon: 'trash', danger: true, onClick: () => this.deletePage(index) },
     ], x, y);
