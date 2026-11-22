@@ -4,14 +4,23 @@ Use this public roadmap when preparing queue entries or when an assigned task ne
 
 ## Desktop backlog
 
-| Outcome | Work that can be assigned separately | Integration check |
-| --- | --- | --- |
-| Paste a copied selection into another app as a picture | Choose original image or rendered selection, preserve plain text and bound rendering size. See `sn-clip-plan`. | Paste into another app and back into StudyNotes. |
-| Use the editor in a half-width window | Calculate which toolbar items fit and where floating controls can go. See `sn-toolbar-fit` and `sn-float-place`. | Resize the window with a selection active and verify the controls remain reachable. |
-| Navigate multiple PDFs and outlines in one notebook | Map source pages, build and move outline nodes, then export an outline. See the `sn-outline-*` entries. | Reopen the notebook and verify that entries still point to the right document and page. |
-| Read PDFs in dark mode | Separate page display colors from ink handling. See `sn-dark-colors` and `sn-dark-ink`. | Verify that switching the view preserves original document content. |
-| Preserve formulas in pasted text | Handle plain text, HTML and Markdown input separately. See `sn-paste-*`. | Compare rendering and text round trips with representative equations. |
-| Improve handwriting and text recognition | Evaluate block detection, conversion to typed text and font matching independently. | Run recognition references for all three languages and include tilted and blurred samples. |
+One queue task = one complete, reviewable outcome with full tests (about 70 % of a
+participant's five-hour allowance, finishable within the two-hour claim). Pure logic
+goes to `src/shared`. User-visible features that fit the extension host go to
+`src/extensions/<id>` with unit and end-to-end tests ([EXTENSIONS.md](../EXTENSIONS.md)).
+Wiring that needs the editor, the viewer or the main process stays with the maintainer.
+
+| Outcome | Queue task(s) | Maintainer part | Integration check |
+| --- | --- | --- | --- |
+| Formulas, bold, headings and lists survive pasting; existing LaTeX text can be rendered | `sn-paste-parse` → `sn-ext-rich-paste` → `sn-ext-rich-paste-export` | extension host, KaTeX dependency | e2e: paste, edit, undo, export PDF/PNG, copy out, switch off |
+| Dark view for PDF pages | `sn-ext-dark-view` | page pass and ink filter in the host | e2e: page dark, ink readable, stored colours and export unchanged |
+| Several PDFs and their outlines in one notebook | `sn-outline-full` | panel tree, drag to move, PDF bookmarks in export | reopen and export: entries point to the right page |
+| Faster, smoother scrolling and zoom | `sn-zoom-motion`, `sn-render-scheduler` | wire into `viewer.js`; measure frame times first | 100-page PDF: frame times while scrolling, Ctrl+wheel and pinch; soak test |
+| Floating reference reader and split view | `sn-reader-layout`, `sn-reader-documents` | always-on-top window, split view, drop and pick files | move, resize, dock, swap; wheel goes to the pane under the pointer |
+| Text recognition keeps columns apart | `sn-blocks-ragged` | OCR reference run for three languages | references unchanged or better |
+| Handwriting to typed text | – (decision pending) | recogniser choice, pen switch | – |
+
+Extension tasks are `invite_only` until the host (`src/renderer/extensions.js`) is merged.
 
 ## Android preparation
 

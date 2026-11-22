@@ -1,67 +1,8 @@
 [
   {
-    "id": "sn-docs-test-guide",
-    "title": "Document how to verify a StudyNotes change",
-    "instructions": "Add docs/TESTING.md for a first-time contributor. Explain when to use npm test, npm run build and the Electron smoke test. Include the prerequisites for the Linux smoke job and how to interpret a skipped optional test. Verify commands against AGENTS.md, package.json and the CI workflow. Keep examples neutral and in English.",
-    "paths": [
-      "docs/TESTING.md"
-    ]
-  },
-  {
-    "id": "sn-stacking-immutable-test",
-    "title": "Verify restacking preserves the original notebook objects",
-    "instructions": "Read the stacking helper and its tests. Add an isolated Node test for restack with a selected picture and text. Snapshot the input first, verify the input remains deeply equal and verify the returned order changes. Only submit the new test file. Report the affected helper and distinguish tests run from tests requested.",
-    "paths": [
-      "test/unit/shared/stacking-immutable.test.js"
-    ],
-    "context": [
-      "src/shared/stacking.js",
-      "test/unit/shared/stacking.test.js"
-    ]
-  },
-  {
-    "id": "sn-clip-plan",
-    "title": "Clipboard: decide which formats a copied selection puts on the clipboard",
-    "instructions": "Add src/shared/clip-plan.js exporting clipPlan(sel). Today copying in StudyNotes puts only text plus an invisible\nmarker on the system clipboard, so pasting into another program shows that marker instead of a picture. The app will\nwrite several formats at once; this pure function decides what. Input: { items: [{ type: 'img'|'stroke'|'shape'|'text'|'table',\nw, h, text?, natural?: { w, h } }], bbox: { w, h } (page units), zoom (screen pixels per unit) }. Output:\n{ png: { mode: 'original' } | { mode: 'render', width, height, scale } | null, text: string, html: boolean, privateClip: true }.\nRules: a selection that is exactly one picture -> mode 'original' (its own bytes, no quality loss). Otherwise render at 2x\nscreen size (bbox * zoom * 2), but the longer side at most 4000 px (scale down evenly, round to whole pixels, at least 1).\ntext = the texts of text boxes and table cells in reading order (top to bottom, then left to right; items carry x, y),\njoined with newlines, '' when none. html = true when there is a png and text is not empty. An empty selection returns\npng null and text ''. Add test/unit/shared/clip-plan.test.js covering every rule, including the 4000 px limit and a\ntall thin selection. Append a dated section to docs/NOTES-CLIPBOARD.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/clip-plan.js",
-      "test/unit/shared/clip-plan.test.js",
-      "docs/NOTES-CLIPBOARD.md"
-    ],
-    "context": [
-      "test/unit/shared/stacking.test.js"
-    ],
-    "chain": "clipboard"
-  },
-  {
-    "id": "sn-toolbar-fit",
-    "title": "Layout: fit toolbar groups into a narrow window without overlap",
-    "instructions": "Add src/shared/toolbar-fit.js exporting fitToolbar(groups, available, opts). In a half-width window the toolbar buttons\nof StudyNotes are drawn on top of each other. This pure function decides what stays visible. groups: [{ id, items: [{ id,\nw, keep?: boolean, rank: number }] }] in display order; available: width in px; opts: { gap: 8, minGap: 2, more: 36 }\n(width of the '...' overflow button). Result: { gap, visible: [ids in order], overflow: [ids in order] }.\nSteps: if everything fits with gap, done. Else shrink the gap between groups down to minGap. Else move items into the\noverflow menu, lowest rank first, never items with keep: true (undo/redo, the active tool), and reserve the width of the\n'...' button as soon as one item moves. Groups keep their order; an emptied group disappears (no gap for it). If even the\nkept items do not fit, return them all visible and set tooNarrow: true. Never return overlapping layouts: sum of widths +\ngaps + overflow button <= available whenever tooNarrow is false. Add test/unit/shared/toolbar-fit.test.js with widths\n1280, 960, 800, 640 and a property-style loop over many random widths checking the no-overlap rule. Append a dated section to docs/NOTES-LAYOUT.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/toolbar-fit.js",
-      "test/unit/shared/toolbar-fit.test.js",
-      "docs/NOTES-LAYOUT.md"
-    ],
-    "chain": "layout"
-  },
-  {
-    "id": "sn-float-place",
-    "title": "Layout: place a floating bar so it never covers what is being edited",
-    "instructions": "Requires sn-toolbar-fit merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Add src/shared/float-place.js exporting placeBar(bar, target, view, avoid). A floating bar (text format, pen options,\nselection actions) appears near the object being edited and must not cover it, nor leave the window. bar: { w, h };\ntarget: rectangle { x0, y0, x1, y1 } of the edited object; view: visible area rectangle; avoid: [rectangles] that must stay\nfree too (the toolbar). Return { x, y, side: 'above'|'below'|'left'|'right'|'inside', compact: boolean }. Order of tries:\nabove the target, below, right, left (8 px from it), each shifted sideways to stay inside view; first one that covers\nneither target nor any avoid rectangle wins. If none fits and bar.compactW is given, retry with that width and compact: true.\nLast resort: the corner of view farthest from the target, side 'inside'. Pure geometry, no DOM. Add\ntest/unit/shared/float-place.test.js: target at the top under the toolbar (bar goes below), at the bottom (above), a\nnarrow window (compact), a target filling the view (corner). Append a dated section to docs/NOTES-LAYOUT.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/float-place.js",
-      "test/unit/shared/float-place.test.js",
-      "docs/NOTES-LAYOUT.md"
-    ],
-    "after": [
-      "sn-toolbar-fit"
-    ],
-    "chain": "layout"
-  },
-  {
-    "id": "sn-outline-pdf-map",
-    "title": "Outline: map a PDF outline to the notebook pages it points at",
-    "instructions": "Add src/shared/outline.js with mapPdfOutline(items, src, pages). StudyNotes notebooks can hold several PDFs (\"sources\",\nkey 'main' for the first). A page record is { id, kind: 'pdf'|'paper'|..., src (default 'main' when missing), pdfPage\n(1-based page number in that PDF), bm?: 1, bmTitle?: string }. items is a PDF outline already resolved to page numbers:\n[{ title, page (1-based) | null, items: [...] }] (nested). Return the same tree with page ids: [{ title, pageId | null,\nlevel, items }], level 0 for top entries. An entry whose PDF page is not in the notebook (deleted) points at the next\nfollowing page of that PDF still present, else the previous, else null. Titles: trim, collapse white space, at most 200\ncharacters. Do not mutate the inputs. Add test/unit/shared/outline.test.js: nested outline, deleted pages, a page\nduplicated in the notebook (first copy wins), pages of another source ignored, empty outline. Append a dated section to docs/NOTES-OUTLINE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-outline-full",
+    "title": "Outline: section tree, moving sections and chapters, export bookmarks",
+    "instructions": "Goal: a notebook with several PDFs shows one section per PDF in the bookmarks panel, with the PDF's own outline and the user's bookmarks inside; sections and chapters can be moved by dragging; the PDF export writes the same tree as PDF bookmarks. src/shared/outline.js already has mapPdfOutline (keep it and its tests). Read docs/NOTES-OUTLINE.md and src/shared/format.js (page and source fields) first. (1) Extend src/shared/outline.js with buildOutline(sources, pages, pdfOutlines). The bookmarks panel becomes a tree: one section per PDF in the notebook (in the order its first page appears), named after sources[key].name or the file name without '.pdf'; under it the PDF's own outline (pdfOutlines[key], already mapped with mapPdfOutline) and the user's bookmarked pages of that section in page order (title = bmTitle or 'Page n', n = 1-based position in the notebook). Pages that are not from a PDF (blank, ruled) belong to the section of the nearest PDF page above them; such pages before the first PDF page form a section 'Notes'. Return [{ kind: 'section', key, title, pageId (first page), items: [...] }] with outline entries { kind: 'outline', ... } and bookmarks { kind: 'bookmark', pageId, title }. Tests in test/unit/shared/outline.test.js: two PDFs, pages moved between them, bookmarks in both, notes before the first PDF, a notebook without PDFs (one 'Notes' section, bookmarks only). (2) Extend src/shared/outline.js with moveRange(pages, fromId, toIdExclusive, beforeId) and rangeOf(tree, entry). Dragging a section or chapter in the sidebar moves all its pages. rangeOf returns { fromId, toIdExclusive } for a tree entry: from its page to the page of the next entry of the same or a higher level (or the end). moveRange returns a NEW pages array with that run of pages moved before beforeId (null = to the end); pages keep their order inside the run; moving a run before one of its own pages returns the input order unchanged. Do not mutate inputs. Tests: move the second PDF section before the first, move a chapter inside its section, move to the end, no-op cases, and that buildOutline on the result still lists every bookmark once. (3) Extend src/shared/outline.js with outlineForExport(tree, pages). The PDF export will write the sidebar tree as PDF bookmarks. Return a flat list [{ title, level, pageIndex (0-based position in pages) }] in tree order; skip entries whose page is no longer in pages; titles at most 200 characters, never empty ('Page n' fallback); levels start at 0 and never jump by more than one from one entry to the next (clamp). Tests in test/unit/shared/outline.test.js. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-OUTLINE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
       "src/shared/outline.js",
       "test/unit/shared/outline.test.js",
@@ -70,189 +11,28 @@
     "chain": "outline"
   },
   {
-    "id": "sn-outline-tree",
-    "title": "Outline: build the sidebar tree of sections, PDF outline and bookmarks",
-    "instructions": "Requires sn-outline-pdf-map merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Extend src/shared/outline.js with buildOutline(sources, pages, pdfOutlines). The bookmarks panel becomes a tree: one\nsection per PDF in the notebook (in the order its first page appears), named after sources[key].name or the file name\nwithout '.pdf'; under it the PDF's own outline (pdfOutlines[key], already mapped with mapPdfOutline) and the user's\nbookmarked pages of that section in page order (title = bmTitle or 'Page n', n = 1-based position in the notebook).\nPages that are not from a PDF (blank, ruled) belong to the section of the nearest PDF page above them; such pages before\nthe first PDF page form a section 'Notes'. Return [{ kind: 'section', key, title, pageId (first page), items: [...] }]\nwith outline entries { kind: 'outline', ... } and bookmarks { kind: 'bookmark', pageId, title }. Tests in\ntest/unit/shared/outline.test.js: two PDFs, pages moved between them, bookmarks in both, notes before the first PDF,\na notebook without PDFs (one 'Notes' section, bookmarks only). Append a dated section to docs/NOTES-OUTLINE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/outline.js",
-      "test/unit/shared/outline.test.js",
-      "docs/NOTES-OUTLINE.md"
-    ],
-    "after": [
-      "sn-outline-pdf-map"
-    ],
-    "chain": "outline"
-  },
-  {
-    "id": "sn-outline-move",
-    "title": "Outline: move a whole section or chapter to another place",
-    "instructions": "Requires sn-outline-tree merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Extend src/shared/outline.js with moveRange(pages, fromId, toIdExclusive, beforeId) and rangeOf(tree, entry). Dragging a\nsection or chapter in the sidebar moves all its pages. rangeOf returns { fromId, toIdExclusive } for a tree entry: from\nits page to the page of the next entry of the same or a higher level (or the end). moveRange returns a NEW pages array\nwith that run of pages moved before beforeId (null = to the end); pages keep their order inside the run; moving a run\nbefore one of its own pages returns the input order unchanged. Do not mutate inputs. Tests: move the second PDF section\nbefore the first, move a chapter inside its section, move to the end, no-op cases, and that buildOutline on the result\nstill lists every bookmark once. Append a dated section to docs/NOTES-OUTLINE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/outline.js",
-      "test/unit/shared/outline.test.js",
-      "docs/NOTES-OUTLINE.md"
-    ],
-    "after": [
-      "sn-outline-tree"
-    ],
-    "chain": "outline"
-  },
-  {
-    "id": "sn-outline-export",
-    "title": "Outline: flatten the tree for PDF bookmarks in the export",
-    "instructions": "Requires sn-outline-tree merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Extend src/shared/outline.js with outlineForExport(tree, pages). The PDF export will write the sidebar tree as PDF\nbookmarks. Return a flat list [{ title, level, pageIndex (0-based position in pages) }] in tree order; skip entries whose\npage is no longer in pages; titles at most 200 characters, never empty ('Page n' fallback); levels start at 0 and never\njump by more than one from one entry to the next (clamp). Tests in test/unit/shared/outline.test.js. Append a dated section to docs/NOTES-OUTLINE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/outline.js",
-      "test/unit/shared/outline.test.js",
-      "docs/NOTES-OUTLINE.md"
-    ],
-    "after": [
-      "sn-outline-tree"
-    ],
-    "chain": "outline"
-  },
-  {
-    "id": "sn-dark-colors",
-    "title": "Dark view: colour mapping for PDF pages (lightness flipped, hue kept)",
-    "instructions": "Add src/shared/dark-view.js with darkColor(r, g, b, mode) and darkenImage(im, opts). A view setting will show PDF pages\ndark without changing the file. darkColor: mode 'full' flips lightness but keeps the hue: white (255,255,255) -> about\n#1e1e1e, black -> about #e0e0e0, a saturated green stays clearly green (hue within 10 degrees, lightness raised so it\nreads on dark). Work in HSL or a similar space; map lightness L to (1 - L) scaled into [0.12, 0.88]. mode 'background'\nonly darkens near-white colours (lightness > 0.9, saturation < 0.15) to #1e1e1e and leaves everything else. darkenImage\nworks in place on { width, height, data: Uint8ClampedArray RGBA } and skips rectangles in opts.keep (pictures inside the\nPDF must not become negatives), opts.mode as above; alpha unchanged. Add test/unit/shared/dark-view.test.js with exact\nexpectations for white, black, mid grey, a green like #84b819, a keep rectangle untouched, and the background mode.\nKeep it fast: no allocation per pixel. Append a dated section to docs/NOTES-DARK.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/dark-view.js",
-      "test/unit/shared/dark-view.test.js",
-      "docs/NOTES-DARK.md"
-    ],
-    "chain": "dark"
-  },
-  {
-    "id": "sn-dark-ink",
-    "title": "Dark view: show the user's ink and highlighter readable on dark pages",
-    "instructions": "Requires sn-dark-colors merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Extend src/shared/dark-view.js with inkForDark(hex) and highlightBlend(dark). In the dark view black or dark-blue pen ink\nwould vanish; stored colours must not change, only the shown ones. inkForDark returns the colour to draw: dark colours\n(lightness < 0.5) get the 'full' mapping of darkColor, light ones stay, results as '#rrggbb' lower case. highlightBlend\nreturns 'multiply' for light pages and 'screen' for dark. Tests in test/unit/shared/dark-view.test.js. Append a dated section to docs/NOTES-DARK.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/dark-view.js",
-      "test/unit/shared/dark-view.test.js",
-      "docs/NOTES-DARK.md"
-    ],
-    "after": [
-      "sn-dark-colors"
-    ],
-    "chain": "dark"
-  },
-  {
-    "id": "sn-paste-math-text",
-    "title": "Paste: find LaTeX formulas in plain text (without mistaking prices)",
-    "instructions": "Add src/shared/paste-math.js with findMath(text). Pasted answers from chat programs contain formulas as $...$, $$...$$,\n\\(...\\) and \\[...\\]. Return segments [{ type: 'text', text } | { type: 'math', tex, display: boolean }] covering the\nwhole input in order. $$...$$ and \\[...\\] are display formulas, $...$ and \\(...\\) inline. Money guard: '$5 and $10'\nis text. A $...$ pair counts only if the character after the opening $ and the one before the closing $ are not spaces\nand the inside contains a letter, a backslash, ^, _ or =. An escaped \\$ is a dollar sign. Unclosed delimiters stay\ntext. Formulas do not span empty lines. Add test/unit/shared/paste-math.test.js: inline and display mixes, prices,\nescaped dollars, nested braces like \\frac{du_C}{dt}, a \\boxed{...} display formula, unclosed delimiters. Append a dated section to docs/NOTES-PASTE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-paste-parse",
+    "title": "Paste: one parser for clipboard HTML, Markdown and LaTeX into the rich-text subset",
+    "instructions": "Goal: text copied from a chat answer or a web page keeps its formulas, bold words, headings and lists when pasted into a text box. paste-math.js already has findMath (keep it and its tests); read docs/NOTES-PASTE.md, src/shared/richtext.js and docs/EXTENSIONS.md (inline elements). A formula is stored as <span data-x=\"rich-paste:math\" data-v=\"SOURCE\" data-display=\"1\"></span> (data-display only for display formulas, SOURCE HTML-escaped). (1) mathFromHtml in paste-math.js: When rendered formulas are copied from a web page the clipboard HTML holds the rendering, not the source. KaTeX keeps the source in <annotation encoding=\"application/x-tex\">...</annotation> inside a <span class=\"katex\">; display formulas sit in <span class=\"katex-display\">. MathJax keeps it in a data-latex attribute or a <script type=\"math/tex\"> (add '; mode=display' for display). Without a DOM (string processing only), return the HTML with every rendered formula replaced by a placeholder element the stored formula element above (data-display only for display formulas; SOURCE HTML-escaped) and all other markup untouched. Decode entities in the source (&lt; &amp; ...). Tests in test/unit/shared/paste-math.test.js with small real-looking KaTeX and MathJax snippets, two formulas in one paragraph, and HTML without formulas returned unchanged. (2) Add src/shared/paste-markdown.js with markdownToRich(text, baseSize). Text boxes store a small HTML subset: <b> <i> <u> <br> <div> and <span data-fs data-ff data-c> (see src/shared/richtext.js, parseRich). Convert Markdown only when the text has at least two Markdown marks (so a lone * or # stays text): **bold** and __bold__ -> <b>, *italic* -> <i>, '# ', '## ', '### ' headings -> a <div> with <span data-fs> of 1.6, 1.35, 1.15 x baseSize (rounded to 0.5) around <b>, '- ' / '* ' items -> a <div> starting with '• ', numbered items keep their numbers, each line a <div>, empty lines kept as <div><br></div>. Escape all text. Return { html, plain } where plain = richToPlain(html). Tests in test/unit/shared/paste-markdown.test.js: a typical chat answer (heading, bold, list), text with one stray *, nested bold inside a list item, and that parseRich(html) accepts the result. (3) src/shared/paste-parse.js: pasteToRich({ html, text }, baseSize) -> { html, plain, formulas } | null. Order: HTML with rendered formulas -> mathFromHtml, then the app's tags only (b/strong, i/em, u, br, div/p/li/h1-h3 mapped like the Markdown rules, everything else unwrapped, all text escaped); else plain text: Markdown via markdownToRich and $..$/\\[..\\] formulas via findMath (display formulas get their own <div>); return null when there is neither a formula nor two Markdown marks (normal paste goes on). plain uses $...$ and $$...$$ for formulas; formulas counts them. parseRich(html) must accept the result. Tests with realistic samples: a chat answer with heading, list and \\frac formulas, a KaTeX web snippet, a MathJax snippet, money text, the text '\\[ \\frac{400}{230}\\approx 1{,}73=\\sqrt{3} \\]'. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PASTE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
       "src/shared/paste-math.js",
-      "test/unit/shared/paste-math.test.js",
-      "docs/NOTES-PASTE.md"
-    ],
-    "chain": "paste"
-  },
-  {
-    "id": "sn-paste-math-html",
-    "title": "Paste: recover LaTeX sources from rendered formulas in copied HTML",
-    "instructions": "Requires sn-paste-math-text merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Extend src/shared/paste-math.js with mathFromHtml(html). When rendered formulas are copied from a web page the clipboard\nHTML holds the rendering, not the source. KaTeX keeps the source in <annotation encoding=\"application/x-tex\">...</annotation>\ninside a <span class=\"katex\">; display formulas sit in <span class=\"katex-display\">. MathJax keeps it in a data-latex\nattribute or a <script type=\"math/tex\"> (add '; mode=display' for display). Without a DOM (string processing only),\nreturn the HTML with every rendered formula replaced by a placeholder element <span data-tex=\"SOURCE\" data-display=\"1\">\n</span> (data-display only for display formulas; SOURCE HTML-escaped) and all other markup untouched. Decode entities in\nthe source (&lt; &amp; ...). Tests in test/unit/shared/paste-math.test.js with small real-looking KaTeX and MathJax\nsnippets, two formulas in one paragraph, and HTML without formulas returned unchanged. Append a dated section to docs/NOTES-PASTE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/paste-math.js",
-      "test/unit/shared/paste-math.test.js",
-      "docs/NOTES-PASTE.md"
-    ],
-    "context": [
-      "src/shared/richtext.js"
-    ],
-    "after": [
-      "sn-paste-math-text"
-    ],
-    "chain": "paste"
-  },
-  {
-    "id": "sn-paste-markdown",
-    "title": "Paste: turn Markdown bold, headings and lists into the app's rich text",
-    "instructions": "Add src/shared/paste-markdown.js with markdownToRich(text, baseSize). Text boxes store a small HTML subset: <b> <i> <u>\n<br> <div> and <span data-fs data-ff data-c> (see src/shared/richtext.js, parseRich). Convert Markdown only when the text\nhas at least two Markdown marks (so a lone * or # stays text): **bold** and __bold__ -> <b>, *italic* -> <i>, '# ', '## ',\n'### ' headings -> a <div> with <span data-fs> of 1.6, 1.35, 1.15 x baseSize (rounded to 0.5) around <b>, '- ' / '* '\nitems -> a <div> starting with '• ', numbered items keep their numbers, each line a <div>, empty lines kept as\n<div><br></div>. Escape all text. Return { html, plain } where plain = richToPlain(html). Tests in\ntest/unit/shared/paste-markdown.test.js: a typical chat answer (heading, bold, list), text with one stray *, nested\nbold inside a list item, and that parseRich(html) accepts the result. Append a dated section to docs/NOTES-PASTE.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
       "src/shared/paste-markdown.js",
+      "src/shared/paste-parse.js",
+      "test/unit/shared/paste-math.test.js",
       "test/unit/shared/paste-markdown.test.js",
+      "test/unit/shared/paste-parse.test.js",
       "docs/NOTES-PASTE.md"
     ],
+    "chain": "paste",
     "context": [
       "src/shared/richtext.js",
-      "test/unit/shared/richtext.test.js"
-    ],
-    "chain": "paste"
-  },
-  {
-    "id": "sn-snap-line",
-    "title": "Handwriting to text: find the ruled line or grid row a written word belongs to",
-    "instructions": "Add src/shared/snap-line.js with snapLine(bbox, paper). A planned pen mode turns handwriting into typed text; the text box\nmust sit on the page's ruling. paper = paperGeometry(kind, w, h) from src/shared/paper.js (lines are [x0, y0, x1, y1, colour,\nwidth]). bbox = { x0, y0, x1, y1 } of the written strokes. Return { baseline, x, lineHeight, kind: 'ruled'|'grid'|'free' }:\nfor ruled papers the horizontal ruling line nearest below the middle of the strokes' lower half; lineHeight = the ruling gap;\nx = bbox.x0, or the margin line + 4 if the strokes start left of it. For grid papers snap baseline to the nearest\nhorizontal grid line below and x to the nearest vertical line at or left of bbox.x0. For blank or unknown papers return\nkind 'free', baseline = bbox.y1, lineHeight = bbox height. Tests in test/unit/shared/snap-line.test.js for 'lined',\n'college', 'grid', 'grid10', 'blank'. Append a dated section to docs/NOTES-HANDWRITING.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/snap-line.js",
-      "test/unit/shared/snap-line.test.js",
-      "docs/NOTES-HANDWRITING.md"
-    ],
-    "context": [
-      "src/shared/paper.js",
-      "test/unit/shared/paper.test.js"
-    ],
-    "chain": "handwriting"
-  },
-  {
-    "id": "sn-hash-shared",
-    "title": "Android prep: pure MD5, SHA-1 and SHA-256 in src/shared",
-    "instructions": "Add src/shared/hash.js exporting md5Hex, sha1Hex, sha256Hex. The Android version runs the app's logic in a WebView where\nNode's crypto is missing and WebCrypto has no MD5 or SHA-1 (sync compares MD5 checksums, asset names use SHA-1). Inputs:\nUint8Array or string (encode strings as UTF-8 by hand, no TextEncoder dependency required but allowed if present).\nOutput: lower-case hex. Pure JavaScript, no Buffer. Tests in test/unit/shared/hash.test.js: the standard vectors for '',\n'abc', 'The quick brown fox jumps over the lazy dog', inputs of length 55, 56, 63, 64, 65 bytes (padding edges, compare\nwith values you compute and state how), a 1 MB input (time it and report), non-ASCII text. Append a dated section to docs/NOTES-ANDROID.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/hash.js",
-      "test/unit/shared/hash.test.js",
-      "docs/NOTES-ANDROID.md"
-    ],
-    "chain": "android"
-  },
-  {
-    "id": "sn-safe-names",
-    "title": "Android prep: file and folder name rules in one pure module",
-    "instructions": "Add src/shared/names.js. Desktop code cleans user-given names like this today: replace < > : \" / \\ | ? * and control\ncharacters with a space, collapse spaces, trim, strip trailing dots and spaces, prefix '_' to CON, PRN, AUX, NUL, COM1-9,\nLPT1-9 (case-insensitive), 'Untitled' when empty, at most 120 characters. Export safeName(name) doing exactly that (cut at\n120 without splitting a surrogate pair), uniqueName(base, taken) returning base, 'base (2)', 'base (3)' ... compared\ncase-insensitively (Windows and Android file systems), and caseOnlyRename(from, to) -> true when the names differ only in\nletter case (such a rename needs a temporary name on those systems). Tests in test/unit/shared/names.test.js. Append a dated section to docs/NOTES-ANDROID.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/names.js",
-      "test/unit/shared/names.test.js",
-      "docs/NOTES-ANDROID.md"
-    ],
-    "context": [
-      "src/shared/paths.js"
-    ],
-    "chain": "android"
-  },
-  {
-    "id": "sn-blocks-more-tests",
-    "title": "Recognition: more edge-case tests for the block finder",
-    "instructions": "Read src/shared/scan-blocks.js (findBlocks: finds paragraphs, cells, headings and columns in a page picture before text\nis read) and its tests. Add tests to test/unit/shared/scan-blocks.test.js with synthetic pictures built like the existing\nhelper: a two-column page with uneven column gaps, a framed box with text touching the frame, a page with a single word,\na bulleted list (bullet dots left of each line must stay with their lines), a dotted leader line, a picture of 4000 x 3000.\nDo not change scan-blocks.js. If a test shows a real defect, keep it as test.skip with a comment explaining expected and\nactual, and describe it in the report and the notes file. Append a dated section to docs/NOTES-RECOGNITION.md (create it if missing, title line '# Notes: <feature>'): what you did, decisions and why, what is still open, what the next task needs to know. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "test/unit/shared/scan-blocks.test.js",
-      "docs/NOTES-RECOGNITION.md"
-    ],
-    "context": [
-      "src/shared/scan-blocks.js"
-    ],
-    "chain": "recognition"
-  },
-  {
-    "id": "sn-guide-shared",
-    "title": "Docs: a guide to the pure modules in src/shared (part 1)",
-    "instructions": "Add docs/SHARED-MODULES.md for contributors who can only read a few files: for each of these modules one section with\nits purpose, the exported functions with inputs and outputs, invariants worth knowing and which test file covers it:\nrichtext.js, paper.js, stacking.js, paths.js, format.js, util.js, scan-blocks.js. Read the files and their tests; do not\nguess. Keep it short and factual. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "docs/SHARED-MODULES.md"
-    ],
-    "context": [
-      "src/shared/richtext.js",
-      "src/shared/paper.js",
-      "src/shared/stacking.js",
-      "src/shared/paths.js",
-      "src/shared/format.js",
-      "src/shared/util.js",
-      "src/shared/scan-blocks.js"
+      "docs/EXTENSIONS.md"
     ]
   },
   {
-    "id": "sn-zoom-easing",
-    "title": "Scroll and zoom: frame-rate independent zoom easing and wheel input",
-    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/zoom-motion.js. (1) easeZoom(current, target, dtMs, tauMs = 60): the next zoom after dtMs milliseconds,\nmoving geometrically (in log space) towards target so that the remaining log distance shrinks by exp(-dt/tau); returns\ntarget when the remaining ratio is within 0.4 %. Same result whether a 120 ms move is done in 2, 8 or 15 steps (within\n1e-9 in log space). dtMs is clamped to 0..100 (a stalled tab must not jump). (2) wheelZoomFactor({ deltaY, deltaMode,\nctrlKey }): factor for one wheel event: deltaMode 1 (lines) exp(-deltaY * 0.05), pixels exp(-deltaY * 0.0025), the result\nclamped to 0.5..2 per event. (3) isTouchpadPinch(e): true for pixel-mode events with |deltaY| < 40 (pinches send many tiny\ndeltas and must be followed directly, not animated). (4) clampZoom(z) to 0.1..8. Tests in\ntest/unit/shared/zoom-motion.test.js: step-count independence, convergence time for factor 2 at tau 60 ms (state it),\nclamping, line and pixel wheel events, touchpad detection. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-zoom-motion",
+    "title": "Scroll and zoom: frame-rate independent easing, wheel and pinch input, zoom anchor",
+    "instructions": "Goal: zoom feels the same on 60 Hz and 144 Hz screens, a touchpad pinch follows the fingers, and the point under the cursor stays put. Today src/renderer/viewer.js (readable) eases zoom with a fixed factor per frame (zoom *= (target/zoom)^0.32), re-renders sharply 160 ms after zooming stops; zoom range 0.1 to 8. Read the zoom code in viewer.js so your API fits the call sites; do not change viewer.js. (1) (1) easeZoom(current, target, dtMs, tauMs = 60): the next zoom after dtMs milliseconds, moving geometrically (in log space) towards target so that the remaining log distance shrinks by exp(-dt/tau); returns target when the remaining ratio is within 0.4 %. Same result whether a 120 ms move is done in 2, 8 or 15 steps (within 1e-9 in log space). dtMs is clamped to 0..100 (a stalled tab must not jump). (2) wheelZoomFactor({ deltaY, deltaMode, ctrlKey }): factor for one wheel event: deltaMode 1 (lines) exp(-deltaY * 0.05), pixels exp(-deltaY * 0.0025), the result clamped to 0.5..2 per event. (3) isTouchpadPinch(e): true for pixel-mode events with |deltaY| < 40 (pinches send many tiny deltas and must be followed directly, not animated). (4) clampZoom(z) to 0.1..8. Tests in test/unit/shared/zoom-motion.test.js: step-count independence, convergence time for factor 2 at tau 60 ms (state it), clamping, line and pixel wheel events, touchpad detection. (2) Add anchorScroll({ zoom, newZoom, scrollLeft, scrollTop, pointX, pointY, pageX, pageY }): pages are laid out at pageX/pageY (screen units at the current zoom, scaled linearly with zoom, page positions given for zoom 1 as layoutX/layoutY: pageX = layoutX * zoom + gapX, pageY = layoutY * zoom + gapY, gaps fixed in screen pixels); the point under the cursor (pointX/pointY relative to the scroller's top-left) must stay under the cursor after the zoom. Return { scrollLeft, scrollTop } for newZoom, never negative. Document the formula in a comment. Tests: zoom in and out around the centre, a corner, a point on the second page with a fixed gap between pages, and a round trip (zoom 1 -> 3 -> 1 returns to the start within half a pixel). In the notes, list each place in viewer.js that should call which function. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PERFORMANCE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
       "src/shared/zoom-motion.js",
       "test/unit/shared/zoom-motion.test.js",
@@ -261,78 +41,37 @@
     "chain": "performance"
   },
   {
-    "id": "sn-zoom-anchor",
-    "title": "Scroll and zoom: keep the point under the cursor fixed while zooming",
-    "instructions": "Requires sn-zoom-easing merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Extend src/shared/zoom-motion.js with anchorScroll({ zoom, newZoom, scrollLeft, scrollTop, pointX, pointY, pageX, pageY }):\npages are laid out at pageX/pageY (screen units at the current zoom, scaled linearly with zoom, page positions given for\nzoom 1 as layoutX/layoutY: pageX = layoutX * zoom + gapX, pageY = layoutY * zoom + gapY, gaps fixed in screen pixels);\nthe point under the cursor (pointX/pointY relative to the scroller's top-left) must stay under the cursor after the zoom.\nReturn { scrollLeft, scrollTop } for newZoom, never negative. Document the formula in a comment. Tests: zoom in and out\naround the centre, a corner, a point on the second page with a fixed gap between pages, and a round trip (zoom 1 -> 3 -> 1\nreturns to the start within half a pixel). Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
-      "src/shared/zoom-motion.js",
-      "test/unit/shared/zoom-motion.test.js",
-      "docs/NOTES-PERFORMANCE.md"
-    ],
-    "chain": "performance",
-    "after": [
-      "sn-zoom-easing"
-    ]
-  },
-  {
-    "id": "sn-render-plan",
-    "title": "Scroll and zoom: decide which pages to render, how sharp, in which order",
-    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/render-plan.js with planRender(state). state: { pages: [{ index, top, height, width }] (screen px at the\ncurrent zoom), viewTop, viewHeight, zoom, dpr, moving: boolean (scroll or zoom gesture in progress), velocityY (px per ms,\n+ = down), cached: { [index]: scale }, maxCanvasPx: 16e6 }. Return an ordered list [{ index, scale, reason }]:\npages intersecting the view first (by distance of their centre to the view centre), then up to 2 pages ahead in the\ndirection of motion (velocity sign; both directions when |velocityY| < 0.05), then 1 page behind. Target scale =\nzoom * dpr, reduced so width*height*scale^2 <= maxCanvasPx. While moving: a page with any cached bitmap is skipped (the\nstretched bitmap is shown), and pages without one get scale * 0.5 (fast preview, reason 'preview'). When not moving: a page\nis listed only if its cached scale is outside 0.97..1.04 of the target (reason 'sharp'). Never list a page twice. Tests in\ntest/unit/shared/render-plan.test.js for each rule, including a fast fling (velocity 3) and a huge page hitting the pixel cap. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-render-scheduler",
+    "title": "Scroll and zoom: render plan, pixel-budget cache and scroll velocity",
+    "instructions": "Goal: long PDFs scroll without blank or blurry pages: pages on screen first, the next ones in the scroll direction prefetched, previews while moving, sharp pages when still, and a cache that never drops what is on screen. viewer.js (readable, do not change) keeps rendered pages in an LRU cache limited to 28 million pixels. (1) Add src/shared/scroll-velocity.js with createVelocityTracker({ windowMs = 120 }): add(t, y) records the scroll position y at time t (ms, increasing); velocity(t) returns px per ms from a least-squares line through the samples of the last windowMs (0 with fewer than 2 samples, or when the newest sample is older than windowMs at time t - the scroll has stopped); reset(). Keep at most 32 samples. Tests in test/unit/shared/scroll-velocity.test.js: steady scrolling, a stop, a reversal, irregular timestamps, many samples. (2) Add src/shared/render-plan.js with planRender(state). state: { pages: [{ index, top, height, width }] (screen px at the current zoom), viewTop, viewHeight, zoom, dpr, moving: boolean (scroll or zoom gesture in progress), velocityY (px per ms, + = down), cached: { [index]: scale }, maxCanvasPx: 16e6 }. Return an ordered list [{ index, scale, reason }]: pages intersecting the view first (by distance of their centre to the view centre), then up to 2 pages ahead in the direction of motion (velocity sign; both directions when |velocityY| < 0.05), then 1 page behind. Target scale = zoom * dpr, reduced so width*height*scale^2 <= maxCanvasPx. While moving: a page with any cached bitmap is skipped (the stretched bitmap is shown), and pages without one get scale * 0.5 (fast preview, reason 'preview'). When not moving: a page is listed only if its cached scale is outside 0.97..1.04 of the target (reason 'sharp'). Never list a page twice. Tests in test/unit/shared/render-plan.test.js for each rule, including a fast fling (velocity 3) and a huge page hitting the pixel cap. (3) Add src/shared/bitmap-cache.js exporting class PixelCache(budget, { onEvict }). Rendered pages are canvases; this pure class only does the bookkeeping by key with { px (pixels), scale, value }. set(key, value, px, scale) replaces an entry (calling onEvict for the old value unless it is the same value); get(key) marks it recently used; has, delete, clear (onEvict for all), size, used. When used > budget: evict entries not in the protected set (protect(keys) - the pages on screen) by oldest use first; never evict a protected entry, even if that leaves the cache over budget (report it with overBudget()). An entry larger than the whole budget is not stored (onEvict called at once, set returns false). Tests in test/unit/shared/bitmap-cache.test.js: LRU order, protection, oversize entries, replacing with the same value, clear. Also one test that drives all three together over a simulated fling across a 200-page PDF and checks the plan stays within budget. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PERFORMANCE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
       "src/shared/render-plan.js",
-      "test/unit/shared/render-plan.test.js",
-      "docs/NOTES-PERFORMANCE.md"
-    ],
-    "chain": "performance"
-  },
-  {
-    "id": "sn-bitmap-cache",
-    "title": "Scroll and zoom: a pixel-budget cache that evicts the right bitmaps",
-    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/bitmap-cache.js exporting class PixelCache(budget, { onEvict }). Rendered pages are canvases; this pure\nclass only does the bookkeeping by key with { px (pixels), scale, value }. set(key, value, px, scale) replaces an entry\n(calling onEvict for the old value unless it is the same value); get(key) marks it recently used; has, delete, clear (onEvict\nfor all), size, used. When used > budget: evict entries not in the protected set (protect(keys) - the pages on screen) by\noldest use first; never evict a protected entry, even if that leaves the cache over budget (report it with overBudget()).\nAn entry larger than the whole budget is not stored (onEvict called at once, set returns false). Tests in\ntest/unit/shared/bitmap-cache.test.js: LRU order, protection, oversize entries, replacing with the same value, clear. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
       "src/shared/bitmap-cache.js",
-      "test/unit/shared/bitmap-cache.test.js",
-      "docs/NOTES-PERFORMANCE.md"
-    ],
-    "chain": "performance"
-  },
-  {
-    "id": "sn-scroll-velocity",
-    "title": "Scroll and zoom: a small velocity tracker for prefetching",
-    "instructions": "Background: scrolling and zooming in StudyNotes lag on long PDFs. Today the viewer (src/renderer/viewer.js, not readable for you) eases zoom with a fixed factor per animation frame (zoom *= (target/zoom)^0.32 each frame), so the speed depends on the screen's frame rate; it re-renders PDF pages sharply 160 ms after zooming stops and keeps rendered pages in a least-recently-used cache limited to 28 million pixels; zoom range 0.1 to 8. Add src/shared/scroll-velocity.js with createVelocityTracker({ windowMs = 120 }): add(t, y) records the scroll position y at\ntime t (ms, increasing); velocity(t) returns px per ms from a least-squares line through the samples of the last windowMs\n(0 with fewer than 2 samples, or when the newest sample is older than windowMs at time t - the scroll has stopped);\nreset(). Keep at most 32 samples. Tests in test/unit/shared/scroll-velocity.test.js: steady scrolling, a stop, a reversal,\nirregular timestamps, many samples. Append a dated section to docs/NOTES-PERFORMANCE.md (create it if missing, title line '# Notes: scrolling and zoom'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into src/renderer/viewer.js. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
       "src/shared/scroll-velocity.js",
+      "test/unit/shared/render-plan.test.js",
+      "test/unit/shared/bitmap-cache.test.js",
       "test/unit/shared/scroll-velocity.test.js",
       "docs/NOTES-PERFORMANCE.md"
     ],
     "chain": "performance"
   },
   {
-    "id": "sn-overlay-bounds",
-    "title": "Reference reader: keep the floating window on screen, snap and resize",
-    "instructions": "Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Add src/shared/overlay-bounds.js. (1) clampBounds(b, displays, opts): b = { x, y, width, height }, displays = [{ x, y,\nwidth, height }] (work areas of all monitors), opts = { minWidth: 240, minHeight: 180, keepVisible: 80 }. Enforce the minimum\nsize, then move the window so at least keepVisible px of its title strip (the top 32 px) lie on some display; if none, put it\non the display nearest its centre (used after a monitor is unplugged). (2) snapBounds(b, display, threshold = 16): edges within\nthreshold of a display edge snap to it. (3) resizeKeepingAspect(b, edge, dx, dy, aspect | null): resize from an edge or corner\n('n','s','e','w','ne','nw','se','sw'); with an aspect (page width / height) the size follows it, the opposite edge or corner\nstays fixed. (4) defaultBounds(display, aspect): a quarter-width window at the right edge, vertically centred, aspect kept.\nTests in test/unit/shared/overlay-bounds.test.js: two monitors side by side, unplugged monitor, snapping, every resize edge\nwith and without aspect, minimum size. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-reader-layout",
+    "title": "Reference reader: floating window bounds and split view layout",
+    "instructions": "StudyNotes gets a reference reader: a PDF opens in a small always-on-top window to move, resize, scroll and zoom while notes are taken elsewhere, or is docked into the main window as one side of a split view (swappable); more documents come by drag and drop or from a folder. Windows, drawing and files are wired in by the maintainer. (1) Add src/shared/overlay-bounds.js. (1) clampBounds(b, displays, opts): b = { x, y, width, height }, displays = [{ x, y, width, height }] (work areas of all monitors), opts = { minWidth: 240, minHeight: 180, keepVisible: 80 }. Enforce the minimum size, then move the window so at least keepVisible px of its title strip (the top 32 px) lie on some display; if none, put it on the display nearest its centre (used after a monitor is unplugged). (2) snapBounds(b, display, threshold = 16): edges within threshold of a display edge snap to it. (3) resizeKeepingAspect(b, edge, dx, dy, aspect | null): resize from an edge or corner ('n','s','e','w','ne','nw','se','sw'); with an aspect (page width / height) the size follows it, the opposite edge or corner stays fixed. (4) defaultBounds(display, aspect): a quarter-width window at the right edge, vertically centred, aspect kept. Tests in test/unit/shared/overlay-bounds.test.js: two monitors side by side, unplugged monitor, snapping, every resize edge with and without aspect, minimum size. (2) Add src/shared/split-layout.js. State: { mode: 'single'|'split', ratio: 0.5, notesSide: 'left'|'right' }. Functions: layout(state, width, { minPane: 280, divider: 6 }) -> { notes: { x, width }, reader: { x, width } | null, divider: { x, width } | null }: in split mode the reader takes (1 - ratio) of the width on the side opposite the notes; the ratio is clamped so both panes keep minPane; below 2 * minPane + divider the reader is hidden (reader null, notes full width, state unchanged). dragDivider(state, width, x) -> new state with the ratio for a divider dragged to x (clamped as above). swap(state) flips notesSide. paneAt(layoutResult, x) -> 'notes' | 'reader' | 'divider' (wheel scrolling and Ctrl+wheel zoom go to the pane under the pointer). Pure, no mutation. Tests in test/unit/shared/split-layout.test.js: both sides, clamping, narrow window, swap round trip, paneAt at the borders. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-READER.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
       "src/shared/overlay-bounds.js",
-      "test/unit/shared/overlay-bounds.test.js",
-      "docs/NOTES-READER.md"
-    ],
-    "chain": "reader"
-  },
-  {
-    "id": "sn-split-layout",
-    "title": "Reference reader: split view layout with a draggable, swappable divider",
-    "instructions": "Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Add src/shared/split-layout.js. State: { mode: 'single'|'split', ratio: 0.5, notesSide: 'left'|'right' }. Functions:\nlayout(state, width, { minPane: 280, divider: 6 }) -> { notes: { x, width }, reader: { x, width } | null, divider: { x, width }\n| null }: in split mode the reader takes (1 - ratio) of the width on the side opposite the notes; the ratio is clamped so\nboth panes keep minPane; below 2 * minPane + divider the reader is hidden (reader null, notes full width, state unchanged).\ndragDivider(state, width, x) -> new state with the ratio for a divider dragged to x (clamped as above). swap(state) flips\nnotesSide. paneAt(layoutResult, x) -> 'notes' | 'reader' | 'divider' (wheel scrolling and Ctrl+wheel zoom go to the pane under\nthe pointer). Pure, no mutation. Tests in test/unit/shared/split-layout.test.js: both sides, clamping, narrow window, swap\nround trip, paneAt at the borders. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
-    "paths": [
       "src/shared/split-layout.js",
+      "test/unit/shared/overlay-bounds.test.js",
       "test/unit/shared/split-layout.test.js",
       "docs/NOTES-READER.md"
     ],
     "chain": "reader"
   },
   {
-    "id": "sn-reader-docs",
-    "title": "Reference reader: accept dropped documents and remember where each was left",
-    "instructions": "Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Add src/shared/reader-docs.js. (1) acceptDocs(files, open): files = [{ name, size, type? }] dropped or picked; accept PDFs\n(.pdf or type application/pdf) and images (.png .jpg .jpeg .webp); ignore other files, empty files and files over 500 MB;\nskip documents already open (same name and size); keep the drop order; return { add: [...], skipped: [{ name, reason }] }.\n(2) A per-document view state store: remember(store, docKey, { page, zoom, scrollY, fit }) and recall(store, docKey) with\nat most 50 documents, least recently used dropped first; zoom clamped to 0.1..8, page >= 0; recall of an unknown key returns\n{ page: 0, zoom: null, scrollY: 0, fit: true }. The store is plain JSON (it is saved with the settings). (3) docKey(file)\n= a stable key from name and size (lower-case name). Tests in test/unit/shared/reader-docs.test.js. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-reader-documents",
+    "title": "Reference reader: dropped documents, remembered positions and tabs",
+    "instructions": "StudyNotes gets a reference reader: a PDF opens in a small always-on-top window to move, resize, scroll and zoom while notes are taken elsewhere, or is docked into the main window as one side of a split view (swappable); more documents come by drag and drop or from a folder. Windows, drawing and files are wired in by the maintainer. (1) Add src/shared/reader-docs.js. (1) acceptDocs(files, open): files = [{ name, size, type? }] dropped or picked; accept PDFs (.pdf or type application/pdf) and images (.png .jpg .jpeg .webp); ignore other files, empty files and files over 500 MB; skip documents already open (same name and size); keep the drop order; return { add: [...], skipped: [{ name, reason }] }. (2) A per-document view state store: remember(store, docKey, { page, zoom, scrollY, fit }) and recall(store, docKey) with at most 50 documents, least recently used dropped first; zoom clamped to 0.1..8, page >= 0; recall of an unknown key returns { page: 0, zoom: null, scrollY: 0, fit: true }. The store is plain JSON (it is saved with the settings). (3) docKey(file) = a stable key from name and size (lower-case name). Tests in test/unit/shared/reader-docs.test.js. (2) Add a tab model: openTabs(state, docs) appends new tabs and activates the first new one; closeTab(state, key) activates the right neighbour, else the left one, else none; moveTab(state, key, toIndex); nextTab / prevTab wrap around; at most 12 tabs (opening more closes the least recently active, never the active one). State is plain JSON { tabs: [key], active: key | null, used: { key: counter } }. Tests in test/unit/shared/reader-docs.test.js. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-READER.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
       "src/shared/reader-docs.js",
       "test/unit/shared/reader-docs.test.js",
@@ -341,17 +80,95 @@
     "chain": "reader"
   },
   {
-    "id": "sn-reader-tabs",
-    "title": "Reference reader: tabs for several open documents",
-    "instructions": "Requires sn-reader-docs merged first: if a file it creates is missing in your checkout, stop and report 'blocked'. Background: StudyNotes gets a reference reader: a PDF (for example lecture slides) opens in a small floating window that stays on top of other windows, can be moved, resized, scrolled and zoomed while notes are taken elsewhere; the same document can be docked into the main window as one side of a split view (left or right, swappable), and further documents are added by dragging files in or choosing them from a folder. Only the pure logic is built here; windows, drawing and file access are wired in by the maintainer. Requires the reader-docs module. Extend src/shared/reader-docs.js with a tab model: openTabs(state, docs) appends new tabs\nand activates the first new one; closeTab(state, key) activates the right neighbour, else the left one, else none;\nmoveTab(state, key, toIndex); nextTab / prevTab wrap around; at most 12 tabs (opening more closes the least recently active,\nnever the active one). State is plain JSON { tabs: [key], active: key | null, used: { key: counter } }. Tests in\ntest/unit/shared/reader-docs.test.js. Append a dated section to docs/NOTES-READER.md (create it if missing, title line '# Notes: reference reader'): what you did, decisions and why, what is still open, what the maintainer needs to wire it into the app. Keep earlier sections unchanged. Rules: CommonJS with 'use strict'. Code in src/shared must stay pure: no require of anything but ./ files, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js checks this). Plain English comments that say why. Neutral English examples only. Tests use node:test and node:assert like the existing tests you can read. The project worker runs npm test after you submit; if you can run node --test yourself, do it and say so, otherwise say the tests were not run by you. Report: what changed, tests actually run, open points, and a short 'Next' paragraph for the following task.",
+    "id": "sn-names-android",
+    "title": "Android prep: file name rules and safe renames in one pure module",
+    "instructions": "Goal: Windows and Android get identical, safe file and folder names, and renames that differ only in letter case work on both. Add src/shared/names.js. Desktop code cleans user-given names like this today: replace < > : \" / \\ | ? * and control characters with a space, collapse spaces, trim, strip trailing dots and spaces, prefix '_' to CON, PRN, AUX, NUL, COM1-9, LPT1-9 (case-insensitive), 'Untitled' when empty, at most 120 characters. Export safeName(name) doing exactly that (cut at 120 without splitting a surrogate pair), uniqueName(base, taken) returning base, 'base (2)', 'base (3)' ... compared case-insensitively (Windows and Android file systems), and caseOnlyRename(from, to) -> true when the names differ only in letter case (such a rename needs a temporary name on those systems). Tests in test/unit/shared/names.test.js. Also renamePlan(from, to, taken) -> the list of rename steps: [[from, to]] normally, [[from, tmp], [tmp, to]] for a case-only rename (tmp from uniqueName(from + '.renaming', taken)), [] when from === to; to is cleaned with safeName and made unique against taken (without from). Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-ANDROID.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
     "paths": [
-      "src/shared/reader-docs.js",
-      "test/unit/shared/reader-docs.test.js",
-      "docs/NOTES-READER.md"
+      "src/shared/names.js",
+      "test/unit/shared/names.test.js",
+      "docs/NOTES-ANDROID.md"
     ],
-    "chain": "reader",
-    "after": [
-      "sn-reader-docs"
+    "chain": "android",
+    "context": [
+      "src/shared/paths.js"
     ]
+  },
+  {
+    "id": "sn-blocks-ragged",
+    "title": "Recognition: keep ragged columns apart in block detection",
+    "instructions": "Goal: 'Make text editable' never joins two text columns into one line. docs/FINDING-blocks-more-tests.md shows findBlocks merging two columns with ragged inner edges (gaps of 39, 83 and 52 px between lines at the same height) into one block. First add that fixture as a failing test, then fix findBlocks: find column gaps as vertical white channels that run through several consecutive text lines (allow the channel to shift by a little per line), and cut blocks along them before the smear joins them; a single wide word gap inside one line must not split a paragraph. Keep every existing test in scan-blocks.test.js green, and add tests for: a justified two-column page, a table with borders, one paragraph with one wide gap, a heading over two columns, and a 3-column page. Keep findBlocks within 1.5x of its current time on a 1500 x 2000 page (add a timing test with a generous limit). The maintainer re-runs the OCR references afterwards. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-RECOGNITION.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/shared/scan-blocks.js",
+      "test/unit/shared/scan-blocks.test.js",
+      "docs/NOTES-RECOGNITION.md"
+    ],
+    "chain": "recognition",
+    "context": [
+      "docs/FINDING-blocks-more-tests.md",
+      "src/shared/scan-layout.js"
+    ]
+  },
+  {
+    "id": "sn-ext-rich-paste",
+    "title": "Extension: formulas and formatting on paste, and on existing text boxes",
+    "instructions": "Goal (user request): text with LaTeX such as '\\[ \\frac{400}{230}\\approx 1{,}73=\\sqrt{3} \\]', copied from a chat, shows as a set formula; bold, headings and lists are kept. Build extension 'rich-paste' on src/shared/paste-parse.js (pasteToRich): (1) host.paste.addTransform: pasteToRich on the clipboard; (2) host.inline.register('rich-paste:math'): render with KaTeX (katex.render(src, el, { displayMode, throwOnError: false })), display formulas centred on their own line, inherit text colour and size; a formula KaTeX cannot parse shows its source in red; toText gives $...$ / $$...$$, toHtml the KaTeX HTML with the source annotation; edit opens host.ui.prompt with the source (Enter applies, Esc cancels); (3) host.menus.add('textbox-more', 'Render formulas and formatting'): for a box whose text already contains formulas or Markdown, replace its content via ctx.textbox.setHtml(pasteToRich({ text })) (one undo step), hidden when there is nothing to convert; (4) setting 'convert on paste' (default on while the extension is on). KaTeX CSS and fonts come from the katex package (see the notes for how the host loads package CSS). e2e: paste the formula above into a box, check a .katex element and no raw \\frac text; double-click edits it; Ctrl+Z restores; the menu action converts an existing box; switching the extension off shows the $...$ text again. Read docs/EXTENSIONS.md first and follow it. If src/renderer/extensions.js or test/unit/extensions/fake-host.js is missing in your checkout, stop and report 'blocked'. ES module, default export with apiVersion 1, defaultEnabled false. Imports only from the extension's own folder, ../../shared/*.js and allowed packages; test/unit/main/extensions-guard.test.js must pass. Everything user-visible goes through host.ui.t() for translation. Unit tests with the fake host for all logic; an e2e test that goes through the user's path in the real app (switch on in Settings, use, undo, switch off) with check(...) lines like test/e2e/run.js. Run node --test, npm test and, if you can run Electron, the e2e file; say exactly which ran. Append a dated section to docs/NOTES-PASTE.md (keep earlier sections): what you did, decisions, open points, how a user tries it. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/extensions/rich-paste/index.js",
+      "src/extensions/rich-paste/math.js",
+      "src/extensions/rich-paste/styles.css",
+      "test/unit/extensions/rich-paste.test.js",
+      "test/e2e/extensions/rich-paste.js",
+      "docs/NOTES-PASTE.md"
+    ],
+    "chain": "paste",
+    "after": [
+      "sn-paste-parse"
+    ],
+    "context": [
+      "docs/EXTENSIONS.md",
+      "src/shared/paste-parse.js",
+      "src/shared/richtext.js"
+    ],
+    "invite_only": true
+  },
+  {
+    "id": "sn-ext-rich-paste-export",
+    "title": "Extension: formulas in PDF and PNG export and when copying out",
+    "instructions": "Goal: exported PDFs and PNGs show the set formulas exactly like the screen; copying a box to another program gives $...$ in plain text and rendered HTML. Implement exportImage for 'rich-paste:math' in src/extensions/rich-paste/export.js: render the KaTeX HTML into an SVG foreignObject with the KaTeX CSS and the needed fonts inlined as data URLs, draw it on a canvas at the requested scale, return { png, width, height, baseline } in points (baseline from the .katex-html base box), colour from the style. Cache by source + size + colour + scale inside the extension. Unit tests: cache keys, size and baseline maths with stubbed measurements, colour handling. e2e: a box with an inline and a display formula -> export PDF -> pdftotext must not contain the LaTeX source and pdfimages (or the page render) shows the formula area inked at the right place (compare with the on-screen box position within 2 pt); PNG export of the page has ink there; Ctrl+C on the box puts $...$ in text/plain. Read docs/EXTENSIONS.md first and follow it. If src/renderer/extensions.js or test/unit/extensions/fake-host.js is missing in your checkout, stop and report 'blocked'. ES module, default export with apiVersion 1, defaultEnabled false. Imports only from the extension's own folder, ../../shared/*.js and allowed packages; test/unit/main/extensions-guard.test.js must pass. Everything user-visible goes through host.ui.t() for translation. Unit tests with the fake host for all logic; an e2e test that goes through the user's path in the real app (switch on in Settings, use, undo, switch off) with check(...) lines like test/e2e/run.js. Run node --test, npm test and, if you can run Electron, the e2e file; say exactly which ran. Append a dated section to docs/NOTES-PASTE.md (keep earlier sections): what you did, decisions, open points, how a user tries it. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/extensions/rich-paste/export.js",
+      "src/extensions/rich-paste/index.js",
+      "test/unit/extensions/rich-paste-export.test.js",
+      "test/e2e/extensions/rich-paste-export.js",
+      "docs/NOTES-PASTE.md"
+    ],
+    "chain": "paste",
+    "after": [
+      "sn-ext-rich-paste"
+    ],
+    "context": [
+      "docs/EXTENSIONS.md",
+      "src/extensions/rich-paste/index.js"
+    ],
+    "invite_only": true
+  },
+  {
+    "id": "sn-ext-dark-view",
+    "title": "Extension: dark view for PDF pages with readable ink",
+    "instructions": "Goal (user request): a view setting that shows PDF pages dark grey with light text, without changing the document. src/shared/dark-view.js has darkColor and darkenImage (keep them and their tests). (1) Add to dark-view.js: inkForDark(hex) and highlightBlend(dark). In the dark view black or dark-blue pen ink would vanish; stored colours must not change, only the shown ones. inkForDark returns the colour to draw: dark colours (lightness < 0.5) get the 'full' mapping of darkColor, light ones stay, results as '#rrggbb' lower case. highlightBlend returns 'multiply' for light pages and 'screen' for dark. Tests in test/unit/shared/dark-view.test.js. (2) Extension 'dark-view': host.menus.add('view', 'Dark pages') toggles it per notebook (host.settings.notebook); host.view.addPagePass darkens the canvas with darkenImage but leaves imageRegions (photos, figures) untouched; host.view.setInkFilter(inkForDark); host.view.refresh() on toggle. e2e: open a notebook with a text PDF page and a black pen stroke, switch on: page background pixel dark, text light, the stroke light on screen but its stored colour unchanged (read the notebook data), a picture region unchanged; export PDF is identical to before; switch off restores the page. Read docs/EXTENSIONS.md first and follow it. If src/renderer/extensions.js or test/unit/extensions/fake-host.js is missing in your checkout, stop and report 'blocked'. ES module, default export with apiVersion 1, defaultEnabled false. Imports only from the extension's own folder, ../../shared/*.js and allowed packages; test/unit/main/extensions-guard.test.js must pass. Everything user-visible goes through host.ui.t() for translation. Unit tests with the fake host for all logic; an e2e test that goes through the user's path in the real app (switch on in Settings, use, undo, switch off) with check(...) lines like test/e2e/run.js. Run node --test, npm test and, if you can run Electron, the e2e file; say exactly which ran. Append a dated section to docs/NOTES-DARK.md (keep earlier sections): what you did, decisions, open points, how a user tries it. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/extensions/dark-view/index.js",
+      "src/shared/dark-view.js",
+      "test/unit/shared/dark-view.test.js",
+      "test/unit/extensions/dark-view.test.js",
+      "test/e2e/extensions/dark-view.js",
+      "docs/NOTES-DARK.md"
+    ],
+    "chain": "dark",
+    "context": [
+      "docs/EXTENSIONS.md",
+      "src/shared/paper.js"
+    ],
+    "invite_only": true
   }
 ]

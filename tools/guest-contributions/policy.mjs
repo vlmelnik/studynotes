@@ -13,7 +13,7 @@ const inviteLifetime = 7 * 24 * 60 * 60 * 1000;
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const newToken = () => randomBytes(32).toString('base64url');
 
-function permittedPath(path) {
+export function permittedPath(path) {
   if (typeof path !== 'string' || path.length > 180 ||
       !/^[a-z0-9][a-z0-9._/-]*$/i.test(path)) return false;
   if (path.split('/').some(part =>
@@ -21,7 +21,12 @@ function permittedPath(path) {
     /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) return false;
   return /^docs\/(?!contributions\/)[^/]+\.md$/.test(path) ||
     /^src\/shared\/(?:[^/.]+\/)*[^/]+\.js$/.test(path) ||
-    /^test\/unit\/shared\/(?:[^/.]+\/)*[^/]+\.test\.js$/.test(path);
+    /^test\/unit\/shared\/(?:[^/.]+\/)*[^/]+\.test\.js$/.test(path) ||
+    // extensions: renderer code that only talks to the host API (docs/EXTENSIONS.md);
+    // test/unit/main/extensions-guard.test.js checks what it may import
+    /^src\/extensions\/[a-z0-9-]+\/[^/]+\.(?:js|css)$/.test(path) ||
+    /^test\/unit\/extensions\/[^/]+\.test\.js$/.test(path) ||
+    /^test\/e2e\/extensions\/[^/]+\.js$/.test(path);
 }
 
 export function readTasks(list) {
