@@ -1,0 +1,27 @@
+name: Publish verified Windows 1.8.0
+on:
+  push:
+    branches: ['publish/windows-1.8.0']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download verified build and publish release
+        run: |
+          set -euo pipefail
+          mkdir binaries
+          cd binaries
+          gh run download 45044197663 --name StudyNotes-Setup-1.8.0
+          gh run download 45044197663 --name StudyNotes-1.8.0-win-x64
+          cat > SHA256SUMS.txt <<'SUMS'
+          4e137c1fc3e0319059339e922812454bd3650d7fe5b1eae5c4a95f8a969ee1c1  StudyNotes-Setup-1.8.0.exe
+          c5e4ef42e01bf879dec896c9b2a0f03d87014eef67b7d5aba97319d2aa094391  StudyNotes-1.8.0-win-x64.zip
+          SUMS
+          sha256sum --check SHA256SUMS.txt
+          gh release create v1.8.0 --target 4c91286929180e0fa9490ad9bc1ab3105b3dcda0 --title 'StudyNotes 1.8.0' --notes 'Windows x64 installer and portable ZIP. This build includes the fix for closed notebooks remaining in memory. Google Drive sync requires a user-supplied OAuth client in Advanced settings.' StudyNotes-Setup-1.8.0.exe StudyNotes-1.8.0-win-x64.zip SHA256SUMS.txt
