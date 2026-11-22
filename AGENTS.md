@@ -54,3 +54,7 @@ never pushed. If it exists:
 When a participant asks to work on ready tasks, use the StudyNotes connector to claim, complete and submit one task at a time. Keep receipts private and leave merging to the maintainer.
 
 After a confirmed submission, check the remaining model allowance if the client exposes it. Claim another task only when there is enough to finish it within the participant's budget. If the balance is unknown or insufficient, the queue is empty, or the service limit is reached, end the session. Honor explicit limits such as a request for a single task. See the [participant guide](docs/contributions/COWORK.md) for setup and handoff details.
+
+Prefer a strong coding model available in the participant's account, such as Claude Opus 5.5 if available, or a comparable model in the chosen client.
+
+When designing queue tasks, aim for one independently reviewable outcome that uses roughly 70% of a typical participant's five-hour usage allowance, including verification and handoff. This is a sizing estimate: model quotas vary and the connector cannot measure the participant's balance. Keep each task feasible within the two-hour reservation. Split larger changes at testable boundaries and submit smaller completed tasks promptly.
