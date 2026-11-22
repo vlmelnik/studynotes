@@ -7,6 +7,7 @@ import { PdfDoc } from './pdfdoc.js';
 import { uid } from './tools.js';
 import { maybeShowWhatsNew, showWhatsNew } from './whats-new.js';
 import { setLang } from './i18n.js';
+import { extensions } from './extensions.js';
 
 class App {
   async init() {
@@ -26,6 +27,8 @@ class App {
     this.saveToolState = this.saveSettings;
 
     this.editors = []; // { editor, tabEl }
+    this.extensions = extensions;
+    extensions.init(this); // after settings and saveSettings exist
     this.opening = new Set(); // rels being loaded right now
     this.active = null; // null = library
     this.loading = new Map();
@@ -425,7 +428,7 @@ class App {
       const input = h('input', { type: 'checkbox', checked: !!s[key], onchange: (e) => { s[key] = e.target.checked; this.saveSettings(); } });
       return h('label', { class: 'check' }, input, h('span', {}, label, hint ? h('small', {}, hint) : null));
     };
-    // two tabs: the app's own settings and the add-ons (each with its own settings)
+    // two tabs: the app's own settings and the add-ons (each with its own settings, extensions too)
     const general = h('div', { class: 'form settings-pane' },
         h('div', { class: 'field' }, h('span', {}, 'Library folder'), libPath,
           h('div', { class: 'row' },
@@ -551,7 +554,13 @@ class App {
         name: 'Handwriting to text',
         about: 'Your pen writing → text: select it → "Copy as text" or "To text". Windows reads it on this PC; Google reads it online with your Google account (better for untidy writing).',
         settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
-      }));
+      }),
+      // extensions (src/extensions, docs/EXTENSIONS.md): off until switched on
+      ...extensions.list().map((x) => card({
+        name: x.name, about: x.description,
+        state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, 'Extension'),
+        on: x.enabled, setOn: (v) => extensions.setEnabled(x.id, v),
+      })));
   }
 
   // ---------- graphics tablet ----------

@@ -6,6 +6,9 @@ import { h, showMenu, closeMenu } from './ui.js';
 import { icon } from './icons.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
 import { boxStyle, BOX_PRESETS } from '../shared/textbox.js';
+import { extensions } from './extensions.js';
+import { sanitizeHtml } from './editor-objects.js';
+import { richToPlain } from '../shared/richtext.js';
 
 export const TEXT_SIZES = [8, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 60, 72, 96];
 
@@ -256,7 +259,33 @@ export class TextBar {
       { label: 'Send to back', icon: 'back', onClick: () => this.boxAction('back') },
       'sep',
       { label: 'Paste formatting as plain text', icon: 'text', checked: !ed.settings.pasteFormatting, onClick: () => { ed.settings.pasteFormatting = !ed.settings.pasteFormatting; ed.app.saveSettings(); } },
+      ...this.extensionItems(),
     ], 0, 0, anchor);
+  }
+
+  // Menu items of extensions for one text box (docs/EXTENSIONS.md, 'textbox-more').
+  extensionItems() {
+    const ed = this.editor;
+    const t = this.target;
+    if (!t || t.ids.length !== 1) return [];
+    const { pageId } = t;
+    const id = t.ids[0];
+    const box = ed.pageData(pageId).texts.find((x) => x.id === id);
+    if (!box) return [];
+    const ctx = Object.freeze({
+      textbox: Object.freeze({
+        text: box.text || '',
+        html: box.html || '',
+        setHtml(html) {
+          if (t.editing) ed.finishEditing(true);
+          const before = ed.pageData(pageId);
+          const clean = sanitizeHtml(String(html));
+          ed.commit(pageId, before, { ...before, texts: before.texts.map((x) => (x.id === id ? { ...x, html: clean, text: richToPlain(clean) } : x)) });
+        },
+      }),
+    });
+    const items = extensions.menuItems('textbox-more', ctx);
+    return items.length ? ['sep', ...items] : [];
   }
 
   // Box-level actions work the same whether the box is being edited or selected.

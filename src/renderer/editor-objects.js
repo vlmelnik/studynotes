@@ -12,6 +12,7 @@ import { clipPlan } from '../shared/clip-plan.js';
 import { boxWarp, cssMatrix3d, validStops } from '../shared/warp.js';
 import { boxStyle, docLook, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
 import { renderFormFields } from './fill-sign.js';
+import { extensions } from './extensions.js';
 
 const MARKER = '⁣StudyNotes-clip:';
 const MAX_IMAGE_SIDE = 3200;
@@ -145,6 +146,14 @@ export function sanitizeHtml(html, external = false) {
     const tag = node.tagName.toLowerCase();
     if (SKIP.has(tag)) return;
     if (tag === 'br') { out.push('<br>'); return; }
+    // An extension's inline element: kept as <span data-x data-v [data-display]>
+    // with its plain-text fallback inside (what older versions and search see).
+    if (tag === 'span' && node.dataset && node.dataset.x && /^[a-z0-9-]+(?::[a-z0-9-]+)?$/.test(node.dataset.x)) {
+      const display = node.dataset.display === '1';
+      const fallback = extensions.fallbackText(node.dataset.x, node.dataset.v || '', display, node.dataset.rendered ? null : node);
+      out.push(`<span data-x="${escHtml(node.dataset.x)}" data-v="${escHtml(node.dataset.v || '').replace(/"/g, '&quot;')}"${display ? ' data-display="1"' : ''}>${escHtml(fallback)}</span>`);
+      return;
+    }
     const st = node.style || {};
     const bold = tag === 'b' || tag === 'strong' || /^(bold|[6-9]00)$/.test(st.fontWeight || '');
     const ital = tag === 'i' || tag === 'em' || st.fontStyle === 'italic';
@@ -248,6 +257,12 @@ function mimeFromName(name) {
   return { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }[ext] || '';
 }
 
+// Text box markup with the extensions' inline elements shown (docs/EXTENSIONS.md).
+function setBoxHtml(el, t) {
+  if (t.html) { el.innerHTML = safeHtml(t.html); if (t.html.includes('data-x')) extensions.renderInline(el, { color: t.c, fontSize: t.fs }); }
+  else el.textContent = t.text;
+}
+
 export const objectsMixin = {
   // ---------- text boxes ----------
   addText(pageId, t) {
@@ -317,7 +332,7 @@ export const objectsMixin = {
         ...(t.lh ? { lineHeight: String(t.lh), minHeight: t.lh + 'em' } : {}),
       },
     });
-    if (t.html) el.innerHTML = safeHtml(t.html); else el.textContent = t.text;
+    setBoxHtml(el, t);
     const grip = h('div', { class: 'tb-handle grip', title: 'Drag to move' });
     const resizeL = h('div', { class: 'tb-handle resize left', title: 'Drag to change the width' });
     const resize = h('div', { class: 'tb-handle resize right', title: 'Drag to change the width' });
@@ -428,6 +443,22 @@ export const objectsMixin = {
       this.textBar.update();
     });
     el.addEventListener('input', () => { this.syncTextFromDom(pageId, id, el); this.textBar.schedulePosition(); });
+    // Double-click on an extension's inline element (a formula …): edit its value.
+    el.addEventListener('dblclick', async (e) => {
+      const sp = e.target.closest && e.target.closest('span[data-x][data-rendered]');
+      if (!sp || !el.contains(sp)) return;
+      e.preventDefault(); e.stopPropagation();
+      const v = await extensions.editInline(sp);
+      if (v === null || v === sp.dataset.v) return;
+      const before = this.pageData(pageId);
+      const t0 = find();
+      sp.dataset.v = v;
+      delete sp.dataset.rendered;
+      extensions.renderInline(el, { color: t0 && t0.c, fontSize: t0 && t0.fs });
+      if (this.textEdit && this.textEdit.id === id) { this.syncTextFromDom(pageId, id, el); return; }
+      const html = sanitizeHtml(el.innerHTML);
+      this.commit(pageId, before, { ...before, texts: before.texts.map((t) => (t.id === id ? { ...t, html, text: richToPlain(html) } : t)) });
+    });
     el.addEventListener('blur', (e) => {
       wrap.classList.remove('editing');
       // Clicking into the text bar (e.g. the size field) keeps editing alive.
@@ -443,7 +474,9 @@ export const objectsMixin = {
       e.stopPropagation();
       const html = e.clipboardData.getData('text/html');
       const text = e.clipboardData.getData('text/plain');
-      if (this.settings.pasteFormatting && html) document.execCommand('insertHTML', false, sanitizeHtml(html, true));
+      const ext = extensions.pasteTransform({ html, text, target: 'textbox' });
+      if (ext) { document.execCommand('insertHTML', false, sanitizeHtml(ext.html)); extensions.renderInline(el); this.syncTextFromDom(pageId, id, el); }
+      else if (this.settings.pasteFormatting && html) document.execCommand('insertHTML', false, sanitizeHtml(html, true));
       else document.execCommand('insertText', false, text.replace(/\u00a0/g, ' '));
     });
     // Move / resize with the handles (text tool, or select tool on a selected box).
@@ -709,7 +742,7 @@ export const objectsMixin = {
         const wrap = el.closest('.textbox-wrap');
         const view = this.viewer.viewById(pageId);
         if (wrap) this.applyBoxLook(el, wrap, t, view && view.page);
-        if (t.html) el.innerHTML = safeHtml(t.html); else el.textContent = t.text;
+        setBoxHtml(el, t);
       }
     }
   },
@@ -832,7 +865,7 @@ export const objectsMixin = {
             color: cell.c || '',
           },
         });
-        if (cell.h) td.innerHTML = safeHtml(cell.h); else td.textContent = cell.t || '';
+        if (cell.h) { td.innerHTML = safeHtml(cell.h); if (cell.h.includes('data-x')) extensions.renderInline(td); } else td.textContent = cell.t || '';
         return td;
       }))));
     return h('div', { class: 'item table-item', dataset: { id: it.id }, style: { left: it.x + 'px', top: it.y + 'px' } }, table);
@@ -1143,9 +1176,10 @@ export const objectsMixin = {
     const tsv = tableFromTsv(text);
     if (tsv) return this.tools.placeObjects(point.index, { items: [this.clampToPage(point.index, this.makeTable(tsv, point))] });
     // 6. Text → new text box (plain by default; formatting if enabled).
-    if (text.trim() || (html && this.settings.pasteFormatting)) {
+    const ext = extensions.pasteTransform({ html, text, target: 'page' });
+    if (text.trim() || ext || (html && this.settings.pasteFormatting)) {
       const ts = this.toolState.text;
-      const rich = this.settings.pasteFormatting && html ? sanitizeHtml(html, true) : '';
+      const rich = ext ? sanitizeHtml(ext.html) : this.settings.pasteFormatting && html ? sanitizeHtml(html, true) : '';
       const plain = rich && hasFormatting(rich) ? richToPlain(rich) : text.replace(/\r/g, '').trim();
       const page = this.pages[point.index];
       const w = Math.min(420, page.kind === 'board' ? 420 : page.w - 60);

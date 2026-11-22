@@ -12,7 +12,7 @@ const { paperGeometry, pageBackground } = require('../shared/paper');
 const { boxWarp, applyH, colourAt, validStops } = require('../shared/warp');
 const { boxStyle, roundedRect, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } = require('../shared/textbox');
 const { stacked } = require('../shared/stacking');
-const { parseRich, plainToHtml, layoutRich } = require('../shared/richtext');
+const { parseRich, plainToHtml, layoutRich, inlineKey } = require('../shared/richtext');
 const { fontFile } = require('../shared/fonts');
 const { strokeBBox, capsulePolygon } = require('../shared/geometry');
 const { LINE_H } = require('../shared/util');
@@ -97,8 +97,10 @@ function splitByGlyphs(text, fk) {
 // Rich text: per-run bold/italic/underline plus optional size, font and colour
 // (<span data-fs data-ff data-c>). Lines are as tall as their largest run, like
 // in the browser. `al` = left | center | right.
-async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, lh = LINE_H, dry = false, turn = 0, soft = 0, look = {} }, map, rot, k = 1) {
+async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y, w, al, lh = LINE_H, dry = false, turn = 0, soft = 0, look = {}, inline = null }, map, rot, k = 1) {
   const paras = parseRich(html || plainToHtml(text || ''), { b, i, u });
+  // extensions' inline elements (formulas …): pictures from the renderer, else their text
+  if (inline) for (const para of paras) for (const run of para) if (run.ix) run.img = await inline(inlineKey(run.ix, run.iv, run.disp, run.fs || fs, run.c || color));
   // layoutRich needs a synchronous measure: pre-load every font variant used.
   const variants = new Map();
   const vkey = (st) => `${st.ff || ff}|${!!st.b}|${!!st.i}`;
@@ -112,12 +114,16 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
   const mSync = (t, st) => {
     const key = `${vkey(st)}|${sizeOf(st)}|${t}`;
     let v = measureCache.get(key);
+    if (st.img) return st.img.width;
     if (v === undefined) { v = variants.get(vkey(st)).pdfFont.widthOfTextAtSize(t, sizeOf(st)); measureCache.set(key, v); }
     return v;
   };
   const maxW = Math.max(4, w - 1);
   const lines = layoutRich(paras, maxW, mSync);
-  if (dry) return lines.reduce((sum, line) => sum + Math.max(fs, ...line.runs.map(sizeOf), 1) * lh, 0);
+  // a line is as tall as its largest letters or its tallest picture
+  const imgs = (line) => line.runs.filter((r) => r.img).map((r) => r.img);
+  const heightOf = (line) => Math.max(Math.max(fs, ...line.runs.map(sizeOf), 1) * lh, ...imgs(line).map((m) => m.height * 1.15));
+  if (dry) return lines.reduce((sum, line) => sum + heightOf(line), 0);
   const fb = await fonts.fallback();
   // "Match the document": soft letters like the scan. A PDF has no blur, so
   // the letters' outlines are collected into one form that is placed several
@@ -128,11 +134,21 @@ async function drawRich(page, fonts, { html, text, ff, b, i, u, fs, color, x, y,
   for (const line of lines) {
     // Like CSS line boxes: never smaller than the box's own font size (the strut).
     const lfs = Math.max(fs, ...line.runs.map(sizeOf), 1);
-    const lineH = lfs * lh;
+    const lineH = heightOf(line);
     const lm = variants.get(vkey({})).metrics;
-    const by = ly + (lineH - (lm.asc - lm.desc) * lfs) / 2 + lm.asc * lfs;
-    const dx = al === 'center' ? (maxW - line.width) / 2 : al === 'right' ? maxW - line.width : 0;
+    const li = imgs(line);
+    const imgTop = li.length ? (lineH - Math.max(...li.map((m) => m.height))) / 2 + Math.max(...li.map((m) => m.baseline)) : 0;
+    const by = ly + Math.max((lineH - (lm.asc - lm.desc) * lfs) / 2 + lm.asc * lfs, imgTop);
+    // a display formula alone on its line is centred
+    const alone = line.runs.some((r) => r.disp && r.img) && line.runs.every((r) => r.disp || !r.t.trim());
+    const dx = al === 'center' || alone ? (maxW - line.width) / 2 : al === 'right' ? maxW - line.width : 0;
     for (const run of line.runs) {
+      if (run.img) {
+        const ix = x + dx + run.x, top = by - run.img.baseline;
+        const [u0, v0] = map(ix, top + run.img.height);
+        page.drawImage(run.img.pdfImage, { x: u0, y: v0, width: run.img.width * k, height: run.img.height * k, rotate: degrees(normRotation(rot) - (turn || 0)) });
+        continue;
+      }
       if (!run.t.trim()) continue;
       const f = variants.get(vkey(run));
       const rfs = sizeOf(run);
@@ -368,7 +384,7 @@ async function drawImage(page, it, map, rot, k, images) {
   page.drawImage(img, opts);
 }
 
-async function drawTable(page, it, map, rot, k, fonts) {
+async function drawTable(page, it, map, rot, k, fonts, inline = null) {
   const cw = it.cw || [];
   const rows = it.cells || [];
   const fs = it.fs || 12;
@@ -385,7 +401,7 @@ async function drawTable(page, it, map, rot, k, fonts) {
       if (cell.h || cell.t) {
         await drawRich(page, fonts, {
           html: cell.h, text: cell.t, ff: it.ff, b: cell.b || (it.hdr && r === 0), i: cell.i, u: cell.u,
-          fs, color: cell.c || it.c || '#1c1c1e', x: x + CELL_PAD, y: y + CELL_PAD, w: cw[c] - CELL_PAD * 2,
+          fs, color: cell.c || it.c || '#1c1c1e', x: x + CELL_PAD, y: y + CELL_PAD, w: cw[c] - CELL_PAD * 2, inline,
         }, map, rot, k);
       }
       x += cw[c];
@@ -409,7 +425,7 @@ async function drawTable(page, it, map, rot, k, fonts) {
 async function drawObject(page, kind, o, map, rot, ctx, k) {
   if (kind === 'item') {
     if (o.type === 'img') await drawImage(page, o, map, rot, k, ctx.images);
-    else if (o.type === 'table') await drawTable(page, o, map, rot, k, ctx.fonts);
+    else if (o.type === 'table') await drawTable(page, o, map, rot, k, ctx.fonts, ctx.inline);
     // unknown item types (from newer versions) are skipped
     return;
   }
@@ -420,7 +436,7 @@ async function drawObject(page, kind, o, map, rot, ctx, k) {
   const w = (o.w || 200) * (o.aw ? 1.04 : 1) + (o.aw ? 2 : 0);
   const rich = {
     html: o.html, text: o.text, ff: o.ff, b: o.b, i: o.i, u: o.u, fs: o.fs || 14, color: o.c,
-    x: o.x, y: o.y, w, al: o.al, lh: o.lh || LINE_H, soft: softOf(o),
+    x: o.x, y: o.y, w, al: o.al, lh: o.lh || LINE_H, soft: softOf(o), inline: ctx.inline,
   };
   // "Match the document": the photo's perspective and light (see shared/warp.js)
   if (rich.soft > 0) {
@@ -562,7 +578,17 @@ async function exportNotebook(args) {
     }
     return imageCache.get(src);
   };
-  const ctx = { fonts, images };
+  // Pictures of extension inline elements (formulas …), drawn by the renderer:
+  // { key: { png, width, height, baseline } } in page units. Embedded once each.
+  const inlineCache = new Map();
+  const given = args.inline && typeof args.inline === 'object' ? args.inline : null;
+  const inline = given ? async (key) => {
+    const m = Object.prototype.hasOwnProperty.call(given, key) ? given[key] : null;
+    if (!m || !m.png || !(m.width > 0) || !(m.height > 0)) return null;
+    if (!inlineCache.has(key)) inlineCache.set(key, out.embedPng(m.png).then((pdfImage) => ({ pdfImage, width: +m.width, height: +m.height, baseline: Math.min(+m.height, Math.max(0, +m.baseline || +m.height)) }), () => null));
+    return inlineCache.get(key);
+  } : null;
+  const ctx = { fonts, images, inline };
 
   const wanted = pageIds ? new Set(pageIds) : null;
   const list = notebook.pages.filter((p) => !wanted || wanted.has(p.id));

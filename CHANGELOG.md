@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+**Extensions**
+- Optional features can now come as extensions (Settings → Add-ons): each one is switched on and off on its own, and a broken one switches itself off instead of stopping the app. Notes stay readable when an extension is off. For developers: docs/EXTENSIONS.md.
+
 ## 1.8.0
 
 **Faster and steadier**

@@ -76,8 +76,8 @@ Two handlers exist only when the app runs with `STUDYNOTES_TEST` set
 
 | Method | Arguments | Result | What it does | Android 2.0 |
 | --- | --- | --- | --- | --- |
-| `exportPdf` | `rel`, `pageIds` (or `null` for all) | saved file path, or `null` if cancelled | Asks where to save, builds the PDF and shows it in the file manager. | needed |
-| `exportTo` | `rel`, `pageIds`, `outFile` | `outFile` | Builds the PDF at a given path without a dialog; registered only in test mode. | desktop-only |
+| `exportPdf` | `rel`, `pageIds` (or `null` for all), `inline` (optional: extension pictures by key, docs/EXTENSIONS.md) | saved file path, or `null` if cancelled | Asks where to save, builds the PDF and shows it in the file manager. | needed |
+| `exportTo` | `rel`, `pageIds`, `outFile`, `inline` (optional) | `outFile` | Builds the PDF at a given path without a dialog; registered only in test mode. | desktop-only |
 | `send` | `rel`, `pageIds`, `via` (`'mail'` or other = Telegram), `label` | `{ file, method, ... }` | Exports a PDF to a temp folder and opens the mail client or Telegram with it. | desktop-only |
 
 ## Sync & cloud (Drive)

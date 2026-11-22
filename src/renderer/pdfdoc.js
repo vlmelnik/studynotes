@@ -3,6 +3,8 @@
 // prioritised render queue shared by all open notebooks.
 import * as pdfjs from 'pdfjs-dist/build/pdf.mjs';
 import { encodeRel } from './ui.js';
+import { extensions } from './extensions.js';
+import { imageRects } from '../shared/pdf-images.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = 'sn://app/pdf.worker.min.mjs';
 export const Util = pdfjs.Util;
@@ -147,6 +149,13 @@ export class PdfDoc {
         throw err;
       }
       if (task.cancelled) { canvas.width = canvas.height = 0; throw new CancelError(); }
+      // extensions' view effects (dark pages …): screen only, never the export
+      if (extensions.passes.length) {
+        await extensions.pagePass(canvas, {
+          scale, viewport: vp,
+          page: { index: n - 1, imageRects: async (v) => { const ol = await page.getOperatorList(); return imageRects(ol.fnArray, ol.argsArray, pdfjs.OPS, v.transform); } },
+        });
+      }
       return canvas;
     });
     return { promise, cancel: task.cancel, setPriority: (pr) => { task.priority = pr; } };

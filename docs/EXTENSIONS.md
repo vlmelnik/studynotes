@@ -6,11 +6,9 @@ object. Users switch extensions on and off in *Settings → Extensions*. Outside
 contributors can build a complete, user-visible feature this way without
 touching the editor, the viewer or the main process.
 
-> **Status (2026-11-22):** this is the planned contract (API version 1). The
-> host (`src/renderer/extensions.js`) is built by the maintainer. Queue tasks
-> that need it are marked `invite_only` until it is merged. If
-> `src/renderer/extensions.js` is missing in your checkout, stop and report
-> "blocked".
+> **Status:** API version 1, implemented in `src/renderer/extensions.js`
+> (host), tested by `test/e2e/extensions-host.js` (a test extension goes
+> through every part below) and `test/unit/extensions/fake-host.test.js`.
 
 ## Files
 
@@ -24,7 +22,9 @@ touching the editor, the viewer or the main process.
 
 `<id>`: lower case letters, digits and `-`. No sub folders, only `.js` and
 `.css`. The build picks up every `src/extensions/*/index.js` by itself, so
-no shared list has to be edited.
+no shared list has to be edited. CSS is imported from the code
+(`import './styles.css';`, `import 'katex/dist/katex.min.css';`) and
+bundled into `dist/app.css` together with the fonts it points to.
 
 ### What extension code may use
 `test/unit/main/extensions-guard.test.js` checks this:
@@ -58,19 +58,22 @@ disables the extension and shows a short message.
 ## Host API version 1
 
 ### `host.paste.addTransform(fn, { priority = 0 })`
-Called when text is pasted into a text box or onto the page, before the app
-sanitises it. `fn({ html, text, target })` gets the clipboard's `text/html`
+Called when text is pasted into a text box or onto the page (also when
+"Paste keeps formatting" is off), before the app sanitises it. `fn({ html, text, target })` gets the clipboard's `text/html`
 (or `''`), `text/plain` and `target` (`'textbox'` or `'page'`). It returns
 `null` (not mine) or `{ html }` in the app's rich-text subset (see
 `src/shared/richtext.js`: `<b> <i> <u> <br> <div>`,
 `<span data-fs data-ff data-c>`) plus inline elements registered with
 `host.inline`. The first non-null result wins (higher priority first).
-*Paste as plain text* (Ctrl+Shift+V) skips all transforms.
+Build inline elements with `host.inline.html(kind, value, { display })`.
 
 ### `host.inline.register(kind, def)`
 An atomic inline element stored as
-`<span data-x="<kind>" data-v="<value>" [data-display="1"]></span>`, with
-`kind` = `<extension id>` or `<extension id>:<name>` and `value` a string (HTML-escaped by the host). `def`:
+`<span data-x="<kind>" data-v="<value>" [data-display="1"]>fallback</span>`,
+with `kind` = `<extension id>` or `<extension id>:<name>`, `value` a string
+and `fallback` = `toText(value)`, which the host writes in. The box's plain
+`text` holds the fallback too, so search, older versions and the app with
+the extension off show it. `def`:
 - `render(el, value, { display, color, fontSize })`: fill the empty element
   on screen. It is called again when the size or colour changes.
 - `toText(value, { display })`: plain text for copy, search and older app
@@ -80,29 +83,39 @@ An atomic inline element stored as
   double-click. Return the new value, or `null` to cancel. Use
   `host.ui.prompt` or your own dialog.
 - `exportImage(value, { display, color, fontSize, scale }) → Promise<{ png, width, height, baseline }>`:
-  used by PDF and PNG export, sizes in points, `baseline` measured from the
-  top. The host caches results per value and style.
+  used by *Export PDF*. `png` is the PNG file (Uint8Array, drawn at `scale` ×
+  for sharpness). `width`, `height` and `baseline` (measured from the top)
+  are given in the same units as `fontSize`. The export places the picture
+  on the text line. A display formula alone on its line is centred. The host
+  caches results per value and style. Other ways out (send by e-mail,
+  saving into an opened PDF, Drive) get the fallback text for now.
 
-The caret steps over the element as one character, Backspace removes it
-whole, and undo works. The host handles all of this. If the extension is
-off or missing, the app shows `toText(value)` from the stored plain text, so
-nothing is lost.
+On screen the element is `contenteditable="false"`, so the caret steps over
+it as one character and Backspace removes it whole. Double-click calls
+`edit` (one undo step). If the extension is off or missing, the element
+shows its fallback text, so nothing is lost.
 
 ### `host.menus.add(where, item)`
 `where`: `'textbox-more'` (the `…` menu of a selected text box),
 `'page-more'`, `'view'`. `item = { id, label, icon?, when?(ctx), run(ctx) }`.
-`ctx` gives the selection, for example
-`{ textbox: { text, html, setHtml(html) } }` for text boxes. `setHtml` is one
-undo step.
+`ctx` for `'textbox-more'` (one box selected or edited):
+`{ textbox: { text, html, setHtml(html) } }`. `setHtml` is one undo step. For
+`'view'` (the editor's `…` menu) and `'page-more'` (right-click on a page):
+`{ notebook, pageIndex }`. The host translates labels with `host.ui.t`.
 
 ### `host.view.addPagePass(fn)` and `host.view.setInkFilter(fn)`
-- `fn({ canvas, ctx, page, scale, imageRegions })` runs after a PDF page is
-  drawn, on the page's canvas only. It never runs for exports or stored
-  data. `imageRegions` are the page's picture rectangles in canvas pixels,
-  so they can be left alone. Call `host.view.refresh()` after the effect
-  changes.
+- `fn({ canvas, ctx, page, scale, imageRegions })` runs after a PDF page (or
+  a sharp part of it when zoomed in) is drawn, on that canvas only. It never
+  runs for exports or stored data. `page` is the 0-based page of the PDF.
+  `imageRegions` are the picture rectangles `{ x0, y0, x1, y1 }` in canvas
+  pixels (`src/shared/pdf-images.js`), so they can be left alone (see
+  `darkenImage(…, { keep })`). It may be `async`. Call `host.view.refresh()`
+  after the effect changes.
 - `setInkFilter(color => color)` changes the colours used to *draw* ink and
   highlighter on screen. The stored colours stay as they are.
+- `setClass(name, on)` puts the class `ext-<id>-<name>` on the editor, so the
+  extension's CSS can change the look (for example the highlighter's blend
+  mode).
 
 ### `host.settings`
 `get(key, fallback)`, `set(key, value)` (JSON values) and
@@ -110,8 +123,9 @@ undo step.
 works the same way but is stored per notebook.
 
 ### `host.ui`
-`toast(text)`, `prompt({ title, value, multiline }) → Promise<string|null>`,
-`t(text)` (translation of the app's language, English fallback).
+`toast(text)`, `prompt({ title, value }) → Promise<string|null>` (the app's
+one-line input dialog), `t(text)` (translation of the app's language,
+English fallback).
 
 ### `host.log(...)`
 Writes to the developer console with the extension id.
