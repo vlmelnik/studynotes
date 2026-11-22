@@ -239,6 +239,15 @@ async function main() {
   // copy / paste
   await win.keyboard.press('Control+c');
   check('Ctrl+C copies and lets the selection go', await win.evaluate(() => !window.__app.active.tools.sel && !!window.__app.active.tools.clip));
+  await win.waitForTimeout(400);
+  const sys = await app.evaluate(async (electron) => {
+    const [item] = await electron.clipboard.read();
+    const get = async (t) => (item && item.types.includes(t) ? item.getType(t) : null);
+    const png = await get('image/png'), html = await get('text/html'), text = await get('text/plain');
+    const size = png ? electron.nativeImage.createFromBuffer(Buffer.from(await png.arrayBuffer())).getSize() : { width: 0, height: 0 };
+    return { text: text ? await text.text() : '', html: html ? await html.text() : '', img: size, types: item ? item.types : [] };
+  });
+  check('Ctrl+C puts a picture on the system clipboard, no marker text', sys.img.width > 10 && sys.img.height > 10 && !/StudyNotes-clip/.test(sys.text) && /StudyNotes-clip:\d+/.test(sys.html), JSON.stringify({ types: sys.types, text: sys.text.slice(0, 40), img: sys.img, html: sys.html.length }));
   await win.keyboard.press('Control+v');
   const n2 = await win.evaluate(() => { const ed = window.__app.active; return ed.pageData(ed.pages[0].id).strokes.length; });
   check('copy / paste duplicates selection', n2 === strokes1.length + 5 + selCount - 1 || n2 > 5, `${n2} strokes on page`);

@@ -154,6 +154,9 @@ select.input { padding-right: 4px; }
 .tb-right { justify-content: flex-end; }
 .tb-center { display: flex; align-items: center; gap: 4px; }
 .nb-title { border: 0; background: transparent; font-weight: 600; font-size: 15px; padding: 6px 8px; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+.topbar [hidden] { display: none !important; }
+.tb-left .nb-title { min-width: 0; flex: 0 1 auto; } /* (shrinks with an ellipsis in a narrow window) */
+.tb-left > *:not(.nb-title) { flex: none; }
 .nb-title:hover { background: rgba(0, 0, 0, .05); }
 .save-dot { width: 8px; height: 8px; border-radius: 50%; background: #7cbf8e; flex: none; margin-left: 2px; transition: background .2s; }
 .save-dot[data-state="dirty"], .save-dot[data-state="saving"] { background: #e8b54a; }

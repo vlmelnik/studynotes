@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld('api', {
   addSourceFile: invoke('lib:addSourceFile'),
   pickImages: invoke('lib:pickImages'),
   clipboardFiles: invoke('clip:files'),
+  copyToClipboard: invoke('clip:write'),
   readImageFile: invoke('file:read'),
   send: invoke('lib:send'),
   exportSettings: invoke('app:exportSettings'),
