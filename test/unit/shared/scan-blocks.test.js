@@ -59,3 +59,77 @@ test('findBlocks: an empty or a black picture gives no blocks (the page is read 
   assert.strictEqual(findBlocks(page(200, 100, () => {})), null);
   assert.strictEqual(findBlocks(page(200, 100, ({ rect }) => rect(0, 0, 200, 100))), null);
 });
+
+function unevenColumns(middleRightX) {
+  return page(600, 170, ({ line }) => {
+    line(40, 40, 4); line(40, 60, 3); line(56, 80, 4);
+    line(274, 40, 4); line(middleRightX, 60, 5); line(303, 80, 3);
+  });
+}
+
+test('findBlocks: two columns with uneven gaps stay separate', () => {
+  const b = findBlocks(unevenColumns(278));
+  assert.deepStrictEqual(boxes(b), [[40, 40, 251, 90], [274, 40, 524, 90]]);
+});
+
+// The expected two column blocks merge into one [40, 40, 513, 90] on a narrow ragged gutter.
+test.skip('findBlocks: two ragged columns stay separate across a narrow diagonal gap', () => {
+  const b = findBlocks(unevenColumns(267));
+  assert.deepStrictEqual(boxes(b), [[40, 40, 251, 90], [267, 40, 513, 90]]);
+});
+
+function framedText(x, y) {
+  return page(430, 230, ({ rect, line }) => {
+    rect(40, 25, 330, 2);
+    rect(40, 175, 330, 2);
+    rect(40, 25, 2, 152);
+    rect(368, 25, 2, 152);
+    line(x, y, 3);
+  });
+}
+
+test('findBlocks: text touching the side of a frame keeps only its text bounds', () => {
+  const b = findBlocks(framedText(42, 48));
+  assert.deepStrictEqual(boxes(b), [[42, 48, 186, 58]]);
+});
+
+// The expected text bounds [62, 27, 206, 37] expand to the entire frame [40, 25, 370, 177].
+test.skip('findBlocks: text touching a top frame leaves the frame out of the text block', () => {
+  const b = findBlocks(framedText(62, 27));
+  assert.deepStrictEqual(boxes(b), [[62, 27, 206, 37]]);
+});
+
+test('findBlocks: a single word keeps its exact bounds and letter height', () => {
+  const b = findBlocks(page(200, 120, ({ line }) => line(20, 28, 1)));
+  assert.deepStrictEqual(boxes(b), [[20, 28, 62, 38]]);
+  assert.strictEqual(b[0].h, 10);
+});
+
+test('findBlocks: bullets stay in the same blocks as their list lines', () => {
+  const b = findBlocks(page(250, 140, ({ line, rect }) => {
+    for (const y of [30, 58, 86]) {
+      rect(38, y + 4, 3, 3);
+      line(52, y, 3);
+    }
+  }));
+  assert.deepStrictEqual(boxes(b), [[38, 30, 196, 40], [38, 58, 196, 68], [38, 86, 196, 96]]);
+});
+
+test('findBlocks: a dotted leader connects its label to its page number', () => {
+  const b = findBlocks(page(280, 130, ({ line, rect }) => {
+    line(24, 36, 1);
+    for (let x = 78; x <= 198; x += 8) rect(x, 43, 2, 2);
+    rect(216, 36, 6, 10);
+    line(24, 75, 1);
+  }));
+  assert.deepStrictEqual(boxes(b), [[24, 36, 222, 46], [24, 75, 66, 85]]);
+});
+
+test('findBlocks: a 4000 × 3000 scan reports original coordinates and clips at the edges', () => {
+  const b = findBlocks(page(4000, 3000, ({ line }) => {
+    line(120, 210, 3, 30, 18);
+    line(3898, 2970, 1, 30, 18);
+  }));
+  assert.deepStrictEqual(boxes(b), [[120, 210, 444, 240], [3897, 2970, 4000, 3000]]);
+  assert.deepStrictEqual(b.map((block) => block.h), [30, 30]);
+});
