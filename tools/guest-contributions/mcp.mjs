@@ -36,12 +36,16 @@ const sessionInstructions = [
 ].join(' ');
 const versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const context = ['AGENTS.md', 'README.md', 'docs/contributions/PLANNING.md', 'test/unit/shared/shared-guard.test.js', 'package.json', '.github/workflows/ci.yml'];
+// extension tasks read the host, its fake for unit tests and the e2e harness
+const hostFiles = ['docs/EXTENSIONS.md', 'src/renderer/extensions.js', 'test/unit/extensions/fake-host.js', 'test/e2e/harness/app.js', 'test/e2e/harness/report.js'];
 const areaContext = {
   clipboard: ['src/renderer/editor-objects.js', 'src/shared/textbox.js'],
   layout: ['src/shared/geometry.js'], outline: ['src/shared/format.js', 'src/shared/pdf-text-layout.js'],
-  dark: ['src/shared/paper.js', 'src/shared/ink.js'], paste: ['src/shared/richtext.js', 'src/shared/textbox.js'],
+  dark: ['src/shared/paper.js', 'src/shared/ink.js', ...hostFiles], paste: ['src/shared/richtext.js', 'src/shared/textbox.js', ...hostFiles],
   handwriting: ['src/shared/ink.js', 'src/shared/pen-filter.js'], android: ['src/platform/types.js', 'src/shared/paths.js'],
   recognition: ['src/shared/scan-blocks.js', 'src/shared/ocr-lines.js'],
+  performance: ['src/renderer/viewer.js', 'test/e2e/soak.js'],
+  reader: ['src/renderer/viewer.js', 'src/main/main.js'],
 };
 function readablePaths(task) {
   return [...new Set([...context, ...(areaContext[task.chain] || []), ...(task.context || []), ...task.paths])];

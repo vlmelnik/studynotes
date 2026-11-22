@@ -19,7 +19,8 @@ Queue rules for maintainers:
   acceptance criteria and exact paths. Approve small, independent work. Check
   that it has no active internal owner before issuing an invitation.
 - The service accepts only listed regular text files in top-level docs,
-  src/shared, and test/unit/shared. It permits additions and replacements.
+  src/shared, test/unit/shared and, for extensions, src/extensions/<id>,
+  test/unit/extensions and test/e2e/extensions (see docs/EXTENSIONS.md). It permits additions and replacements.
   Changes to workflows, dependencies, release files, permissions, service
   code and Claude instructions follow the normal maintainer PR process.
 - A claim holds its task and all listed paths for two hours. An uploaded job
@@ -37,7 +38,8 @@ for the participant commands.
 ## Task chains and handover notes
 
 Tasks in [tasks.json](tasks.json) are small enough for one session and fit the
-service's file scope (`docs/*.md`, `src/shared`, `test/unit/shared`). Two
+service's file scope (`docs/*.md`, `src/shared`, `test/unit/shared`, and
+extension folders). Two
 optional fields, ignored by the service, keep the work moving between
 sessions that do not know each other:
 
@@ -54,4 +56,5 @@ task per chain. The maintainer's part stays: review and merge the draft PR,
 then invite for the next ready task (any task whose `after` tasks are merged
 and that has no open PR). Wiring the pure modules into the app (renderer,
 main process) is done by the maintainer afterwards; each notes file collects
-what that wiring needs.
+what that wiring needs. Extensions are complete features on their own; after
+a scope change in policy.mjs the Worker must be deployed again (wrangler deploy).
