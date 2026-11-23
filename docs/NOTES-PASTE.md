@@ -45,3 +45,24 @@ not load KaTeX or attach UI hooks. The extension owns the rendered preview,
 editing and the readable fallback when rendering is disabled. Verify the
 real editor path and then handle PDF export and rich copy in
 `sn-ext-rich-paste-export`.
+
+## 2026-11-23 - Rich Paste add-on
+
+Enable **Formulas and formatting on paste** in **Settings → Add-ons**. Paste
+text containing LaTeX or Markdown into a note. Select the **Text** tool and
+double-click a rendered formula to edit its source; Enter applies and Escape
+cancels. For multiline TeX, the prompt marks line breaks explicitly. The
+text-box **More** menu offers **Render formulas and formatting** for existing
+convertible text without run-level formatting, so the action cannot strip
+existing formatting.
+The editor **More** menu can disable or re-enable automatic conversion without
+switching off rendering or the manual action.
+
+The add-on turns each parser placeholder into a host-owned inline element with
+an escaped dollar-delimited fallback. KaTeX renders only in the view; the
+stored source stays readable with the add-on off. API v1 does not provide the
+current text-box size to paste transforms, so heading sizes use the parser's
+default. When clipboard HTML has no rendered source, conversion uses the
+plain-text representation; HTML-only formatting may be lost in that case.
+PDF formula rendering and the full copy-out workflow belong to
+`sn-ext-rich-paste-export`.
