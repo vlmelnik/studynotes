@@ -18,3 +18,18 @@ open.
 Next, use the shared digests in the WebView adapter and replace the memory
 adapter's duplicate fallback code. Keep the adapter's existing asynchronous
 API and use the same digest formats for sync checksums and stored asset names.
+
+## 2026-11-23 — Share naming and case-only rename rules
+
+Added `safeName`, `uniqueName`, `caseOnlyRename`, and `renamePlan` in
+`src/shared/names.js`. Names fit both 120 UTF-16 units and 255 UTF-8 bytes
+without cutting a character. Suffixes and the temporary `.renaming` marker
+stay intact at both limits. Windows device names are prefixed even before an
+extension. The caller supplies the exact source spelling and a snapshot of
+sibling names. Per-character uppercase comparison recognizes Greek sigma's
+two lowercase forms without treating `ß` as `SS`.
+
+The plan does not touch the filesystem. Next, wire it into the desktop and
+Android adapters. Recheck destination availability when applying the plan,
+and handle rollback or recovery if the second rename fails. Verify the
+case-only path on both platforms before replacing the existing library logic.
