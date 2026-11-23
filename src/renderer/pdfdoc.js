@@ -126,6 +126,14 @@ export class PdfDoc {
   // only that part, at the full scale: the way to stay sharp at a zoom where
   // the whole page would not fit into memory.
   render(n, scale, priority = 0, rotate = 0, region = null) {
+    return this._render(n, scale, priority, rotate, region, null);
+  }
+
+  renderForDisplay(editor, n, scale, priority = 0, rotate = 0, region = null) {
+    return this._render(n, scale, priority, rotate, region, editor);
+  }
+
+  _render(n, scale, priority, rotate, region, editor) {
     const { promise, task } = enqueue(priority, async () => {
       if (this.destroyed) throw new CancelError();
       const page = await this.getPage(n);
@@ -149,13 +157,14 @@ export class PdfDoc {
         throw err;
       }
       if (task.cancelled) { canvas.width = canvas.height = 0; throw new CancelError(); }
-      // extensions' view effects (dark pages …): screen only, never the export
-      if (extensions.passes.length) {
+      // Only the viewer opts in: OCR, covers and saved assets use raw render().
+      if (editor && extensions.passes.length) {
         await extensions.pagePass(canvas, {
-          scale, viewport: vp,
+          editor, scale, viewport: vp, cancelled: () => task.cancelled || this.destroyed,
           page: { index: n - 1, imageRects: async (v) => { const ol = await page.getOperatorList(); return imageRects(ol.fnArray, ol.argsArray, pdfjs.OPS, v.transform); } },
         });
       }
+      if (task.cancelled || this.destroyed) { canvas.width = canvas.height = 0; throw new CancelError(); }
       return canvas;
     });
     return { promise, cancel: task.cancel, setPriority: (pr) => { task.priority = pr; } };

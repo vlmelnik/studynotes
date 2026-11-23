@@ -2,7 +2,6 @@
 import { getOutline, getLiveOutline, getSizedOutline, traceOutline, strokeLook, lighten, isClosedShape } from '../shared/ink.js';
 import { paperGeometry, pageBackground } from '../shared/paper.js';
 import { strokeBBox, capsulePolygon } from '../shared/geometry.js';
-import { extensions } from './extensions.js';
 
 const pathCache = new WeakMap();
 const sizedPathCache = new WeakMap();
@@ -174,7 +173,7 @@ function overlaps(b, clip) {
 // Draw strokes in page units onto ctx, scaled by `scale`, offset by (ox, oy)
 // device pixels. Highlighters go underneath pen ink. `clip` (page units)
 // skips strokes outside the area being drawn.
-export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, clear = true, clip = null, only = null } = {}) {
+export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, clear = true, clip = null, only = null, color = null } = {}) {
   if (clear) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -186,8 +185,8 @@ export function drawStrokes(ctx, strokes, scale, { ox = 0, oy = 0, skip = null, 
       const b = strokeBBox(st);
       const pad = st.ps === 'neon' ? st.s * 2 : 0;
       if (!overlaps([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad], clip)) continue;
-      // (an extension's ink filter changes only the colour drawn, never the stored one)
-      paintStroke(ctx, extensions.ink ? { ...st, c: extensions.inkColor(st.c) } : st, scale, strokePath(st));
+      const c = color ? color(st.c) : st.c;
+      paintStroke(ctx, c === st.c ? st : { ...st, c }, scale, strokePath(st));
     }
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -219,11 +218,13 @@ function livePath(st) {
 }
 
 // Live (in-progress) stroke on a region canvas covering `rect` (page units).
-export function drawLive(ctx, st, scale, rect = [0, 0], clear = true) {
+export function drawLive(ctx, st, scale, rect = [0, 0], clear = true, color = null) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (clear) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (!st || st.p.length < 3) return;
   const path = livePath(st);
+  const c = color ? color(st.c) : st.c;
+  if (c !== st.c) st = { ...st, c };
   ctx.setTransform(scale, 0, 0, scale, -rect[0] * scale, -rect[1] * scale);
   if (st.f && isClosedShape(st)) { ctx.globalAlpha = st.fa ?? 1; ctx.fillStyle = st.f; ctx.fill(fillPath({ p: st.p })); ctx.globalAlpha = 1; }
   const look = strokeLook(st);
