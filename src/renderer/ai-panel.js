@@ -9,6 +9,10 @@ import { buildContext, buildRequest, estimateTokens } from '../shared/ai-context
 import { checkPlan, applyPlan, describePlan, parsePlan } from '../shared/ai-plan.js';
 import { uid } from './tools.js';
 
+// chat events from the main process, by message id (one listener for all editors)
+const chatHandlers = new Map();
+if (window.api && window.api.onChatEvent) window.api.onChatEvent((id, ev) => { const f = chatHandlers.get(id); if (f) f(ev); });
+
 const ACTIONS = [
   { label: 'Summarise', mode: 'edit', prompt: 'Summarise this in short points. Put the summary on a new page right after the last page shown, titled "Summary". Keep formulas.' },
   { label: 'Explain', mode: 'ask', prompt: 'Explain this simply, step by step, as for an exam. Answer only, change nothing.' },
@@ -31,7 +35,10 @@ export class AiPanel {
 
   close() { if (this.el) { this.el.remove(); this.el = null; this.editor.el.classList.remove('ai-open'); this.editor.viewer.scheduleUpdate(); } }
 
-  ready() { return !!(this.cfg.enabled && this.cfg.provider && this.cfg.model); }
+  // Claude Code (the user's subscription) needs no provider or model here
+  ready() { return !!(this.cfg.enabled && (this.cfg.via === 'claudecode' || (this.cfg.provider && this.cfg.model))); }
+
+  get isChat() { return this.cfg.via === 'claudecode'; }
 
   open() {
     const ed = this.editor;
@@ -43,7 +50,8 @@ export class AiPanel {
     // a panel on the right like search: the page gets narrower, nothing is covered
     this.el = h('aside', { class: 'ai-panel', role: 'complementary', 'aria-label': tr('AI assistant') },
       h('div', { class: 'ai-head' }, h('span', { class: 'ai-head-ic', html: icon('ai', 18) }), h('b', {}, 'AI assistant'),
-        h('small', { class: 'ai-model no-i18n' }, this.ready() ? `${this.cfg.provider} · ${this.cfg.model}` : ''),
+        h('small', { class: 'ai-model no-i18n' }, !this.ready() ? '' : this.isChat ? `Claude Code${this.cfg.ccModel ? ' · ' + this.cfg.ccModel : ''}` : `${this.cfg.provider} · ${this.cfg.model}`),
+        this.isChat && this.ready() ? h('button', { class: 'btn ghost small', title: 'Start a new conversation', onclick: () => { this.stopChat(); this.chat = null; this.open(); } }, 'New chat') : null,
         h('button', { class: 'icon-btn', title: 'Close (Ctrl+J)', html: icon('close', 16), onclick: () => this.close() })),
       body);
     if (ed.el.classList.contains('searching')) ed.searchPanel.close?.();
@@ -61,6 +69,7 @@ export class AiPanel {
         h('button', { class: 'btn primary', onclick: () => { this.close(); ed.app.showSettings('ai'); } }, 'Open AI settings')));
       return;
     }
+    if (this.isChat) { this.openChat(body); return; }
     const chip = (key, label, enabled = true) => h('button', { class: `btn small ai-chip${this.scope === key ? ' active' : ''}`, disabled: !enabled, onclick: (e) => {
       this.scope = key;
       for (const b of e.currentTarget.parentNode.children) b.classList.toggle('active', b === e.currentTarget);
@@ -80,6 +89,89 @@ export class AiPanel {
       this.result);
     this.updateInfo();
     this.prompt.focus();
+  }
+
+  // ---------- chat with Claude Code (the user's subscription) ----------
+  openChat(body) {
+    const ed = this.editor;
+    this.chat ||= { sessionId: null, messages: [] };
+    this.msgs = h('div', { class: 'chat-msgs', role: 'log', 'aria-live': 'polite' });
+    for (const m of this.chat.messages) this.msgs.append(this.bubble(m));
+    if (!this.chat.messages.length) this.msgs.append(h('div', { class: 'chat-hello' }, h('span', { html: icon('ai', 28) }),
+      h('p', {}, 'Ask Claude about this notebook or tell it what to do: "Summarise page 3 on a new page", "Make a glossary of the terms", "Underline the key terms on this page".'),
+      h('small', { class: 'hint wrap' }, 'Runs your Claude Code with your Claude plan. Claude reads and changes notes only through StudyNotes; Ctrl+Z undoes every change.')));
+    this.input = h('textarea', { class: 'ai-prompt chat-input', rows: 2, placeholder: tr('Message Claude…'), 'aria-label': tr('Message Claude'),
+      onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.sendChat(); } } });
+    this.sendBtn = h('button', { class: 'btn primary', onclick: () => (this.running ? this.stopChat() : this.sendChat()) }, this.running ? 'Stop' : 'Send');
+    body.classList.add('chat-body');
+    body.append(this.msgs, h('div', { class: 'chat-compose' }, this.input, this.sendBtn));
+    this.msgs.scrollTop = this.msgs.scrollHeight;
+    this.input.focus();
+    if (!ed.app.settings.mcp) ed.app.mcp.setEnabled(true).catch((err) => toast(String(err.message || err), { error: true }));
+  }
+
+  bubble(m) {
+    const el = h('div', { class: `chat-msg ${m.role}` });
+    if (m.role === 'user') el.append(h('div', { class: 'chat-text' }, m.text));
+    else {
+      for (const part of m.parts) {
+        if (part.tool) el.append(h('div', { class: 'chat-tool no-i18n' }, h('span', { html: icon(part.tool.startsWith('read') || part.tool.startsWith('search') || part.tool.startsWith('list') ? 'search' : 'pen', 12) }), part.tool.replace(/_/g, ' ')));
+        else el.append(h('div', { class: 'chat-text' }, part.text));
+      }
+      if (m.error) el.append(h('div', { class: 'ai-error' }, m.error));
+      if (m.pending) el.append(h('div', { class: 'ai-wait' }, h('div', { class: 'spinner small' }), h('span', {}, 'Claude is working…')));
+    }
+    m.el = el;
+    return el;
+  }
+
+  redraw(m) { const old = m.el; const nu = this.bubble(m); if (old && old.parentNode) old.replaceWith(nu); this.msgs.scrollTop = this.msgs.scrollHeight; }
+
+  // what Claude needs to know about where the user is
+  chatContext() {
+    const ed = this.editor;
+    const sel = ed.tools.sel && ed.tools.sel.textIds && ed.tools.sel.textIds.size ? [...ed.tools.sel.textIds] : [];
+    return `[StudyNotes: the user has the notebook "${ed.doc.nb.title}" (path: ${ed.rel}) open at page ${ed.viewer.currentIndex + 1} of ${ed.pages.length}`
+      + (sel.length ? `; selected text boxes on that page: ${sel.join(', ')}` : '')
+      + '. Read and change notes only with the StudyNotes tools; the user sees changes at once and can undo them with Ctrl+Z. Answer in the language of the message.]';
+  }
+
+  async sendChat() {
+    const text = this.input.value.trim();
+    if (!text || this.running) return;
+    this.input.value = '';
+    if (this.msgs.querySelector('.chat-hello')) this.msgs.replaceChildren();
+    const user = { role: 'user', text };
+    const reply = { role: 'assistant', parts: [], pending: true };
+    this.chat.messages.push(user, reply);
+    this.msgs.append(this.bubble(user), this.bubble(reply));
+    this.msgs.scrollTop = this.msgs.scrollHeight;
+    const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    this.running = id;
+    this.sendBtn.textContent = tr('Stop');
+    chatHandlers.set(id, (ev) => {
+      if (ev.kind === 'session') this.chat.sessionId = ev.sessionId;
+      else if (ev.kind === 'text') reply.parts.push({ text: ev.text });
+      else if (ev.kind === 'tool') reply.parts.push({ tool: ev.name });
+      else if (ev.kind === 'done') {
+        chatHandlers.delete(id);
+        if (ev.sessionId) this.chat.sessionId = ev.sessionId;
+        reply.pending = false;
+        if (ev.error) reply.error = ev.error;
+        else if (!reply.parts.some((x) => x.text)) reply.parts.push({ text: tr('(done)') });
+        this.running = null;
+        if (this.sendBtn) this.sendBtn.textContent = tr('Send');
+      }
+      if (this.el) this.redraw(reply);
+    });
+    if (!this.editor.app.settings.mcp) await this.editor.app.mcp.setEnabled(true).catch(() => {});
+    await this.editor.flush?.();
+    window.api.chatSend(id, { prompt: `${this.chatContext()}\n\n${text}`, sessionId: this.chat.sessionId, model: this.cfg.ccModel || '', bin: this.cfg.ccPath || '' });
+  }
+
+  stopChat() {
+    if (!this.running) return;
+    window.api.chatStop(this.running);
   }
 
   context() {

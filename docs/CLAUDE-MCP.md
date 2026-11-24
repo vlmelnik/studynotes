@@ -10,7 +10,20 @@ Claude Desktop, Claude Code). StudyNotes therefore does not sign in to Claude
 itself. Claude Desktop starts a small bridge that connects to the running
 app.
 
-## Set up (once)
+## Chat inside StudyNotes (Claude Code)
+Instead of Claude Desktop you can chat in StudyNotes itself, like the Claude
+plugins for Obsidian (Claudian):
+1. Install Claude Code and sign in once: run `claude` in a terminal.
+2. **Settings → AI assistant → How to connect: Claude Code** → **Find Claude Code**
+   (or enter its path). Choose a model if you like.
+3. In a notebook press **Ctrl+J**: the chat opens on the right.
+
+StudyNotes starts `claude -p` with `--strict-mcp-config` and only the
+StudyNotes tools allowed; built-in tools (files, shell, web) are blocked.
+Whether this use of a subscription is covered by Anthropic's terms is not
+settled; the settings say so.
+
+## Set up Claude Desktop (once)
 1. StudyNotes: **Settings → AI assistant → How to connect: Claude app**, switch
    on **Let the Claude app use StudyNotes**.
 2. Click **Connect Claude Desktop**. This adds StudyNotes to every copy of

@@ -49,7 +49,7 @@ const server = http.createServer((req, res) => {
   await ed(() => window.__app.showSettings('ai'));
   const card = win.locator('.ai-settings');
   await card.getByRole('switch', { name: 'AI assistant' }).press('Space');
-  check('three ways to connect: Claude app, API key, local model', (await card.getByRole('radio').allTextContents()).join('|').startsWith('Claude app'));
+  check('ways to connect: Claude Code, Claude app, API key, local model', /^Claude Code.*\|Claude app.*\|.*API key.*\|.*Local model/.test((await card.getByRole('radio').allTextContents()).join('|')), (await card.getByRole('radio').allTextContents()).join('|'));
   await card.getByRole('radio', { name: /Local model/ }).click();
   await card.getByLabel('Server address').fill(base);
   await card.getByLabel('Server address').press('Tab');
