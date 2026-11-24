@@ -12,6 +12,12 @@ let prompt = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (c) => { prompt += c; });
 process.stdin.on('end', async () => {
+  // with attachments StudyNotes sends one stream-json user message (text, images, documents)
+  let content = [];
+  if (opt('--input-format') === 'stream-json') {
+    content = JSON.parse(prompt.trim().split('\n')[0]).message.content;
+    prompt = content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  }
   const session = opt('--resume') || 'sess-1';
   out({ type: 'system', subtype: 'init', session_id: session, model: opt('--model') || 'default' });
   if (/not signed in test/.test(prompt)) { out({ type: 'result', subtype: 'success', is_error: true, result: 'Invalid API key · Please run /login', session_id: session }); return; }
@@ -25,8 +31,16 @@ process.stdin.on('end', async () => {
   const rpc = (method, params) => new Promise((r) => { const id = ++n; waiting.set(id, r); srv.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); });
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
   const text = (r) => (r.result ? r.result.content.map((c) => c.text).join('\n') : r.error.message);
-  const flags = `flags: strict=${args.includes('--strict-mcp-config')} blocked=${(opt('--disallowedTools') || '').includes('Bash')} allowed=${(opt('--allowedTools') || '').split(',').length}`;
-  if (opt('--resume')) {
+  const flags = `flags: strict=${args.includes('--strict-mcp-config')} blocked=${(opt('--disallowedTools') || '').includes('Bash')} allowed=${(opt('--allowedTools') || '').split(',').length} prompt-file=${fs.existsSync(opt('--append-system-prompt-file') || '')}`;
+  if (/picture test/.test(prompt)) {
+    const seen = `seen: images=${content.filter((b) => b.type === 'image').length} documents=${content.filter((b) => b.type === 'document').length} text-file=${/--- notes\.txt ---\nhello from a file/.test(prompt)}`;
+    const ref = (/(a\d+) = "[^"]+" \(picture\)/.exec(prompt) || [])[1];
+    const path = (/path: ([^)]+)\)/.exec(prompt) || [])[1];
+    const page = Number((/at page (\d+)/.exec(prompt) || [])[1]);
+    out({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'mcp__studynotes__write_notes', input: {} }] } });
+    const r = text(await rpc('tools/call', { name: 'write_notes', arguments: { notebook: path, page, place: 'below', blocks: [{ type: 'heading', level: 2, text: 'Picture' }, { type: 'image', ref, caption: 'From the chat' }] } }));
+    out({ type: 'assistant', message: { content: [{ type: 'text', text: `**${seen}**\n- ref ${ref}\n- ${r}` }] } });
+  } else if (opt('--resume')) {
     out({ type: 'assistant', message: { content: [{ type: 'text', text: `resumed ${session}` }] } });
   } else {
     out({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'mcp__studynotes__list_notebooks', input: {} }] } });

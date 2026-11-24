@@ -175,8 +175,17 @@ export class McpTools {
         if (!blocks.length) throw new Error('Nothing to write.\n' + problems.map((p) => '- ' + p).join('\n'));
         if (document.fonts && document.fonts.ready) await document.fonts.ready;
         const style = notesStyle(this.app.settings.notesStyle, ed.doc.nb.notesStyle);
+        // pictures attached in the chat: stored in the notebook first
+        const images = {};
+        for (const b of blocks) {
+          const f = b.type === 'image' && !images[b.ref] && this.app.chatFiles && this.app.chatFiles.get(b.ref);
+          if (f && f.mime.startsWith('image/')) {
+            const it = await ed.insertImageBytes(f.bytes, f.mime, { index: Math.min(index, ed.pages.length - 1), x: 0, y: 0 });
+            images[b.ref] = { src: it.src, w: it.w, h: it.h };
+          }
+        }
         const r = layoutNotes(blocks, index, {
-          pages: ed.pages, data: (id) => ed.pageData(id), style, measure: measureText, newId: uid, place: { free_space: 'free', below: 'below' }[a.place] || 'next',
+          pages: ed.pages, data: (id) => ed.pageData(id), style, measure: measureText, newId: uid, images, place: { free_space: 'free', below: 'below' }[a.place] || 'next',
           newPage: (ref) => { const s = ed.styleOf(ref); return { id: uid(), kind: 'paper', paper: ref.kind === 'pdf' && s.paper === 'blank' ? 'lined' : s.paper, ...(s.pc && s.pc !== 'cream' ? { pc: s.pc } : {}), w: s.w, h: s.h }; },
         });
         // formulas need the formula add-on to be shown as formulas
@@ -190,7 +199,7 @@ export class McpTools {
         toast(`Claude wrote notes in "${nb.title}" – Ctrl+Z undoes them`);
         const where = r.placed.map((p) => `page ${p.index + 1}`).join(', ');
         return `Wrote ${blocks.length} block(s) on ${where}${r.added.length ? ` (${r.added.length} new page${r.added.length === 1 ? '' : 's'})` : ''} of "${nb.title}" as one undo step.`
-          + (problems.length ? '\nLeft out:\n' + problems.map((p) => '- ' + p).join('\n') : '') + note;
+          + (problems.length || r.problems.length ? '\nLeft out:\n' + [...problems, ...r.problems].map((p) => '- ' + p).join('\n') : '') + note;
       }
       case 'clear_page': {
         const nb = await this.notebookFor(a.notebook);

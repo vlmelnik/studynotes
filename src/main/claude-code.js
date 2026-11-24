@@ -70,7 +70,7 @@ class ClaudeCodeChat {
    *   { kind: 'session', sessionId }, { kind: 'text', text }, { kind: 'tool', name, input },
    *   { kind: 'done', sessionId, cost, error }
    */
-  async send(id, { prompt, sessionId, model, bin: configured }, emit) {
+  async send(id, { prompt, sessionId, model, bin: configured, attachments }, emit) {
     const bin = findClaude(configured);
     if (!bin) { emit({ kind: 'done', error: 'Claude Code was not found. Install it (claude.com/claude-code), run "claude" once in a terminal and sign in, or set its path in Settings → AI assistant.' }); return; }
     const args = ['-p', '--output-format', 'stream-json', '--verbose', '--strict-mcp-config', '--mcp-config', await this.mcpConfig(),
@@ -78,6 +78,9 @@ class ClaudeCodeChat {
       '--allowedTools', MCP_TOOLS.join(','), '--disallowedTools', BLOCKED.join(',')];
     if (sessionId && /^[\w-]+$/.test(sessionId)) args.push('--resume', sessionId);
     if (model && /^[\w.-]+$/.test(model)) args.push('--model', model);
+    // pictures and PDFs go as content blocks of a stream-json message (Claude sees them)
+    const files = (Array.isArray(attachments) ? attachments : []).filter((a) => a && typeof a.data === 'string' && ATTACH_TYPES.has(a.mime));
+    if (files.length) args.push('--input-format', 'stream-json');
     const p = launch(bin, args, { cwd: this.dir, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     this.runs.set(id, p);
     let buf = '', err = '', finished = false, session = sessionId || null;
@@ -110,7 +113,13 @@ class ClaudeCodeChat {
       }
     });
     p.on('close', (code) => finish(code ? { error: readable(err.trim() || `Claude Code stopped (exit code ${code}).`) } : {}));
-    p.stdin.end(prompt);
+    if (!files.length) p.stdin.end(prompt);
+    else {
+      const content = [{ type: 'text', text: prompt }, ...files.map((a) => (a.mime === 'application/pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: a.mime, data: a.data }, title: String(a.name || 'document').slice(0, 200) }
+        : { type: 'image', source: { type: 'base64', media_type: a.mime, data: a.data } }))];
+      p.stdin.end(JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n');
+    }
   }
 
   stop(id) {
@@ -121,9 +130,33 @@ class ClaudeCodeChat {
   }
 }
 
+const ATTACH_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf']);
+
+// ---------- chat history (all chats, on this computer) ----------
+const MAX_CHATS = 300;
+class ChatHistory {
+  constructor(file) { this.file = file; }
+  async all() { try { const j = JSON.parse(await fsp.readFile(this.file, 'utf8')); return Array.isArray(j.chats) ? j.chats : []; } catch { return []; } }
+  async write(chats) {
+    await fsp.mkdir(path.dirname(this.file), { recursive: true });
+    const tmp = this.file + '.tmp';
+    await fsp.writeFile(tmp, JSON.stringify({ version: 1, chats }));
+    await fsp.rename(tmp, this.file);
+  }
+  async list() { return (await this.all()).map(({ id, title, notebook, updated, sessionId }) => ({ id, title, notebook, updated, sessionId })); }
+  async get(id) { return (await this.all()).find((c) => c.id === id) || null; }
+  async save(chat) {
+    if (!chat || typeof chat.id !== 'string' || !/^[\w-]{1,64}$/.test(chat.id)) throw new Error('bad chat');
+    const chats = (await this.all()).filter((c) => c.id !== chat.id);
+    chats.unshift({ ...chat, updated: Date.now() });
+    await this.write(chats.slice(0, MAX_CHATS));
+  }
+  async remove(id) { await this.write((await this.all()).filter((c) => c.id !== id)); }
+}
+
 function readable(msg) {
   if (/login|log in|authenticat|api key|unauthor/i.test(msg)) return 'Claude Code is not signed in. Open a terminal, run "claude" and sign in with your Claude account, then try again.';
   return msg.slice(0, 600);
 }
 
-module.exports = { ClaudeCodeChat, findClaude, MCP_TOOLS, BLOCKED };
+module.exports = { ClaudeCodeChat, ChatHistory, findClaude, MCP_TOOLS, BLOCKED };

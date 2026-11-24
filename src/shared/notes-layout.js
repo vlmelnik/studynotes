@@ -134,7 +134,7 @@ function runsHtml(runs, base) {
 
 // ---------- blocks ----------
 
-const BLOCKS = ['heading', 'paragraph', 'list', 'formula', 'box', 'pagebreak'];
+const BLOCKS = ['heading', 'paragraph', 'list', 'formula', 'box', 'image', 'pagebreak'];
 
 /** Checks the blocks the model sent: { blocks, problems }. */
 function checkBlocks(input) {
@@ -149,6 +149,11 @@ function checkBlocks(input) {
       const items = (Array.isArray(b.items) ? b.items : []).map((x) => String(x == null ? '' : x).trim()).filter(Boolean);
       if (!items.length) return bad('a list needs "items"');
       return blocks.push({ type: 'list', items, ordered: !!b.ordered });
+    }
+    if (b.type === 'image') {
+      const ref = String(b.ref || '').trim();
+      if (!ref) return bad('a picture needs "ref" (the id of an attached picture)');
+      return blocks.push({ type: 'image', ref, caption: String(b.caption || '').trim(), size: ['small', 'medium', 'full'].includes(b.size) ? b.size : 'medium' });
     }
     if (b.type === 'formula') {
       const tex = String(b.latex || b.text || '').trim().replace(/^\$\$?|\$\$?$/g, '').trim();
@@ -234,6 +239,7 @@ function layoutNotes(blocks, start, ctx) {
   if (ctx.place === 'next' || ctx.fresh || page.kind === 'pdf' || page.kind === 'board') nextPage();
 
   const placed = [];
+  const problems = [];
   const width = () => grid.right - grid.left;
   const rowGap = () => (grid.rows[1] - grid.rows[0]) || fs * 1.6;
   // one text line spans k rows; the line box is centred so the baseline sits on the lower row
@@ -303,6 +309,23 @@ function layoutNotes(blocks, start, ctx) {
       const k = Math.max(2, rowsPerLine(size) * 2);
       seek(k);
       put(mathHtml(b.latex, true), { size, color: colors.text, lines: 1, k });
+    } else if (b.type === 'image') {
+      const img = ctx.images && ctx.images[b.ref];
+      if (!img || !img.src) { problems.push(`picture "${b.ref}" is not attached`); return; }
+      const gap = rowGap();
+      const share = { small: 0.4, medium: 0.7, full: 1 }[b.size];
+      let w = Math.min(width() * share, img.w || width()), hh = img.w && img.h ? w * (img.h / img.w) : w * 0.75;
+      const maxH = (grid.rows[grid.rows.length - 1] - grid.rows[0]) * 0.6;
+      if (hh > maxH) { w *= maxH / hh; hh = maxH; }
+      const k = Math.ceil((hh + 8) / gap);
+      seek(k);
+      const top = grid.rows[row] - gap + 4;
+      const d = dataOf(page);
+      d.items.push({ id: newId(), type: 'img', src: img.src, x: Math.round((grid.left + (width() - w) / 2) * 100) / 100, y: Math.round(top * 100) / 100, w: Math.round(w * 100) / 100, h: Math.round(hh * 100) / 100, lay: 'b', z: d.items.reduce((m, it) => Math.max(m, it.z || 0), 0) + 1 });
+      const last = placed[placed.length - 1];
+      if (last && last.index === index) last.boxes++; else placed.push({ index, boxes: 1 });
+      row += k;
+      if (b.caption) flow(`<i>${inlineHtml(b.caption, colors.accent)}</i>`, { size: Math.max(9, fs - 2), color: colors.text });
     } else if (b.type === 'box') {
       const look = { bg: colors.boxBg, bc: colors.boxBorder, br: 6 };
       const html = (b.title ? `<span data-c="${colors.accent}"><b>${escHtml(b.title)}</b></span>${b.text ? ': ' : ''}` : '') + inlineHtml(b.text, colors.accent);
@@ -310,9 +333,9 @@ function layoutNotes(blocks, start, ctx) {
     }
   });
 
-  const changes = [...after.keys()].filter((id) => !added.includes(id) || after.get(id).texts.length)
+  const changes = [...after.keys()].filter((id) => !added.includes(id) || after.get(id).texts.length || after.get(id).items.length)
     .map((id) => ({ pageId: id, before: before.get(id), after: after.get(id) }));
-  return { pages, changes, placed, added };
+  return { pages, changes, placed, added, problems };
 }
 
 /** What is on a page, in words, for read_notebook: so the model knows about ink and pictures it cannot read. */

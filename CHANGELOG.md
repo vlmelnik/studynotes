@@ -10,6 +10,9 @@
 - "Dark pages" is one switch in the More menu, like Dark mode.
 
 **Chat with Claude in StudyNotes**
+- Attach pictures, PDFs and text files to a chat message (paper clip, drag and drop, Ctrl+V). Claude sees them and can put an attached picture into your notes.
+- Chat history: all chats are saved on this computer; open an old one to continue it, or delete it.
+- Chat settings: model, your own standing instructions for Claude, and a notes style for this notebook only. Answers show bold text and lists.
 - Claude writes notes the way a person would: you get headings, paragraphs, lists, formulas and a framed "remember" box on the ruled lines, inside the margins, below what is already on the page, and onto a new page when one is full – never over a PDF page (new tool write_notes).
 - A notes style (Settings → AI assistant → Notes style): font, size and colours for white and dark paper; dark paper gets light text by default.
 - Claude sees handwriting and pictures it cannot read and can clear pages when you want old notes replaced – StudyNotes asks first, Ctrl+Z brings them back (clear_page).

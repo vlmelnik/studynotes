@@ -71,6 +71,60 @@ const { launch, root } = require('./harness/app');
   await win.locator('.chat-msg.assistant .ai-error').waitFor({ timeout: 20000 });
   check('not signed in: says how to sign in', /run "claude" and sign in/.test(await win.locator('.chat-msg.assistant .ai-error').textContent()));
 
+  // ---- attachments: a picture, a PDF and a text file; Claude puts the picture into the notes ----
+  const png = (() => {
+    const zlib = require('zlib');
+    const w = 60, hh = 30, raw = Buffer.alloc((w * 3 + 1) * hh);
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) raw.set([30, 120, 220], y * (w * 3 + 1) + 1 + x * 3);
+    const crcT = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcT[n] = c >>> 0; }
+    const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(hh, 4); ihdr.set([8, 2, 0, 0, 0], 8);
+    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+  })();
+  fs.writeFileSync(path.join(tmp, 'circuit.png'), png);
+  fs.writeFileSync(path.join(tmp, 'notes.txt'), 'hello from a file');
+  await win.locator('.ai-head button', { hasText: 'New chat' }).click();
+  await win.locator('.ai-panel input[type=file]').setInputFiles([path.join(tmp, 'circuit.png'), pdf, path.join(tmp, 'notes.txt')]);
+  await win.waitForFunction(() => document.querySelectorAll('.chat-files .chat-file').length === 3);
+  check('attached files show as chips', (await win.locator('.chat-files .chat-file').allTextContents()).join('|').includes('circuit.png'));
+  const itemsBefore = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).items.length);
+  await win.locator('.chat-input').fill('picture test');
+  await win.locator('.chat-input').press('Enter');
+  await win.waitForFunction(() => document.querySelectorAll('.chat-msg.assistant').length === 1 && !document.querySelector('.chat-msg.assistant .ai-wait'), null, { timeout: 20000 });
+  const pic = await win.locator('.chat-msg.assistant').last().textContent();
+  check('Claude gets the picture and the PDF as attachments and the text file in the message', /seen: images=1 documents=1 text-file=true/.test(pic), pic);
+  check('the answer is shown as Markdown (bold, list)', await win.locator('.chat-msg.assistant .chat-text.md b').count() > 0 && await win.locator('.chat-msg.assistant .chat-text.md li').count() === 2);
+  const after = await ed(() => window.__app.active.pages.map((p) => window.__app.active.pageData(p.id).items.filter((it) => it.type === 'img').length).reduce((a, b) => a + b, 0));
+  check('the attached picture is placed in the notebook', after === itemsBefore + 1 && /Wrote 2 block/.test(pic), JSON.stringify({ itemsBefore, after, pic }));
+  if (process.env.SHOT) { fs.mkdirSync(process.env.SHOT, { recursive: true }); await win.screenshot({ path: path.join(process.env.SHOT, 'chat-files.png') }); }
+  check('the user message lists its files', (await win.locator('.chat-msg.user .chat-file').count()) === 3);
+
+  // ---- history ----
+  await win.getByRole('button', { name: 'Chat history' }).click();
+  await win.locator('.chat-hist-row').first().waitFor();
+  const rows = await win.locator('.chat-hist-row').count();
+  if (process.env.SHOT) await win.screenshot({ path: path.join(process.env.SHOT, 'chat-history.png') });
+  check('history: all chats, newest first', rows === 3 && /picture test/.test(await win.locator('.chat-hist-row').first().textContent()), String(rows));
+  await win.locator('.chat-hist-open', { hasText: 'What notebooks do I have' }).click();
+  await win.locator('.chat-msg.assistant').nth(1).waitFor();
+  check('history: an old chat opens with its messages and continues its session', /resumed sess-1/.test(await win.locator('.chat-msg.assistant').nth(1).textContent()) && await win.evaluate(() => window.__app.active.aiPanel.chat.sessionId === 'sess-1'));
+  await win.getByRole('button', { name: 'Chat history' }).click();
+  await win.locator('.chat-hist-row', { hasText: 'not signed in test' }).getByRole('button', { name: /Delete chat/ }).click();
+  await win.waitForFunction(() => document.querySelectorAll('.chat-hist-row').length === 2);
+  const stored = JSON.parse(fs.readFileSync(path.join(tmp, 'u', 'chats.json'), 'utf8')).chats;
+  check('history is saved on this computer, without the deleted chat and without file contents', stored.length === 2 && !JSON.stringify(stored).includes('hello from a file') && !stored.some((c) => /not signed in/.test(c.title)), JSON.stringify(stored.map((c) => c.title)));
+
+  // ---- chat settings ----
+  await win.getByRole('button', { name: 'Chat settings' }).click();
+  await win.getByLabel('Your instructions for Claude').fill('Always answer in German.');
+  await win.getByLabel('Your instructions for Claude').press('Tab');
+  await win.locator('.chat-settings').getByLabel('Notes text size').fill('17');
+  await win.locator('.chat-settings').getByLabel('Notes text size').press('Tab');
+  if (process.env.SHOT) await win.screenshot({ path: path.join(process.env.SHOT, 'chat-settings.png') });
+  const st = await ed(() => ({ mine: window.__app.settings.ai.ccInstructions, nb: window.__app.active.doc.nb.notesStyle, app: window.__app.settings.notesStyle }));
+  check('chat settings: own instructions, and a notes style for this notebook only', st.mine === 'Always answer in German.' && st.nb && st.nb.fs === 17 && !(st.app && st.app.fs === 17), JSON.stringify(st));
+
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   finish(errors);

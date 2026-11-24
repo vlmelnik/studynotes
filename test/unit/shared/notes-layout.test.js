@@ -158,3 +158,18 @@ test('place "next": starts on the next empty page, else a new one', () => {
   assert.strictEqual(r2.added.length, 1);
   assert.strictEqual(r2.placed[0].index, 2);
 });
+
+test('image block: an attached picture, centred, below the text before it, caption under it', () => {
+  const p = lined('a');
+  const blocks = L.checkBlocks([{ type: 'paragraph', text: 'Circuit:' }, { type: 'image', ref: 'a1', caption: 'Equivalent circuit', size: 'medium' }, { type: 'paragraph', text: 'after' }, { type: 'image', ref: 'nope' }]).blocks;
+  const r = L.layoutNotes(blocks, 0, ctx([p], {}, { images: { a1: { src: 'assets/x.png', w: 400, h: 200 } } }));
+  const d = r.changes[0].after;
+  const img = d.items[0];
+  const [para, cap, after] = d.texts;
+  assert.strictEqual(img.src, 'assets/x.png');
+  assert.ok(Math.abs(img.x + img.w / 2 - (68 + (p.w - 40)) / 2) < 1, 'centred between the margins');
+  assert.ok(img.w / img.h === 2);
+  assert.ok(img.y > para.y + 10 && cap.y > img.y + img.h - 10 && after.y > cap.y, JSON.stringify({ img, cap: cap.y, after: after.y }));
+  assert.ok(cap.html.includes('<i>'));
+  assert.deepStrictEqual(r.problems, ['picture "nope" is not attached']);
+});

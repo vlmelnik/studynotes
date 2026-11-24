@@ -33,8 +33,8 @@ export function notesStyleEditor(value, onChange, { base = null, resetLabel = 'R
         h('div', { style: { color: c.text, background: c.boxBg, border: `1.5px solid ${c.boxBorder}`, borderRadius: '6px', padding: '2px 6px', marginTop: '4px' } }, h('b', { style: { color: c.accent } }, 'Remember'), ': a framed statement'));
     };
     root.replaceChildren(
-      h('div', { class: 'row wrap' }, h('span', { class: 'tk-label' }, 'Font'), font, h('span', { class: 'tk-label' }, 'Size'), size,
-        h('button', { class: 'btn ghost small', onclick: () => { cur = {}; emit(); } }, resetLabel)),
+      h('div', { class: 'ns-fields' }, h('span', {}, 'Font'), font, h('span', {}, 'Size'),
+        h('div', { class: 'row' }, size, h('button', { class: 'btn ghost small', onclick: () => { cur = {}; emit(); } }, resetLabel))),
       h('div', { class: 'ns-previews' }, preview('light'), preview('dark')),
       grid);
   };
