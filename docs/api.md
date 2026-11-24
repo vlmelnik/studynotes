@@ -169,6 +169,12 @@ Each method registers a listener and returns nothing. They are plain
 | `aiRequest` | `{ provider, model, baseUrl, monthlyLimit }`, `{ system, user }` | `{ text, model, usage }` | One AI request (counted and logged without content). | needed |
 | `chatInfo` | `path` (optional) | `{ found, path, version }` | Finds the user's Claude Code (`claude`). | desktop-only |
 | `chatSend` | `id`, `{ prompt, sessionId, model, bin, attachments? }` | `true` | One chat turn with Claude Code; events come through `onChatEvent`. `attachments`: `[{ name, mime, data }]` (base64 pictures or PDFs, sent as content blocks). | desktop-only |
+| `speechInfo` | – | `{ models, languages }` | Speech-to-text models (base, small) and languages. | desktop-only |
+| `speechStatus` | `model` | `{ downloaded, size }` | Whether a model is on this computer. | desktop-only |
+| `speechDownload` | `model`, `progressId` | status | Downloads a model once (progress through `onSpeechProgress`). | desktop-only |
+| `speechRemove` | `model` | – | Deletes a downloaded model. | desktop-only |
+| `speechTranscribe` | `Float32Array` (16 kHz mono), `{ model, language }`, `progressId` | text | Transcribes on this computer (Whisper). | needed |
+| `onSpeechProgress` | `(id, fraction, file)` | – | Download progress. | desktop-only |
 | `chatList` | – | `[{ id, title, notebook, updated, sessionId }]` | All saved chats, newest first (userData/chats.json, up to 300). | needed |
 | `chatGet` | `id` | chat or `null` | One saved chat with its messages. | needed |
 | `chatSave` | `chat` | – | Saves a chat (`id`, `title`, `notebook`, `sessionId`, `messages`). | needed |

@@ -17,7 +17,7 @@ const { launch, root } = require('./harness/app');
   const fake = path.join(root, 'test', 'e2e', 'fixtures', 'fake-claude.js');
   const pdf = path.join(tmp, 'Power electronics.pdf');
   execFileSync(process.execPath, [path.join(root, 'scripts', 'make-test-pdf.js'), pdf, '2'], { stdio: 'ignore' });
-  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_MCP_PIPE: pipe, STUDYNOTES_CLAUDE_BIN: fake } });
+  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_MCP_PIPE: pipe, STUDYNOTES_CLAUDE_BIN: fake, STUDYNOTES_SPEECH_FAKE: '1' } });
   await win.waitForFunction(() => window.__app && document.querySelector('.library'));
   const rel = await ed(async (f) => (await window.api.importFiles('', [f]))[0], pdf);
   await ed((r) => window.__app.openNotebook(r), rel);
@@ -124,6 +124,37 @@ const { launch, root } = require('./harness/app');
   if (process.env.SHOT) await win.screenshot({ path: path.join(process.env.SHOT, 'chat-settings.png') });
   const st = await ed(() => ({ mine: window.__app.settings.ai.ccInstructions, nb: window.__app.active.doc.nb.notesStyle, app: window.__app.settings.notesStyle }));
   check('chat settings: own instructions, and a notes style for this notebook only', st.mine === 'Always answer in German.' && st.nb && st.nb.fs === 17 && !(st.app && st.app.fs === 17), JSON.stringify(st));
+
+  // ---- a recording: off → points to the add-on; on → transcribed on this computer, Claude gets the text ----
+  const wav = (() => {
+    const sr = 22050, n = Math.round(sr * 2.5), b = Buffer.alloc(44 + n * 2);
+    b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+    b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+    for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(8000 * Math.sin(2 * Math.PI * 440 * i / sr)), 44 + i * 2);
+    return b;
+  })();
+  fs.writeFileSync(path.join(tmp, 'lecture.wav'), wav);
+  await win.getByRole('button', { name: 'Chat settings' }).click(); // back to the chat
+  await win.locator('.ai-head button', { hasText: 'New chat' }).click();
+  await win.locator('.ai-panel input[type=file]').setInputFiles(path.join(tmp, 'lecture.wav'));
+  await win.locator('.toast', { hasText: 'Speech to text' }).waitFor();
+  check('a recording without the add-on: says where to switch it on', (await win.locator('.chat-files .chat-file').count()) === 0);
+  await ed(() => window.__app.showSettings('addons'));
+  const spCard = win.locator('.addon', { has: win.locator('.addon-title b', { hasText: /^Speech to text$/ }) });
+  check('Add-ons: "Speech to text" is there and off', await spCard.isVisible() && !(await spCard.getByRole('switch').isChecked()));
+  await spCard.getByRole('switch').press('Space');
+  await spCard.click();
+  await win.getByLabel('Language of the recordings').waitFor();
+  check('its page: model, language (from the app language), the model on this computer', (await win.getByLabel('Speech model').locator('option').count()) === 2 && (await win.getByLabel('Language of the recordings').inputValue()) === 'english' && /offline/.test(await win.locator('.addon-state').first().textContent()));
+  await win.getByLabel('Language of the recordings').selectOption('german');
+  await win.getByRole('button', { name: 'Done', exact: true }).click();
+  await win.locator('.ai-panel input[type=file]').setInputFiles(path.join(tmp, 'lecture.wav'));
+  await win.waitForFunction(() => { const c = document.querySelector('.chat-files .chat-file'); return c && /transcript/.test(c.textContent) && !c.querySelector('.chat-file-busy'); }, null, { timeout: 20000 });
+  await win.locator('.chat-input').fill('transcript test');
+  await win.locator('.chat-input').press('Enter');
+  await win.waitForFunction(() => document.querySelectorAll('.chat-msg.assistant').length === 1 && !document.querySelector('.chat-msg.assistant .ai-wait'), null, { timeout: 20000 });
+  const tx = await win.locator('.chat-msg.assistant').last().textContent();
+  check('the recording is decoded (16 kHz) and transcribed in German, Claude gets the transcript', /fake transcript: 2\.5 s, german, base/.test(tx), tx);
 
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });

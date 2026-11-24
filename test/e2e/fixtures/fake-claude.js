@@ -32,7 +32,9 @@ process.stdin.on('end', async () => {
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
   const text = (r) => (r.result ? r.result.content.map((c) => c.text).join('\n') : r.error.message);
   const flags = `flags: strict=${args.includes('--strict-mcp-config')} blocked=${(opt('--disallowedTools') || '').includes('Bash')} allowed=${(opt('--allowedTools') || '').split(',').length} prompt-file=${fs.existsSync(opt('--append-system-prompt-file') || '')}`;
-  if (/picture test/.test(prompt)) {
+  if (/transcript test/.test(prompt)) {
+    out({ type: 'assistant', message: { content: [{ type: 'text', text: 'got: ' + ((/fake transcript: [^\n]+/.exec(prompt) || ['nothing'])[0]) }] } });
+  } else if (/picture test/.test(prompt)) {
     const seen = `seen: images=${content.filter((b) => b.type === 'image').length} documents=${content.filter((b) => b.type === 'document').length} text-file=${/--- notes\.txt ---\nhello from a file/.test(prompt)}`;
     const ref = (/(a\d+) = "[^"]+" \(picture\)/.exec(prompt) || [])[1];
     const path = (/path: ([^)]+)\)/.exec(prompt) || [])[1];

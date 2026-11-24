@@ -10,6 +10,7 @@ import { checkPlan, applyPlan, describePlan, parsePlan } from '../shared/ai-plan
 import { uid } from './tools.js';
 import { escHtml } from '../shared/util.js';
 import { notesStyleEditor } from './notes-style.js';
+import { speechSettings, transcribe } from './speech.js';
 
 const newChat = () => ({ id: 'ch' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), title: '', sessionId: null, messages: [] });
 
@@ -199,11 +200,11 @@ export class AiPanel {
     if (!this.chat.messages.length) this.msgs.append(h('div', { class: 'chat-hello' }, h('span', { html: icon('ai', 28) }),
       h('p', {}, 'Ask Claude about this notebook or tell it what to do: "Summarise page 3 on a new page", "Make a glossary of the terms", "Underline the key terms on this page".'),
       h('small', { class: 'hint wrap' }, 'Runs your Claude Code with your Claude plan. Claude reads and changes notes only through StudyNotes; Ctrl+Z undoes every change.'),
-      h('small', { class: 'hint wrap' }, 'Attach pictures, PDFs or text files with the paper clip, by dragging them here or with Ctrl+V.')));
+      h('small', { class: 'hint wrap' }, 'Attach pictures, PDFs, text files or recordings with the paper clip, by dragging them here or with Ctrl+V.')));
     this.input = h('textarea', { class: 'ai-prompt chat-input', rows: 2, placeholder: tr('Message Claude…'), 'aria-label': tr('Message Claude'),
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.sendChat(); } },
       onpaste: (e) => { const f = e.clipboardData && e.clipboardData.files; if (f && f.length) { e.preventDefault(); this.addFiles(f); } } });
-    const picker = h('input', { type: 'file', multiple: true, hidden: true, accept: 'image/*,.pdf,.txt,.md,.csv,.json,.tex', onchange: (e) => { this.addFiles(e.target.files); e.target.value = ''; } });
+    const picker = h('input', { type: 'file', multiple: true, hidden: true, accept: 'image/*,audio/*,.pdf,.txt,.md,.csv,.json,.tex,.m4a,.mp3,.wav,.ogg,.webm,.opus', onchange: (e) => { this.addFiles(e.target.files); e.target.value = ''; } });
     this.fileChips = h('div', { class: 'chat-files' });
     this.sendBtn = h('button', { class: 'btn primary', onclick: () => (this.running ? this.stopChat() : this.sendChat()) }, this.running ? 'Stop' : 'Send');
     body.append(this.msgs, this.fileChips,
@@ -220,10 +221,10 @@ export class AiPanel {
     const app = this.editor.app;
     app.chatFiles ||= new Map();
     for (const f of [...list]) {
-      const mime = f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.(txt|md|csv|json|tex)$/i.test(f.name) ? 'text/plain' : '');
+      const mime = f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.(txt|md|csv|json|tex)$/i.test(f.name) ? 'text/plain' : /\.(m4a|mp3|wav|ogg|opus|webm|flac|aac)$/i.test(f.name) ? 'audio/' + f.name.split('.').pop().toLowerCase() : '');
       const kind = mime.startsWith('image/') ? 'picture' : mime === 'application/pdf' ? 'pdf' : mime.startsWith('text/') || /json/.test(mime) ? 'text' : mime.startsWith('audio/') ? 'audio' : '';
-      if (!kind) { toast(`${tr('Cannot attach')} "${f.name}": ${tr('only pictures, PDFs and text files')}`, { error: true }); continue; }
-      if (kind === 'audio') { toast(tr('Audio needs the speech-to-text add-on (coming soon).'), { error: true }); continue; }
+      if (!kind) { toast(`${tr('Cannot attach')} "${f.name}": ${tr('only pictures, PDFs, text files and recordings')}`, { error: true }); continue; }
+      if (kind === 'audio') { this.addAudio(f); continue; }
       if (f.size > (kind === 'pdf' ? 30e6 : kind === 'text' ? 2e6 : 40e6)) { toast(`"${f.name}" ${tr('is too large')}`, { error: true }); continue; }
       let bytes = new Uint8Array(await f.arrayBuffer());
       let type = mime;
@@ -236,10 +237,38 @@ export class AiPanel {
     this.drawFiles();
   }
 
+  // audio becomes text on this computer first (add-on "Speech to text"); Claude gets the transcript
+  async addAudio(f) {
+    const ed = this.editor;
+    const cfg = speechSettings(this.settings);
+    if (!cfg.enabled) {
+      toast(tr('Switch on "Speech to text" in Settings → Add-ons to attach recordings.'), { error: true });
+      return;
+    }
+    if (f.size > 500e6) { toast(`"${f.name}" ${tr('is too large')}`, { error: true }); return; }
+    const app = ed.app;
+    const id = 'a' + (app.chatFiles.size + 1);
+    const file = { id, name: f.name.replace(/\.[^.]+$/, '') + ' (transcript).txt', mime: 'text/plain', kind: 'text', busy: 0, from: f.name };
+    app.chatFiles.set(id, file);
+    this.files.push(file);
+    this.drawFiles();
+    try {
+      const text = await transcribe(new Uint8Array(await f.arrayBuffer()), cfg, (p) => { file.busy = p; this.drawFiles(); });
+      file.bytes = new TextEncoder().encode(`Transcript of the recording "${f.name}" (${cfg.language}, made on this computer):\n${text}`);
+      file.busy = null;
+    } catch (err) {
+      this.files = this.files.filter((x) => x !== file);
+      app.chatFiles.delete(id);
+      toast(`${tr('Could not transcribe')} "${f.name}": ${err.message || err}`, { error: true });
+    }
+    this.drawFiles();
+  }
+
   drawFiles() {
     if (!this.fileChips) return;
     this.fileChips.replaceChildren(...this.files.map((f) => h('span', { class: 'chat-file no-i18n', title: f.name },
-      h('span', { html: icon(f.kind === 'picture' ? 'image' : 'page', 13) }), h('span', { class: 'chat-file-name' }, f.name),
+      h('span', { html: icon(f.from ? 'mic' : f.kind === 'picture' ? 'image' : 'page', 13) }), h('span', { class: 'chat-file-name' }, f.name),
+      f.busy != null ? h('span', { class: 'chat-file-busy' }, h('span', { class: 'spinner small' }), f.busy > 0 && f.busy < 1 ? `${Math.round(f.busy * 100)}%` : tr('Transcribing…')) : null,
       h('button', { class: 'icon-btn', title: tr('Remove'), 'aria-label': `${tr('Remove')} ${f.name}`, html: icon('close', 11), onclick: () => { this.files = this.files.filter((x) => x !== f); this.drawFiles(); } }))));
     this.fileChips.hidden = !this.files.length;
   }
@@ -278,6 +307,7 @@ export class AiPanel {
 
   async sendChat() {
     const text = this.input.value.trim();
+    if (this.files.some((f) => f.busy != null)) { toast(tr('Wait until the recording is transcribed.')); return; }
     const files = this.files.slice();
     if ((!text && !files.length) || this.running) return;
     this.input.value = '';
