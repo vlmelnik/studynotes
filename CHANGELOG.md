@@ -9,6 +9,9 @@
 - The AI panel opens on the right next to the page, like search.
 - "Dark pages" is one switch in the More menu, like Dark mode.
 
+**Chat with Claude in StudyNotes**
+- Settings → AI assistant → Claude Code: the AI panel (Ctrl+J) becomes a chat with your own Claude Code and Claude plan, like the Claude plugins for Obsidian. Claude reads and changes the notebook only through the StudyNotes tools (no files, no commands); every change is undone with Ctrl+Z. The conversation continues until "New chat".
+
 **AI assistant (1.9)**
 - A new AI button (Ctrl+J) in the notebook: ask about the selection, the page or the whole notebook; one click for a summary, an explanation, a glossary, exam questions or underlining key terms.
 - Works with your own API key (Anthropic, OpenAI, Google Gemini) or a model on your computer (Ollama, LM Studio). Keys are stored encrypted. You see what is sent before it goes, and there is a monthly request limit.

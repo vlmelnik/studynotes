@@ -524,7 +524,7 @@ class App {
       info = await window.api.aiInfo().catch(() => null);
       if (!info) return;
       const p = info.providers[ai.provider];
-      status.textContent = ai.via === 'claude' ? '' : !ai.provider ? 'Not set up'
+      status.textContent = ai.via === 'claude' || ai.via === 'claudecode' ? '' : !ai.provider ? 'Not set up'
         : `${p ? p.name : ai.provider}${p && p.key ? (info.keys[ai.provider] ? ' · key saved' : ' · no key yet') : ''}${ai.model ? ' · ' + ai.model : ''} · ${info.used} requests this month`;
       keyRow.hidden = !(p && p.key);
     };
@@ -587,7 +587,29 @@ class App {
         h('input', { type: 'number', min: 0, step: 10, value: ai.monthlyLimit, class: 'ai-limit', 'aria-label': 'Monthly limit', onchange: (e) => { ai.monthlyLimit = Math.max(0, Number(e.target.value) || 0); save(); } })),
       h('textarea', { rows: 2, class: 'ai-custom', placeholder: 'Your standing instructions, e.g. "Answer in German, short, keep formulas in LaTeX."', 'aria-label': 'Standing instructions', onchange: (e) => { ai.custom = e.target.value; save(); } }, ai.custom || ''));
 
+    // --- Claude Code: a chat in StudyNotes with the user's own Claude Code (subscription) ---
+    const ccOut = h('div', { class: 'mcp-test' });
+    const ccFind = async () => {
+      const r = await window.api.chatInfo(ai.ccPath || '').catch((err) => ({ found: false, error: errorText(err) }));
+      const ok = r.found;
+      ccOut.replaceChildren(h('div', { class: `mcp-line ${ok ? 'ok' : 'bad'}` }, h('span', { html: icon(ok ? 'check' : 'close', 14) }),
+        h('span', { class: 'no-i18n' }, ok ? `Claude Code found: ${r.path}${r.version ? ' (' + r.version + ')' : ''}` : 'Claude Code was not found. Install it, run "claude" once in a terminal and sign in – or enter its path below.')));
+    };
+    const ccBox = h('div', { class: 'ai-way-body' },
+      h('ol', { class: 'steps' },
+        h('li', {}, 'Install Claude Code and sign in once: in a terminal run "claude", then log in with your Claude account.'),
+        h('li', {}, 'Switch on "AI button in notebooks" above and press Ctrl+J in a notebook: the chat opens on the right.')),
+      h('div', { class: 'row wrap' }, h('button', { class: 'btn', onclick: ccFind }, 'Find Claude Code')),
+      ccOut,
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Path (optional)'),
+        h('input', { type: 'text', class: 'ai-base', value: ai.ccPath || '', placeholder: 'found automatically', 'aria-label': 'Claude Code path', onchange: (e) => { ai.ccPath = e.target.value.trim(); save(); } })),
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model'),
+        h('select', { class: 'rec-select', 'aria-label': 'Claude Code model', onchange: (e) => { ai.ccModel = e.target.value; save(); } },
+          ...[['', 'Default'], ['sonnet', 'Sonnet'], ['opus', 'Opus'], ['haiku', 'Haiku']].map(([v, l]) => h('option', { value: v, selected: (ai.ccModel || '') === v }, l)))),
+      h('small', { class: 'hint wrap ai-note' }, 'Like the Claude plugins for Obsidian: StudyNotes starts your Claude Code, which uses your Claude plan. Anthropic allows a subscription only in its own apps; whether starting Claude Code from another app is covered is not settled – you decide. Claude can only use the StudyNotes tools here, not your files or commands.'));
+
     const ways = [
+      ['claudecode', 'Claude Code', 'Chat here with your subscription', ccBox],
       ['claude', 'Claude app', 'With your Claude subscription', claudeBox],
       ['api', 'API key', 'Anthropic, OpenAI or Gemini', apiBox],
       ['local', 'Local model', 'Ollama, LM Studio – offline', localBox],
@@ -602,7 +624,8 @@ class App {
       save();
       for (const b of wayBtns.children) b.setAttribute('aria-checked', String(b.dataset.key === key));
       const w = ways.find((x) => x[0] === key);
-      wayBody.replaceChildren(w[3], ...(key === 'claude' ? [] : [shared]));
+      wayBody.replaceChildren(w[3], ...(key === 'claude' || key === 'claudecode' ? [] : [shared]));
+      if (key === 'claudecode') ccFind();
       setModels([]);
       refresh();
     };

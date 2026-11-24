@@ -167,6 +167,10 @@ Each method registers a listener and returns nothing. They are plain
 | `aiSetKey` | `provider`, `key` (empty: remove) | nothing | Saves an API key encrypted with the system key store. | needed |
 | `aiModels` | `{ provider, baseUrl }` | `[model ids]` | The models the provider offers. | needed |
 | `aiRequest` | `{ provider, model, baseUrl, monthlyLimit }`, `{ system, user }` | `{ text, model, usage }` | One AI request (counted and logged without content). | needed |
+| `chatInfo` | `path` (optional) | `{ found, path, version }` | Finds the user's Claude Code (`claude`). | desktop-only |
+| `chatSend` | `id`, `{ prompt, sessionId, model, bin }` | `true` | One chat turn with Claude Code; events come through `onChatEvent`. | desktop-only |
+| `chatStop` | `id` | nothing | Stops a running chat turn. | desktop-only |
+| `onChatEvent` | `fn(id, { kind: 'session' \| 'text' \| 'tool' \| 'done', … })` | nothing | Events of a chat turn. | desktop-only |
 | `mcpSetEnabled` | `on` | `true` when the pipe for Claude is open | Opens or closes the local connection for Claude (MCP), see `src/main/mcp-server.js`. | desktop-only |
 | `mcpInstallClaude` | – | `{ file, files }` | Adds StudyNotes to Claude Desktop's MCP servers in every config copy (normal and Microsoft Store build), keeps a `.bak`. | desktop-only |
 | `mcpTest` | – | `{ files, pipe, bridge, tools, error }` | Checks the connection like Claude Desktop: config entries, and the bridge answering. | desktop-only |

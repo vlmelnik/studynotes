@@ -785,6 +785,20 @@ handle('mcp:test', async () => {
   });
   return out;
 });
+// Chat with the user's own Claude Code (src/main/claude-code.js): it reaches the
+// notebooks only through the MCP bridge above.
+const { ClaudeCodeChat } = require('./claude-code');
+let chat = null;
+const chatInst = () => (chat ||= new ClaudeCodeChat({ dir: path.join(app.getPath('userData'), 'claude-chat'), bridge: mcpEntry }));
+handle('chat:info', (bin) => chatInst().info(bin));
+handle('chat:send', (id, req) => {
+  chatInst().send(id, req, (ev) => { if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, ev); }).catch((err) => {
+    if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, { kind: 'done', error: String(err.message || err) });
+  });
+  return true;
+});
+handle('chat:stop', (id) => chatInst().stop(id));
+app.on('will-quit', () => { if (chat) for (const id of [...chat.runs.keys()]) chat.stop(id); });
 app.on('will-quit', () => { if (mcp) mcp.stop().catch(() => {}); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));
 handle('app:startupReport', () => { const r = startupReport; startupReport = null; return r; });

@@ -356,7 +356,7 @@ const words = {
   'Send to the AI?': 'Отправить ИИ?', 'Set up the AI assistant first (Settings → Add-ons).': 'Сначала настройте ИИ-помощника (Настройки → Дополнения).', 'Cancelled': 'Отменено', 'a request': 'запрос',
   // Settings sections (1.9)
   'Pen & input': 'Перо и ввод', 'Library & backups': 'Библиотека и копии', 'About': 'О программе', 'Google Drive': 'Google Диск',
-  'All add-ons': 'Все дополнения', '← All add-ons': '← Все дополнения', 'Always on': 'Всегда включено',
+  'All add-ons': 'Все дополнения', '← All add-ons': '← Все дополнения',
   'AI button in notebooks (Ctrl+J)': 'Кнопка ИИ в тетрадях (Ctrl+J)', 'How to connect': 'Как подключить',
   'Claude app': 'Приложение Claude', 'With your Claude subscription': 'С вашей подпиской Claude', 'Anthropic, OpenAI or Gemini': 'Anthropic, OpenAI или Gemini', 'Local model': 'Локальная модель', 'Ollama, LM Studio – offline': 'Ollama, LM Studio – офлайн',
   'Ask about your notes, summarise, explain, glossaries, exam questions, underline key terms. You see what is sent; changes are previewed and undone with Ctrl+Z.': 'Вопросы по конспектам, краткое содержание, объяснения, глоссарий, вопросы к экзамену, подчёркивание терминов. Видно, что отправляется; изменения показываются заранее и отменяются через Ctrl+Z.',
@@ -372,8 +372,17 @@ const words = {
   'Set up the AI assistant': 'Настройте ИИ-помощника', 'You use the Claude app': 'Вы используете приложение Claude', 'Open AI settings': 'Открыть настройки ИИ',
   'Choose how to connect: the Claude app with your subscription, an API key (Anthropic, OpenAI, Gemini) or a model on this computer.': 'Выберите подключение: приложение Claude с подпиской, API-ключ (Anthropic, OpenAI, Gemini) или модель на этом компьютере.',
   'Ask Claude in the Claude app – it can read this notebook and change it. For this panel, add an API key or a local model.': 'Спрашивайте Claude в его приложении – он может читать и менять эту тетрадь. Для этой панели добавьте API-ключ или локальную модель.',
+  // Claude Code chat
+  'Chat here with your subscription': 'Чат здесь, с вашей подпиской', 'Find Claude Code': 'Найти Claude Code', 'Path (optional)': 'Путь (необязательно)', 'found automatically': 'находится автоматически',
+  'Claude Code path': 'Путь к Claude Code', 'Claude Code model': 'Модель Claude Code', 'Default': 'По умолчанию',
+  'Install Claude Code and sign in once: in a terminal run "claude", then log in with your Claude account.': 'Установите Claude Code и один раз войдите: в терминале выполните «claude» и войдите в аккаунт Claude.',
+  'Switch on "AI button in notebooks" above and press Ctrl+J in a notebook: the chat opens on the right.': 'Включите «Кнопка ИИ в тетрадях» выше и нажмите Ctrl+J в тетради: справа откроется чат.',
+  'Like the Claude plugins for Obsidian: StudyNotes starts your Claude Code, which uses your Claude plan. Anthropic allows a subscription only in its own apps; whether starting Claude Code from another app is covered is not settled – you decide. Claude can only use the StudyNotes tools here, not your files or commands.': 'Как плагины Claude для Obsidian: StudyNotes запускает ваш Claude Code, который работает с вашей подпиской Claude. Anthropic разрешает подписку только в своих приложениях; покрывает ли это запуск Claude Code из другого приложения – не ясно, решаете вы. Здесь Claude может использовать только инструменты StudyNotes, не ваши файлы и команды.',
+  'Message Claude…': 'Сообщение для Claude…', 'Message Claude': 'Сообщение для Claude', 'Claude is working…': 'Claude работает…', 'New chat': 'Новый чат', 'Start a new conversation': 'Начать новый разговор', '(done)': '(готово)',
+  'Ask Claude about this notebook or tell it what to do: "Summarise page 3 on a new page", "Make a glossary of the terms", "Underline the key terms on this page".': 'Спросите Claude об этой тетради или скажите, что сделать: «Перескажи страницу 3 на новой странице», «Составь глоссарий терминов», «Подчеркни ключевые термины на этой странице».',
+  'Runs your Claude Code with your Claude plan. Claude reads and changes notes only through StudyNotes; Ctrl+Z undoes every change.': 'Работает через ваш Claude Code и вашу подписку Claude. Claude читает и меняет конспекты только через StudyNotes; Ctrl+Z отменяет каждое изменение.',
   // Claude (MCP)
-  'Claude (MCP)': 'Claude (MCP-сервер)',
+  'Claude (MCP)':'Claude (MCP-сервер)',
   'Lets the Claude app read your notebooks and add text, pages and bookmarks when you ask it to. Uses your own Claude plan. Changes can be undone with Ctrl+Z.': 'Приложение Claude читает ваши тетради и по вашей просьбе добавляет текст, страницы и закладки. Работает с вашей подпиской Claude. Изменения отменяются через Ctrl+Z.',
   'Connect Claude Desktop': 'Подключить Claude Desktop',
   'Then ask Claude for example: "Summarise page 3 of my notebook Power electronics and add the summary on a new page."': 'Потом попросите Claude, например: «Кратко перескажи страницу 3 тетради Силовая электроника и добавь пересказ на новую страницу».',
