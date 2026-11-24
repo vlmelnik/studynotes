@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Settings, add-ons and dark pages**
+- Settings in sections on the left (General, Pen & input, Library & backups, Google Drive, AI assistant, Add-ons, About).
+- Add-ons as tiles with an icon and one line; a click opens the add-on's page with its settings.
+- AI assistant settings in one place with three ways to connect: the Claude app with your subscription, an API key, or a local model. "Test connection" shows whether Claude Desktop can reach StudyNotes; the Microsoft Store build of Claude Desktop is supported.
+- The AI panel opens on the right next to the page, like search.
+- "Dark pages" is one switch in the More menu, like Dark mode.
+
 **AI assistant (1.9)**
 - A new AI button (Ctrl+J) in the notebook: ask about the selection, the page or the whole notebook; one click for a summary, an explanation, a glossary, exam questions or underlining key terms.
 - Works with your own API key (Anthropic, OpenAI, Google Gemini) or a model on your computer (Ollama, LM Studio). Keys are stored encrypted. You see what is sent before it goes, and there is a monthly request limit.

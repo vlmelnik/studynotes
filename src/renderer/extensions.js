@@ -74,7 +74,7 @@ class ExtensionHost {
   }
 
   list() {
-    return [...this.entries.values()].map((e) => ({ id: e.def.id, name: e.def.name || e.def.id, description: e.def.description || '', enabled: e.enabled, error: e.error }));
+    return [...this.entries.values()].map((e) => ({ id: e.def.id, name: e.def.name || e.def.id, description: e.def.description || '', icon: typeof e.def.icon === 'string' ? e.def.icon : null, enabled: e.enabled, error: e.error }));
   }
 
   isEnabled(id) { const e = this.entries.get(id); return !!(e && e.enabled); }

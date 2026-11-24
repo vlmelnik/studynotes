@@ -168,6 +168,7 @@ Each method registers a listener and returns nothing. They are plain
 | `aiModels` | `{ provider, baseUrl }` | `[model ids]` | The models the provider offers. | needed |
 | `aiRequest` | `{ provider, model, baseUrl, monthlyLimit }`, `{ system, user }` | `{ text, model, usage }` | One AI request (counted and logged without content). | needed |
 | `mcpSetEnabled` | `on` | `true` when the pipe for Claude is open | Opens or closes the local connection for Claude (MCP), see `src/main/mcp-server.js`. | desktop-only |
-| `mcpInstallClaude` | – | `{ file }` | Adds StudyNotes to Claude Desktop's MCP servers (keeps a `.bak` of the file). | desktop-only |
+| `mcpInstallClaude` | – | `{ file, files }` | Adds StudyNotes to Claude Desktop's MCP servers in every config copy (normal and Microsoft Store build), keeps a `.bak`. | desktop-only |
+| `mcpTest` | – | `{ files, pipe, bridge, tools, error }` | Checks the connection like Claude Desktop: config entries, and the bridge answering. | desktop-only |
 | `onMcpCall` | `fn({ id, name, args })` | nothing | Called for each tool call from Claude; answer with `mcpResult`. | desktop-only |
 | `mcpResult` | `id`, `{ ok, result \| error }` | nothing | The answer to one tool call. | desktop-only |

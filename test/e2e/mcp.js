@@ -63,16 +63,18 @@ function bridge(cfg, env) {
   await win.waitForTimeout(500);
 
   // ---- settings: off by default, switch on, connect Claude Desktop ----
-  await ed(() => window.__app.showSettings());
-  await win.getByRole('button', { name: 'Add-ons', exact: true }).click();
+  await ed(() => window.__app.showSettings('ai'));
+  await win.locator('.ai-way', { hasText: 'Claude app' }).click();
   const toggle = win.getByRole('switch', { name: 'Claude (MCP)' });
   check('Claude access is off by default', !(await toggle.isChecked()));
   await toggle.press('Space');
   await win.waitForTimeout(500);
   check('the switch turns it on', await toggle.isChecked() && await ed(() => window.__app.settings.mcp === true));
-  const addon = win.locator('.addon', { has: win.locator('.addon-title b', { hasText: /^Claude \(MCP\)$/ }) });
-  await addon.getByRole('button', { name: 'Settings' }).click();
-  await addon.getByRole('button', { name: 'Connect Claude Desktop' }).click();
+  await win.getByRole('button', { name: 'Connect Claude Desktop' }).click();
+  await win.locator('.mcp-line').first().waitFor();
+  await win.waitForTimeout(1500);
+  const testLines = await win.locator('.mcp-line').allTextContents();
+  check('after connecting, the test shows the config entry and the bridge answering', testLines.some((l) => l.startsWith('Connected in')) && testLines.some((l) => /bridge answers: 7 tools/.test(l)), JSON.stringify(testLines));
   await win.waitForTimeout(500);
   await win.getByRole('button', { name: 'Done', exact: true }).click();
   const cfgAll = JSON.parse(fs.readFileSync(claudeCfg, 'utf8'));

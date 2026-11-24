@@ -81,7 +81,7 @@ const launch = () => launchApp({ tmp });
     await key({ key: 'я', code: '', keyCode: 90, ctrlKey: true });
     const ru = await count();
     // learn the tablet button in Settings: it arrives as Ctrl+Y (German layout)
-    await ed(() => window.__app.showSettings());
+    await ed(() => window.__app.showSettings('pen'));
     await win.locator('.modal .btn', { hasText: 'Set…' }).first().click();
     await key({ key: 'y', code: 'KeyZ', keyCode: 89, ctrlKey: true });
     const shown = await win.locator('.modal .tk-val').first().textContent();

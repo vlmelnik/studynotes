@@ -33,23 +33,25 @@ test('one extension uses the current mode of each rendering notebook', async () 
   assert.deepEqual(await run('off'), [255,255,255,255, 0,0,0,255, 12,60,140,255]);
 });
 
-test('the View menu changes and refreshes only the notebook it was opened from', async () => {
+test('the View menu has one Dark pages switch that changes only its own notebook', async () => {
   const { host } = await setup();
   const a = fakeHost('dark-view').settings.notebook;
   const b = fakeHost('dark-view', { notebook: { mode: 'background' } }).settings.notebook;
   let refreshesA = 0;
   const ctx = { notebookSettings: a, refreshView: () => { refreshesA++; } };
   const items = host.menus.visible('view', ctx);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].label, 'Dark pages');
   assert.equal(host.menus.visible('view', { ...ctx, isExternal: true }).length, 0);
-  const full = items.find((i) => i.id === 'full');
-  assert.equal(items.find((i) => i.checked(ctx)).id, 'off');
-  full.run(ctx);
-  assert.equal(items.find((i) => i.checked(ctx)).id, 'full');
+  assert.equal(items[0].checked(ctx), false);
+  items[0].run(ctx);
   assert.equal(a.get('mode'), 'full');
+  assert.equal(items[0].checked(ctx), true);
   assert.equal(b.get('mode'), 'background');
-  assert.equal(refreshesA, 1);
-  full.run(ctx);
-  assert.equal(refreshesA, 1, 'choosing the current mode does not redraw');
+  items[0].run(ctx);
+  assert.equal(a.get('mode'), 'off');
+  assert.equal(refreshesA, 2);
+  assert.equal(items[0].checked({ notebookSettings: b }), true, 'an older "background" notebook counts as on');
 });
 
 test('only a PDF with Dark View on has lighter ink and screen blending', async () => {

@@ -432,16 +432,9 @@ class App {
       const input = h('input', { type: 'checkbox', checked: !!s[key], onchange: (e) => { s[key] = e.target.checked; this.saveSettings(); } });
       return h('label', { class: 'check' }, input, h('span', {}, label, hint ? h('small', {}, hint) : null));
     };
-    // two tabs: the app's own settings and the add-ons (each with its own settings, extensions too)
-    const general = h('div', { class: 'form settings-pane' },
-        h('div', { class: 'field' }, h('span', {}, 'Library folder'), libPath,
-          h('div', { class: 'row' },
-            h('button', { class: 'btn', onclick: async () => {
-              const r = await window.api.chooseLibrary();
-              if (r) { this.info.libraryRoot = r; libPath.textContent = r; await this.closeAll(); this.library.load(''); toast('Library folder changed'); }
-            } }, 'Change…'),
-            h('button', { class: 'btn', onclick: () => window.api.showLibraryFolder() }, 'Open in Explorer')),
-          h('small', { class: 'hint' }, 'Sync: choose a folder inside OneDrive, Google Drive or Dropbox and your notes sync between PCs automatically. Avoid editing the same notebook on two PCs at the same time.')),
+    // Sections on the left, one shown at a time (built when first opened).
+    const sections = [
+      ['general', 'General', 'settings', () => [
         h('div', { class: 'field' }, h('span', {}, 'Language'),
           h('div', { class: 'row' }, ...[['en', 'English'], ['ru', 'Русский']].map(([v, label]) => h('button', {
             class: `chip no-i18n${(s.lang || 'en') === v ? ' active' : ''}`, dataset: { lang: v },
@@ -456,6 +449,8 @@ class App {
             onclick: (e) => { this.setTheme(v); e.currentTarget.parentElement.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === e.currentTarget)); },
           }, label)))),
         check('Round PDF letters', 'pdfShapes', 'Draws the letters of PDFs as smooth shapes (like other PDF readers) instead of through Windows text rendering, which makes small print angular. Applies to notebooks opened afterwards'),
+      ]],
+      ['pen', 'Pen & input', 'pen', () => [
         check('Mouse can draw', 'mouseDraws', 'Turn off to scroll with the mouse and draw only with the pen'),
         check('Scribble to erase', 'scribbleErase', 'Scribble back and forth over handwriting with the pen to erase it (like GoodNotes)'),
         check('Scribbling also erases text', 'scribbleText', 'Scribbling over a text box deletes it too (off: scribbling erases only handwriting)'),
@@ -463,6 +458,16 @@ class App {
         check('Draw & hold to create shapes', 'shapeHold', 'Hold the pen still at the end of a stroke to snap it to a line, rectangle, triangle or ellipse'),
         check('Pasted text keeps formatting', 'pasteFormatting', 'Off: text is always pasted as plain text. On: bold, italic, underline and lists are kept'),
         this.tabletSettings(),
+      ]],
+      ['library', 'Library & backups', 'folder', () => [
+        h('div', { class: 'field' }, h('span', {}, 'Library folder'), libPath,
+          h('div', { class: 'row' },
+            h('button', { class: 'btn', onclick: async () => {
+              const r = await window.api.chooseLibrary();
+              if (r) { this.info.libraryRoot = r; libPath.textContent = r; await this.closeAll(); this.library.load(''); toast('Library folder changed'); }
+            } }, 'Change…'),
+            h('button', { class: 'btn', onclick: () => window.api.showLibraryFolder() }, 'Open in Explorer')),
+          h('small', { class: 'hint' }, 'Sync: choose a folder inside OneDrive, Google Drive or Dropbox and your notes sync between PCs automatically. Avoid editing the same notebook on two PCs at the same time.')),
         h('div', { class: 'field' }, h('span', {}, 'Backup & moving to a new version or PC'),
           h('div', { class: 'row wrap' },
             h('button', { class: 'btn', onclick: () => this.exportSettings() }, 'Export settings…'),
@@ -471,80 +476,144 @@ class App {
             h('button', { class: 'btn', onclick: () => this.importBackup() }, 'Import notes…'),
             h('button', { class: 'btn', onclick: () => window.api.backupOpenFolder() }, 'Open automatic backups')),
           h('small', { class: 'hint' }, 'Settings include your tools, favourite pens and colours. A notes backup (.studynotes) contains every folder and notebook; importing it never overwrites anything – it goes into a new folder. Files from older versions always open in newer ones. Automatic backups: every hour, next to your library (right-click a notebook → Restore from backup).')),
-        this.driveSettings(),
+      ]],
+      ['sync', 'Google Drive', 'cloud', () => [this.driveSettings()]],
+      ['ai', 'AI assistant', 'ai', () => [this.aiSettings()]],
+      ['addons', 'Add-ons', 'star', () => [this.addonSettings()]],
+      ['about', 'About', 'more', () => [
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => showWhatsNew(this.info.version) }, "What's new"),
           h('button', { class: 'btn', onclick: () => this.showAbout() }, 'About StudyNotes')),
-        h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when the driver uses "Windows Ink" (newer Wacom drivers: Wacom Tablet Properties → Mapping → Use Windows Ink; older Bamboo drivers do it automatically).`));
-    const addons = h('div', { class: 'form settings-pane', hidden: true }, this.addonSettings());
-    const tabs = [['General', general], ['Add-ons', addons]].map(([label, pane], k) => h('button', {
-      class: `settings-tab${k ? '' : ' active'}`,
-      onclick: (e) => {
-        tabs.forEach((t) => t.classList.toggle('active', t === e.currentTarget));
-        general.hidden = pane !== general; addons.hidden = pane !== addons;
-      },
-    }, label));
-    if (tab === 'addons') tabs[1].click();
+        h('small', { class: 'hint' }, `StudyNotes ${this.info.version}. Graphics tablet: pressure works when the driver uses "Windows Ink" (newer Wacom drivers: Wacom Tablet Properties → Mapping → Use Windows Ink; older Bamboo drivers do it automatically).`),
+      ]],
+    ];
+    const pane = h('div', { class: 'settings-pane form' });
+    const built = new Map();
+    const nav = h('nav', { class: 'settings-nav' });
+    const show = (key) => {
+      const sec = sections.find((x) => x[0] === key) || sections[0];
+      if (!built.has(sec[0])) built.set(sec[0], h('div', { class: 'settings-section' }, h('h2', { class: 'settings-h' }, sec[1]), ...sec[3]().filter(Boolean)));
+      pane.replaceChildren(built.get(sec[0]));
+      pane.scrollTop = 0;
+      for (const b of nav.children) b.classList.toggle('active', b.dataset.key === sec[0]);
+    };
+    for (const [key, label, ic] of sections) {
+      nav.append(h('button', { class: 'settings-tab', dataset: { key }, onclick: () => show(key) }, h('span', { class: 'settings-ic', html: icon(ic, 18) }), h('span', {}, label)));
+    }
+    show(sections.some((x) => x[0] === tab) ? tab : 'general');
     modal({
       title: 'Settings',
-      width: 720,
-      body: h('div', { class: 'settings' }, h('div', { class: 'settings-tabs' }, ...tabs), general, addons),
+      width: 920,
+      body: h('div', { class: 'settings' }, nav, pane),
       actions: [{ label: 'Done', primary: true, result: true }],
     });
   }
 
-  // ---------- AI assistant (Settings → Add-ons) ----------
-  aiCard(card) {
-    const ai = this.settings.ai = { provider: '', model: '', baseUrl: '', monthlyLimit: 200, custom: '', enabled: false, ...(this.settings.ai || {}) };
+  // ---------- AI assistant (Settings → AI assistant) ----------
+  // Three ways to connect: the Claude app with the user's subscription (MCP),
+  // an API key, or a model on this computer. Keys stay in the main process.
+  aiSettings() {
+    const s = this.settings;
+    const ai = s.ai = { provider: '', model: '', baseUrl: '', monthlyLimit: 200, custom: '', enabled: false, ...(s.ai || {}) };
+    ai.via ||= ai.provider === 'local' ? 'local' : ai.provider ? 'api' : (s.mcp ? 'claude' : 'api');
     const save = () => this.saveSettings();
-    const state = h('small', { class: 'addon-state' }, '');
-    const keyRow = h('div', { class: 'row' });
-    const baseRow = h('div', { class: 'row', hidden: true });
-    const modelSel = h('select', { class: 'rec-select', 'aria-label': 'Model', onchange: () => { ai.model = modelSel.value; save(); } });
-    const setModels = (list) => {
-      const all = [...new Set([ai.model, ...list].filter(Boolean))];
-      modelSel.replaceChildren(h('option', { value: '' }, '– choose a model –'), ...all.map((m) => h('option', { value: m, class: 'no-i18n', selected: m === ai.model }, m)));
-    };
+    const sw = (on, onChange, label) => h('label', { class: 'switch', title: label },
+      h('input', { type: 'checkbox', role: 'switch', checked: on, 'aria-label': label, onchange: (e) => onChange(e.target.checked) }), h('span', { class: 'switch-track' }));
+    const status = h('small', { class: 'hint ai-status' }, '');
     let info = null;
     const refresh = async () => {
       info = await window.api.aiInfo().catch(() => null);
       if (!info) return;
       const p = info.providers[ai.provider];
-      keyRow.hidden = !p || !p.key;
-      baseRow.hidden = ai.provider !== 'local';
-      state.textContent = !ai.provider ? 'Not set up' : `${p ? p.name : ai.provider}${p && p.key ? (info.keys[ai.provider] ? ' · key saved' : ' · no key yet') : ''} · ${info.used} ${'requests this month'}`;
+      status.textContent = ai.via === 'claude' ? '' : !ai.provider ? 'Not set up'
+        : `${p ? p.name : ai.provider}${p && p.key ? (info.keys[ai.provider] ? ' · key saved' : ' · no key yet') : ''}${ai.model ? ' · ' + ai.model : ''} · ${info.used} requests this month`;
+      keyRow.hidden = !(p && p.key);
+    };
+
+    // --- Claude app (subscription) ---
+    const testOut = h('div', { class: 'mcp-test' });
+    const showTest = (r) => {
+      const line = (ok, text) => h('div', { class: `mcp-line ${ok ? 'ok' : 'bad'}` }, h('span', { html: icon(ok ? 'check' : 'close', 14) }), h('span', { class: 'no-i18n' }, text));
+      testOut.replaceChildren(
+        ...r.files.map((f) => line(f.connected, `${f.connected ? 'Connected in' : f.exists ? 'Not connected in' : 'No file'}: ${f.file}`)),
+        line(r.pipe, r.pipe ? 'StudyNotes is listening for Claude' : 'Claude access is switched off (switch above)'),
+        line(r.bridge === 'ok' && r.tools > 0, r.bridge === 'ok' ? `The bridge answers: ${r.tools} tools` : `The bridge: ${r.error || 'no answer'}`));
+    };
+    const claudeBox = h('div', { class: 'ai-way-body' },
+      h('div', { class: 'row' }, sw(!!s.mcp, (v) => { this.mcp.setEnabled(v).catch((err) => toast(String(err.message || err), { error: true })); }, 'Claude (MCP)'), h('b', {}, 'Let the Claude app use StudyNotes')),
+      h('ol', { class: 'steps' },
+        h('li', {}, 'Switch it on (above).'),
+        h('li', {}, 'Click "Connect Claude Desktop".'),
+        h('li', {}, 'Quit Claude Desktop completely (tray icon next to the clock → Quit) and start it again.'),
+        h('li', {}, 'In Claude: "+" → Connectors → StudyNotes should be listed. Ask for example "Which notebooks do I have?"')),
+      h('div', { class: 'row wrap' },
+        h('button', { class: 'btn', onclick: async () => {
+          try {
+            const r = await window.api.mcpInstallClaude();
+            toast(`Added to Claude Desktop (${r.files.length} ${r.files.length === 1 ? 'file' : 'files'}). Quit Claude Desktop completely and start it again.`, { timeout: 7000 });
+            showTest(await window.api.mcpTest());
+          } catch (err) { toast(errorText(err), { error: true }); }
+        } }, 'Connect Claude Desktop'),
+        h('button', { class: 'btn ghost', onclick: async () => { testOut.replaceChildren(h('small', { class: 'hint' }, 'Testing…')); showTest(await window.api.mcpTest()); } }, 'Test connection')),
+      testOut,
+      h('small', { class: 'hint wrap' }, 'Uses your own Claude plan (Pro, Max), no API key. Claude asks before each change; Ctrl+Z in StudyNotes undoes it.'));
+
+    // --- API key / local model ---
+    const modelSel = h('select', { class: 'rec-select', 'aria-label': 'Model', onchange: () => { ai.model = modelSel.value; save(); refresh(); } });
+    const setModels = (list) => {
+      const all = [...new Set([ai.model, ...list].filter(Boolean))];
+      modelSel.replaceChildren(h('option', { value: '' }, '– choose a model –'), ...all.map((m) => h('option', { value: m, class: 'no-i18n', selected: m === ai.model }, m)));
     };
     const provSel = h('select', { class: 'rec-select', 'aria-label': 'AI provider', onchange: () => { ai.provider = provSel.value; ai.model = ''; setModels([]); save(); refresh(); } },
       h('option', { value: '' }, '– choose –'),
-      ...[['anthropic', 'Anthropic (Claude) – API key'], ['openai', 'OpenAI (GPT) – API key'], ['gemini', 'Google (Gemini) – API key'], ['local', 'Local model (Ollama, LM Studio)']]
-        .map(([v, l]) => h('option', { value: v, selected: v === ai.provider }, l)));
+      ...[['anthropic', 'Anthropic (Claude)'], ['openai', 'OpenAI (GPT)'], ['gemini', 'Google (Gemini)']].map(([v, l]) => h('option', { value: v, selected: v === ai.provider }, l)));
     const keyIn = h('input', { type: 'password', class: 'ai-key', placeholder: 'API key', autocomplete: 'off', 'aria-label': 'API key' });
-    keyRow.append(keyIn,
+    const keyRow = h('div', { class: 'row' }, keyIn,
       h('button', { class: 'btn small', onclick: async () => {
         try { await window.api.aiSetKey(ai.provider, keyIn.value); keyIn.value = ''; toast('Key saved (encrypted on this computer)'); refresh(); } catch (err) { toast(errorText(err), { error: true }); }
       } }, 'Save key'),
       h('button', { class: 'btn ghost small', onclick: async () => { await window.api.aiSetKey(ai.provider, '').catch(() => {}); refresh(); } }, 'Remove key'));
     const baseIn = h('input', { type: 'text', value: ai.baseUrl || 'http://localhost:11434/v1', class: 'ai-base', 'aria-label': 'Server address', onchange: () => { ai.baseUrl = baseIn.value.trim(); save(); } });
-    baseRow.append(h('span', { class: 'tk-label' }, 'Server'), baseIn);
-    const limitIn = h('input', { type: 'number', min: 0, step: 10, value: ai.monthlyLimit, class: 'ai-limit', 'aria-label': 'Monthly limit', onchange: () => { ai.monthlyLimit = Math.max(0, Number(limitIn.value) || 0); save(); } });
-    const customIn = h('textarea', { rows: 2, class: 'ai-custom', placeholder: 'Your standing instructions, e.g. "Answer in German, short, keep formulas in LaTeX."', 'aria-label': 'Standing instructions', onchange: () => { ai.custom = customIn.value; save(); } }, ai.custom || '');
-    setModels([]);
-    refresh();
-    return card({
-      name: 'AI assistant',
-      about: 'Ask about your notes, summarise, explain, make glossaries or exam questions, underline key terms. Uses your own API key or a model on this computer. You see what is sent; changes are previewed and undone with Ctrl+Z.',
-      state, on: !!ai.enabled, setOn: (v) => { ai.enabled = v; save(); },
-      settings: [
-        h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Provider'), provSel),
-        keyRow, baseRow,
-        h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model'), modelSel,
-          h('button', { class: 'btn small', onclick: async () => {
-            try { setModels(await window.api.aiModels({ provider: ai.provider, baseUrl: ai.baseUrl })); toast('Models loaded'); } catch (err) { toast(errorText(err), { error: true }); }
-          } }, 'Load models')),
-        h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Requests per month (0: no limit)'), limitIn),
-        customIn,
-        h('small', { class: 'hint' }, 'API keys are stored encrypted on this computer and are only sent to the provider you choose. With a Claude subscription and no API key, use "Claude (MCP)" below.'),
-      ],
-    });
+    const modelRow = h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model'), modelSel,
+      h('button', { class: 'btn small', onclick: async () => {
+        try { setModels(await window.api.aiModels({ provider: ai.provider, baseUrl: ai.baseUrl })); toast('Models loaded'); } catch (err) { toast(errorText(err), { error: true }); }
+      } }, 'Load models'));
+    const apiBox = h('div', { class: 'ai-way-body' }, h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Provider'), provSel), keyRow,
+      h('small', { class: 'hint wrap' }, 'The key is stored encrypted on this computer and only sent to this provider. Requests are billed by the provider.'));
+    const localBox = h('div', { class: 'ai-way-body' }, h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Server'), baseIn),
+      h('small', { class: 'hint wrap' }, 'Ollama or LM Studio on this computer (or in your own network). Nothing leaves it.'));
+    const shared = h('div', { class: 'ai-shared' },
+      modelRow,
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Requests per month (0: no limit)'),
+        h('input', { type: 'number', min: 0, step: 10, value: ai.monthlyLimit, class: 'ai-limit', 'aria-label': 'Monthly limit', onchange: (e) => { ai.monthlyLimit = Math.max(0, Number(e.target.value) || 0); save(); } })),
+      h('textarea', { rows: 2, class: 'ai-custom', placeholder: 'Your standing instructions, e.g. "Answer in German, short, keep formulas in LaTeX."', 'aria-label': 'Standing instructions', onchange: (e) => { ai.custom = e.target.value; save(); } }, ai.custom || ''));
+
+    const ways = [
+      ['claude', 'Claude app', 'With your Claude subscription', claudeBox],
+      ['api', 'API key', 'Anthropic, OpenAI or Gemini', apiBox],
+      ['local', 'Local model', 'Ollama, LM Studio – offline', localBox],
+    ];
+    const wayBody = h('div', {});
+    const wayBtns = h('div', { class: 'ai-ways', role: 'radiogroup', 'aria-label': 'How to connect' });
+    const pick = (key) => {
+      ai.via = key;
+      if (key === 'local') ai.provider = 'local';
+      else if (key === 'api' && ai.provider === 'local') { ai.provider = ''; ai.model = ''; }
+      provSel.value = ai.provider === 'local' ? '' : ai.provider;
+      save();
+      for (const b of wayBtns.children) b.setAttribute('aria-checked', String(b.dataset.key === key));
+      const w = ways.find((x) => x[0] === key);
+      wayBody.replaceChildren(w[3], ...(key === 'claude' ? [] : [shared]));
+      setModels([]);
+      refresh();
+    };
+    for (const [key, title, sub] of ways) wayBtns.append(h('button', { class: 'ai-way', role: 'radio', 'aria-checked': 'false', dataset: { key }, onclick: () => pick(key) }, h('b', {}, title), h('small', {}, sub)));
+    pick(ai.via);
+    return h('div', { class: 'ai-settings' },
+      h('div', { class: 'row ai-top' }, sw(!!ai.enabled, (v) => { ai.enabled = v; save(); }, 'AI assistant'),
+        h('div', {}, h('b', {}, 'AI button in notebooks (Ctrl+J)'), h('small', { class: 'hint wrap' }, 'Ask about your notes, summarise, explain, glossaries, exam questions, underline key terms. You see what is sent; changes are previewed and undone with Ctrl+Z.'))),
+      status,
+      h('div', { class: 'settings-h3' }, 'How to connect'),
+      wayBtns, wayBody);
   }
 
   // ---------- add-ons ----------
@@ -556,15 +625,30 @@ class App {
       const input = h('input', { type: 'checkbox', role: 'switch', checked: on, 'aria-label': label, onchange: (e) => onChange(e.target.checked) });
       return h('label', { class: 'switch', title: label }, input, h('span', { class: 'switch-track' }));
     };
-    const card = ({ name, about, on, setOn, state, settings }) => {
-      const body = settings ? h('div', { class: 'addon-settings', hidden: true }, ...settings) : null;
-      const more = settings ? h('button', { class: 'btn ghost small', onclick: () => { body.hidden = !body.hidden; more.classList.toggle('open', !body.hidden); } }, 'Settings') : null;
-      return h('div', { class: 'addon' },
-        h('div', { class: 'addon-head' },
+    // A tile per add-on (icon, name, one line, switch); a click opens its page
+    // with the full text and its settings.
+    let list = null;
+    const root = h('div', { class: 'addons' });
+    const card = ({ name, about, on, setOn, state, settings, icon: ic = 'star' }) => {
+      const short = (about.match(/^[^.!?]*[.!?]/) || [about])[0];
+      let cur = on;
+      const set = (v) => { cur = v; setOn(v); };
+      const detail = () => {
+        const back = h('button', { class: 'btn ghost small addon-back', onclick: () => root.replaceChildren(list) }, '← All add-ons');
+        root.replaceChildren(h('div', { class: 'addon-detail' }, back,
+          h('div', { class: 'addon-dhead' }, h('span', { class: 'addon-ic big', html: icon(ic, 28) }),
+            h('div', { class: 'addon-title' }, h('b', {}, name), state ? state.cloneNode(true) : null),
+            setOn ? sw(cur, set, name) : h('span', { class: 'addon-always' }, 'Always on')),
+          h('p', { class: 'addon-about' }, about),
+          settings ? h('div', { class: 'addon-settings' }, ...settings) : null));
+      };
+      const tile = h('div', { class: 'addon', tabindex: 0, onclick: (e) => { if (!e.target.closest('.switch')) detail(); }, onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) detail(); } },
+        h('div', { class: 'addon-head' }, h('span', { class: 'addon-ic', html: icon(ic, 20) }),
           h('div', { class: 'addon-title' }, h('b', {}, name), state || null),
-          more, setOn ? sw(on, setOn, name) : h('span', { class: 'addon-always' }, 'Always on')),
-        h('small', { class: 'hint' }, about),
-        body);
+          setOn ? sw(on, set, name) : h('span', { class: 'addon-always' }, 'Always on')),
+        h('small', { class: 'hint wrap' }, short),
+        settings ? h('button', { class: 'btn ghost small addon-more', onclick: (e) => { e.stopPropagation(); detail(); } }, 'Settings') : null);
+      return tile;
     };
 
     // text recognition: built in
@@ -594,15 +678,15 @@ class App {
       },
     }, label)));
 
-    return h('div', { class: 'addons' },
+    list = h('div', { class: 'addon-grid' },
       card({
-        name: 'Searchable scans',
+        name: 'Searchable scans', icon: 'search',
         about: 'Scanned PDFs become searchable by themselves when they are opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.',
         state: ocrState, on: s.autoOcr !== false, setOn: (v) => { s.autoOcr = v; this.saveSettings(); },
         settings: [h('small', { class: 'hint' }, 'By hand: Search → "Recognize text (OCR)".')],
       }),
       card({
-        name: 'Editable scans',
+        name: 'Editable scans', icon: 'scanText',
         about: 'Turns text in scans, photos and PDFs into text boxes you can edit, in a matching font, size, colour, tilt and look (lasso → Text area, or the page button in the toolbar). Handwriting becomes typed text.',
         on: !!s.editableScans, setOn: (v) => { s.editableScans = v; this.saveSettings(); },
         settings: [
@@ -611,36 +695,18 @@ class App {
         ],
       }),
       card({
-        name: 'Handwriting to text',
+        name: 'Handwriting to text', icon: 'pen',
         about: 'Your pen writing → text: select it → "Copy as text" or "To text". Windows reads it on this PC; Google reads it online with your Google account (better for untidy writing).',
         settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
       }),
-      // AI assistant (1.9): own API key or a local model; keys stay in the main process
-      this.aiCard(card),
-      // Claude (MCP): Claude Desktop reads and edits notebooks with the user's own Claude plan
-      card({
-        name: 'Claude (MCP)',
-        about: 'Lets the Claude app read your notebooks and add text, pages and bookmarks when you ask it to. Uses your own Claude plan. Changes can be undone with Ctrl+Z.',
-        on: !!s.mcp,
-        setOn: (v) => { this.mcp.setEnabled(v).catch((err) => toast(String(err.message || err), { error: true })); },
-        settings: [
-          h('div', { class: 'row' },
-            h('button', { class: 'btn small', onclick: async () => {
-              try {
-                const r = await window.api.mcpInstallClaude();
-                toast('StudyNotes was added to Claude Desktop. Restart Claude Desktop to use it.', { timeout: 6000 });
-                console.log('[mcp] Claude Desktop config', r.file);
-              } catch (err) { toast(String(err.message || err), { error: true }); }
-            } }, 'Connect Claude Desktop')),
-          h('small', { class: 'hint' }, 'Then ask Claude for example: "Summarise page 3 of my notebook Power electronics and add the summary on a new page."'),
-        ],
-      }),
       // extensions (src/extensions, docs/EXTENSIONS.md): off until switched on
       ...extensions.list().map((x) => card({
-        name: x.name, about: x.description,
+        name: x.name, about: x.description, icon: x.icon || 'star',
         state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, 'Extension'),
         on: x.enabled, setOn: (v) => extensions.setEnabled(x.id, v),
       })));
+    root.append(list);
+    return root;
   }
 
   // ---------- graphics tablet ----------

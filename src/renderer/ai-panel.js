@@ -3,6 +3,7 @@
 // what goes out; the AI answers with an edit plan (src/shared/ai-plan.js)
 // that is checked and previewed, and applied as one undo step.
 import { h, toast } from './ui.js';
+import { icon } from './icons.js';
 import { t as tr } from './i18n.js';
 import { buildContext, buildRequest, estimateTokens } from '../shared/ai-context.js';
 import { checkPlan, applyPlan, describePlan, parsePlan } from '../shared/ai-plan.js';
@@ -28,7 +29,7 @@ export class AiPanel {
 
   toggle() { if (this.el) this.close(); else this.open(); }
 
-  close() { if (this.el) { this.el.remove(); this.el = null; } }
+  close() { if (this.el) { this.el.remove(); this.el = null; this.editor.el.classList.remove('ai-open'); this.editor.viewer.scheduleUpdate(); } }
 
   ready() { return !!(this.cfg.enabled && this.cfg.provider && this.cfg.model); }
 
@@ -39,14 +40,25 @@ export class AiPanel {
     this.scope = sel ? 'selection' : 'page';
     this.selection = sel;
     const body = h('div', { class: 'ai-body' });
-    this.el = h('div', { class: 'ai-panel', role: 'dialog', 'aria-label': tr('AI assistant') },
-      h('div', { class: 'ai-head' }, h('b', {}, 'AI assistant'), h('small', { class: 'ai-model no-i18n' }, this.ready() ? `${this.cfg.provider} · ${this.cfg.model}` : ''),
-        h('button', { class: 'btn ghost small', title: 'Close', onclick: () => this.close() }, '×')),
+    // a panel on the right like search: the page gets narrower, nothing is covered
+    this.el = h('aside', { class: 'ai-panel', role: 'complementary', 'aria-label': tr('AI assistant') },
+      h('div', { class: 'ai-head' }, h('span', { class: 'ai-head-ic', html: icon('ai', 18) }), h('b', {}, 'AI assistant'),
+        h('small', { class: 'ai-model no-i18n' }, this.ready() ? `${this.cfg.provider} · ${this.cfg.model}` : ''),
+        h('button', { class: 'icon-btn', title: 'Close (Ctrl+J)', html: icon('close', 16), onclick: () => this.close() })),
       body);
-    ed.el.append(this.el);
+    if (ed.el.classList.contains('searching')) ed.searchPanel.close?.();
+    ed.body.append(this.el);
+    ed.el.classList.add('ai-open');
+    ed.viewer.scheduleUpdate();
     if (!this.ready()) {
-      body.append(h('p', { class: 'hint' }, 'Choose an AI provider and model first (Settings → Add-ons → AI assistant). With a Claude subscription, use "Claude (MCP)" there instead.'),
-        h('button', { class: 'btn', onclick: () => { this.close(); ed.app.showSettings('addons'); } }, 'Open settings'));
+      const claude = !!ed.app.settings.mcp && (this.cfg.via === 'claude');
+      body.append(h('div', { class: 'ai-empty' },
+        h('span', { class: 'ai-empty-ic', html: icon('ai', 34) }),
+        h('b', {}, claude ? 'You use the Claude app' : 'Set up the AI assistant'),
+        h('p', {}, claude
+          ? 'Ask Claude in the Claude app – it can read this notebook and change it. For this panel, add an API key or a local model.'
+          : 'Choose how to connect: the Claude app with your subscription, an API key (Anthropic, OpenAI, Gemini) or a model on this computer.'),
+        h('button', { class: 'btn primary', onclick: () => { this.close(); ed.app.showSettings('ai'); } }, 'Open AI settings')));
       return;
     }
     const chip = (key, label, enabled = true) => h('button', { class: `btn small ai-chip${this.scope === key ? ' active' : ''}`, disabled: !enabled, onclick: (e) => {
