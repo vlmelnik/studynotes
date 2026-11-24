@@ -335,6 +335,12 @@ const words = {
   'Pictures, shapes and safer sync': 'Картинки, фигуры и надёжная синхронизация', 'Pictures': 'Картинки', 'Crop, rotate, transparency and AI background removal.': 'Обрезка, поворот, прозрачность и удаление фона с ИИ.',
   'Shapes': 'Фигуры', 'Clean corners, fill colour.': 'Ровные углы, заливка.', 'Backups': 'Резервные копии', 'Hourly local backups and repair after a crash or power cut.': 'Ежечасные локальные копии и восстановление после сбоя или отключения питания.',
   'Signature…': 'Подпись…', 'Pen eraser end / barrel button ': 'Ластик на пере / боковая кнопка', 'Text': 'Текст', 'Date': 'Дата', 'Check': 'Галочка', 'Saved to ': 'Сохранено в ',
+  // extension: rich-paste
+  'Formulas and formatting on paste': 'Формулы и форматирование при вставке',
+  'Shows LaTeX formulas, bold text, headings and lists from pasted text.': 'Показывает формулы LaTeX, жирный текст, заголовки и списки из вставленного текста.',
+  'Render formulas and formatting': 'Показать формулы и форматирование', 'Edit formula': 'Изменить формулу',
+  'Edit formula ({break} marks a line break)': 'Изменить формулу ({break} – перенос строки)', 'Invalid LaTeX formula': 'Ошибка в формуле LaTeX',
+  'Disable conversion on paste': 'Не преобразовывать при вставке', 'Enable conversion on paste': 'Преобразовывать при вставке',
 };
 
 // Texts with numbers / names. [regex, replacement or function]
