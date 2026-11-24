@@ -80,10 +80,11 @@ const TOOLS = [
           + 'free_space: on "page" itself, in its empty rows between what is there (when the user names the page). below: under everything on "page".' },
         blocks: {
           type: 'array', maxItems: 400,
-          description: 'In order. { "type": "heading", "level": 1|2|3, "text": "…" } | { "type": "paragraph", "text": "…" } | { "type": "list", "items": ["…"], "ordered": false } | '
+          description: 'In order. { "type": "heading", "level": 1|2|3, "text": "…" } | { "type": "paragraph", "text": "…", "tone": "warning"|"note" (optional: red caution, or a side note / page reference in the note colour) } | '
+            + '{ "type": "definition", "term": "SSRI", "text": "…" } (term: explanation; several in a row stay together) | { "type": "list", "items": ["…"], "ordered": false } | '
             + '{ "type": "formula", "latex": "U_2 > U_1" } (a formula on its own line) | { "type": "box", "title": "Remember", "text": "…" } (a framed key statement) | '
             + '{ "type": "image", "ref": "a1", "caption": "…", "size": "small"|"medium"|"full" } (a picture the user attached in the StudyNotes chat, by its id) | { "type": "pagebreak" }',
-          items: { type: 'object', required: ['type'], properties: { type: { type: 'string', enum: ['heading', 'paragraph', 'list', 'formula', 'box', 'image', 'pagebreak'] }, level: { type: 'integer' }, text: { type: 'string' }, title: { type: 'string' }, latex: { type: 'string' }, ref: { type: 'string' }, caption: { type: 'string' }, size: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, ordered: { type: 'boolean' } } },
+          items: { type: 'object', required: ['type'], properties: { type: { type: 'string', enum: ['heading', 'paragraph', 'definition', 'list', 'formula', 'box', 'image', 'pagebreak'] }, tone: { type: 'string' }, term: { type: 'string' }, level: { type: 'integer' }, text: { type: 'string' }, title: { type: 'string' }, latex: { type: 'string' }, ref: { type: 'string' }, caption: { type: 'string' }, size: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, ordered: { type: 'boolean' } } },
         },
       },
     },
@@ -106,7 +107,8 @@ const INSTRUCTIONS = 'StudyNotes is the user\'s note-taking app for lectures and
   + 'Where: when the user just asks to add notes, use place "next_page" (the next empty page after the open one); when they name a page, use "free_space" on that page; '
   + 'only when they ask to replace or delete what is there, call clear_page for those pages first (the user confirms it) and then write on them. '
   + 'read_notebook also says what else is on a page (handwriting, pictures, shapes) that you cannot read, and which paper it is. '
-  + 'Good notes: a level-1 heading for the topic, level-2 headings for sections, short paragraphs, **bold** only for key terms, lists for steps or properties, '
+  + 'Good notes: a level-1 heading for the topic, level-2 headings for sections, a level-3 heading for a sub-topic, short paragraphs, **bold** only for key terms, '
+  + 'definition blocks for terms and abbreviations, lists for steps or properties, tone "warning" for side effects, risks and common mistakes, tone "note" for sources and page references, '
   + 'formulas as formula blocks (LaTeX), one "box" with the key statement to remember at the end. '
   + 'Example: [{"type":"heading","level":1,"text":"Ferranti effect"},{"type":"paragraph","text":"On a long **unloaded** line the voltage at the end rises."},'
   + '{"type":"heading","level":2,"text":"Why"},{"type":"list","items":["capacitive charging current","line inductance"]},{"type":"formula","latex":"U_2 > U_1"},'
