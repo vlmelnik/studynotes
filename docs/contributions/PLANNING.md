@@ -12,13 +12,13 @@ Wiring that needs the editor, the viewer or the main process stays with the main
 
 | Outcome | Queue task(s) | Maintainer part | Integration check |
 | --- | --- | --- | --- |
-| Formulas, bold, headings and lists survive pasting; existing LaTeX text can be rendered | `sn-paste-parse` → `sn-ext-rich-paste` → `sn-ext-rich-paste-export` | extension host, KaTeX dependency | e2e: paste, edit, undo, export PDF/PNG, copy out, switch off |
-| Dark view for PDF pages | `sn-ext-dark-view` | page pass and ink filter in the host | e2e: page dark, ink readable, stored colours and export unchanged |
+| Formulas, bold, headings and lists survive pasting; existing LaTeX text can be rendered | done: `sn-paste-parse`, `sn-ext-rich-paste`; open: `sn-ext-rich-paste-export` | extension host, KaTeX dependency | e2e: paste, edit, undo, export PDF/PNG, copy out, switch off |
+| Dark view for PDF pages | done: `sn-ext-dark-view` | page pass and ink filter in the host | e2e: page dark, ink readable, stored colours and export unchanged |
 | Several PDFs and their outlines in one notebook | `sn-outline-full` | panel tree, drag to move, PDF bookmarks in export | reopen and export: entries point to the right page |
 | Faster, smoother scrolling and zoom | `sn-zoom-motion`, `sn-render-scheduler` | wire into `viewer.js`; measure frame times first | 100-page PDF: frame times while scrolling, Ctrl+wheel and pinch; soak test |
 | Floating reference reader and split view | `sn-reader-layout`, `sn-reader-documents` | always-on-top window, split view, drop and pick files | move, resize, dock, swap; wheel goes to the pane under the pointer |
 | Text recognition keeps columns apart | `sn-blocks-ragged` | OCR reference run for three languages | references unchanged or better |
-| AI in the notebook (1.9): ask, edit, summarise with a checked edit plan | `sn-ai-edit-plan`, `sn-ai-context` | providers and keys in the main process, AI panel, host API v2 | e2e with a fake provider: preview, apply, undo, bad plan refused |
+| AI in the notebook (1.9): ask, edit, summarise with a checked edit plan | built by the maintainer (`src/shared/ai-plan.js`, `ai-context.js`, `src/main/ai.js`, AI panel) | host API v2 for extensions | `test/e2e/ai.js` with a fake provider |
 | Study session (1.9.x, extension): capture from the whole screen, AI files it into the notebook | `sn-capture-session`, `sn-scroll-stitch` | floating bar, global shortcuts, screen capture (`host.capture`) | e2e: capture a test window, apply the plan |
 | Handwriting to text (1.9.x, extension, local model) | `sn-ink-lines` | model choice by measurement, `host.models`, `host.ink` | error rate per language on a fixed test set |
 

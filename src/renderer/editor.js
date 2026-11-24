@@ -21,6 +21,7 @@ import { FONTS } from '../shared/fonts.js';
 import { makeTextEditable } from './scan-edit.js';
 import { fitToolbar } from '../shared/toolbar-fit.js';
 import { extensions } from './extensions.js';
+import { AiPanel } from './ai-panel.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
 const UNDO_LIMIT = 300;
@@ -324,6 +325,18 @@ export class Editor {
     for (const c of changes) this.setPageData(c.pageId, c.after);
   }
 
+  // An AI edit plan (src/shared/ai-plan.js applyPlan): new pages, bookmarks
+  // and changes on several pages as one undo step.
+  commitPlan({ pages, changes }) {
+    this.finishEditing();
+    this.tools.clearSelection(true);
+    const e = { kind: 'plan', before: this.pages, after: pages, items: changes.map(({ pageId, before, after }) => ({ pageId, before, after })) };
+    this.undoStack.push(e);
+    if (this.undoStack.length > UNDO_LIMIT) this.undoStack.shift();
+    this.redoStack.length = 0;
+    this.applyHistory(e, 'after');
+  }
+
   addStroke(pageId, st) {
     this.finishEditing();
     const before = this.pageData(pageId);
@@ -380,6 +393,11 @@ export class Editor {
       const idx = this.pages.findIndex((p) => p.id === list[list.length - 1].pageId);
       const [first, last] = this.viewer.visibleRange();
       if (idx >= 0 && (idx < first || idx > last)) this.viewer.scrollToPage(idx);
+    } else if (e.kind === 'plan') {
+      // page data first when pages come in, the page list first when they go
+      if (which === 'after') { for (const it of e.items) this.doc.pages[it.pageId] = it.after; this.applyPages(e.after); }
+      else { this.applyPages(e.before); for (const it of e.items) this.doc.pages[it.pageId] = it.before; }
+      for (const it of e.items) { this.markDirty(it.pageId); this.viewer.invalidateInk(it.pageId); const v = this.viewer.viewById(it.pageId); if (v) this.renderObjects(v); this.sidebar.invalidate(it.pageId); }
     } else if (e.kind === 'pages') {
       if (e.sources) this.doc.nb.sources = e.sources[which];
       if (e.data) { this.doc.pages[e.data.pageId] = e.data[which]; this.dirtyPages.add(e.data.pageId); }
@@ -528,6 +546,7 @@ export class Editor {
       toolBtn('hand', 'hand', 'Hand / pan (Space)'),
     ];
     const imageBtn = h('button', { class: 'tool-btn', title: 'Insert picture', 'aria-label': 'Insert picture', html: icon('image', 24), onclick: () => this.insertPictureDialog() });
+    this.aiPanel = new AiPanel(this);
     this.undoBtn = iconButton('undo', 'Undo (Ctrl+Z)', () => this.undo(), 'bar-btn');
     this.redoBtn = iconButton('redo', 'Redo (Ctrl+Y)', () => this.redo(), 'bar-btn');
     const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, ...this.toolButtons.slice(7));
@@ -543,6 +562,7 @@ export class Editor {
       this.isBoard ? null : opt(h('div', { class: 'split-btn' },
         iconButton('addPage', 'Add a page after this one (same style)', () => this.addPageSameStyle(), 'bar-btn'),
         h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })), 4, 'Add a page…', 'addPage', () => this.addPageMenu(this.moreBtn)),
+      this.isBoard ? null : opt(iconButton('ai', 'AI assistant (Ctrl+J)', () => this.aiPanel.toggle(), 'bar-btn ai-btn'), 7, 'AI assistant', 'ai', () => this.aiPanel.toggle()),
       this.isBoard ? null : opt(iconButton('scanText', 'Make the text of this page editable (scans, photos, PDFs)', () => this.makePageEditable(this.viewer.currentIndex), 'bar-btn scan-text'), 2, 'Make text editable', 'scanText', () => this.makePageEditable(this.viewer.currentIndex)),
       this.isBoard ? null : opt(iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'), 1, 'Delete this page', 'pageDelete', () => this.deletePage(this.viewer.currentIndex)),
       opt(iconButton('send', 'Send by e-mail or Telegram', (e) => this.sendMenu(e.currentTarget), 'bar-btn'), 3, 'Send…', 'send', () => this.sendMenu(this.moreBtn)),
@@ -1382,6 +1402,7 @@ export class Editor {
     if (ctrl && k === 'x') { this.tools.cut(); return true; }
     if (ctrl && k === 'd') return this.tools.duplicate(), true;
     if (ctrl && k === 'g') { if (this.tools.sel) this.tools.group(!e.shiftKey); return true; }
+    if (ctrl && k === 'j' && !this.isBoard) { this.aiPanel.toggle(); return true; }
     if (ctrl && k === 'a') return this.selectAll(), true;
     if (ctrl && (k === '=' || k === '+')) return this.viewer.zoomTo(this.viewer.zoomTarget() * 1.25), true;
     if (ctrl && k === '-') return this.viewer.zoomTo(this.viewer.zoomTarget() / 1.25), true;

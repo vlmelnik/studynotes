@@ -5,6 +5,7 @@
 import { toast } from './ui.js';
 import { notebookText, freeSpot, findNotebook } from '../shared/mcp-tools.js';
 import { plainToHtml } from '../shared/richtext.js';
+import { checkPlan, applyPlan, describePlan } from '../shared/ai-plan.js';
 import { uid } from './tools.js';
 import { round2 } from '../shared/geometry.js';
 
@@ -138,6 +139,21 @@ export class McpTools {
         }
         toast(`Claude added page ${n}`);
         return `Added page ${n} to "${nb.title}"${a.title ? ' with a bookmarked title' : ''}.`;
+      }
+      case 'apply_edit_plan': {
+        const nb = await this.notebookFor(a.notebook);
+        const ed = await this.editorFor(nb.path);
+        const plan = typeof a.plan === 'string' ? JSON.parse(a.plan) : a.plan;
+        const checked = checkPlan(plan, { pages: ed.pages, data: (id) => ed.pageData(id) }, { allowRemove: !!a.allow_remove });
+        const problems = checked.problems.map((p) => `- change ${p.index + 1}: ${p.reason}`);
+        if (!checked.ops.length) throw new Error('Nothing was changed.' + (problems.length ? '\n' + problems.join('\n') : ''));
+        const r = applyPlan({ pages: ed.pages, data: (id) => ed.pageData(id) }, checked.ops, {
+          newId: uid, fontSize: ed.toolState.text.size || 14, color: ed.toolState.pen.color || '#1c1c1e', font: ed.toolState.text.ff,
+        });
+        ed.commitPlan(r);
+        toast(`Claude changed "${nb.title}" – Ctrl+Z undoes it`);
+        return `Applied ${checked.ops.length} change(s) to "${nb.title}" (one undo step):\n${describePlan(checked.ops, ed.pages).map((l) => '- ' + l).join('\n')}`
+          + (problems.length ? `\nLeft out:\n${problems.join('\n')}` : '');
       }
       case 'bookmark_page': {
         const nb = await this.notebookFor(a.notebook);

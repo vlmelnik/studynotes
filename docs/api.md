@@ -163,6 +163,10 @@ Each method registers a listener and returns nothing. They are plain
 | `onCloudStatus` | `fn(status)` | nothing | Called whenever the sync status changes. | needed |
 | `onCloudRequestSync` | `fn()` | nothing | Called by the 15-minute timer: the editor should save everything and then call `cloudSync`. | needed |
 | `onLibraryChanged` | `fn()` | nothing | Called when a sync changed files in the library. | needed |
+| `aiInfo` | – | `{ providers, keys, used }` | AI providers, which have a saved key (never the key), requests this month. | needed |
+| `aiSetKey` | `provider`, `key` (empty: remove) | nothing | Saves an API key encrypted with the system key store. | needed |
+| `aiModels` | `{ provider, baseUrl }` | `[model ids]` | The models the provider offers. | needed |
+| `aiRequest` | `{ provider, model, baseUrl, monthlyLimit }`, `{ system, user }` | `{ text, model, usage }` | One AI request (counted and logged without content). | needed |
 | `mcpSetEnabled` | `on` | `true` when the pipe for Claude is open | Opens or closes the local connection for Claude (MCP), see `src/main/mcp-server.js`. | desktop-only |
 | `mcpInstallClaude` | – | `{ file }` | Adds StudyNotes to Claude Desktop's MCP servers (keeps a `.bak` of the file). | desktop-only |
 | `onMcpCall` | `fn({ id, name, args })` | nothing | Called for each tool call from Claude; answer with `mcpResult`. | desktop-only |

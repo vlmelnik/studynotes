@@ -16,7 +16,7 @@ const data = {
 const text = { main: { pages: { 1: 'Buck converter   \nduty cycle' } }, s1: { pages: { 2: 'Second source page' } } };
 
 test('the tool list is complete and every tool has a schema', () => {
-  assert.deepStrictEqual(TOOLS.map((t) => t.name), ['list_notebooks', 'read_notebook', 'search_notes', 'add_text', 'add_page', 'bookmark_page']);
+  assert.deepStrictEqual(TOOLS.map((t) => t.name), ['list_notebooks', 'read_notebook', 'search_notes', 'add_text', 'add_page', 'apply_edit_plan', 'bookmark_page']);
   for (const t of TOOLS) assert.strictEqual(t.inputSchema.type, 'object');
 });
 
@@ -30,6 +30,7 @@ test('page text: PDF text of the right source, boxes top to bottom, tables', () 
 test('notebook text: headings, bookmarks, ranges and the size limit', () => {
   const all = notebookText(nb, data, text);
   assert.ok(all.text.includes('## Page 1 (bookmarked)') && all.text.includes('## Page 3') && !all.more);
+  assert.ok(all.text.includes('duty cycle\n\n[t:t1] first note\n\n[t:t2] second note'), all.text);
   const two = notebookText(nb, data, text, { from: 2, to: 2 });
   assert.ok(!two.text.includes('## Page 1') && two.text.includes('## Page 2') && two.to === 2);
   const small = notebookText(nb, data, text, { max: 120 });
