@@ -10,6 +10,7 @@
 import { h } from './ui.js';
 import { drawStrokes, drawPaperRegion } from './inkrender.js';
 import { isCancel } from './pdfdoc.js';
+import { extensions } from './extensions.js';
 import { peekLayout } from './pdf-text.js';
 import { pageBackground } from '../shared/paper.js';
 
@@ -190,6 +191,9 @@ class PageView {
   }
 
   setBg(canvas, scale) {
+    const effects = extensions.pageEffects.get(canvas);
+    const effectsChanged = effects !== this.displayEffects;
+    this.displayEffects = effects;
     canvas.classList.add('bg-canvas');
     if (canvas.isConnected && canvas.parentNode !== this.bgHost) {
       // Same PDF page shown twice (duplicated page): copy the bitmap.
@@ -206,6 +210,10 @@ class PageView {
     }
     this.bgScale = scale;
     this.syncPixelRendering();
+    if (effectsChanged) {
+      this.drawInk(true);
+      this.viewer.editor.tools.refreshDisplayInk(this);
+    }
   }
 
   drawPaper(force = false) {
@@ -243,16 +251,18 @@ class PageView {
       return;
     }
     this.cancelBg();
-    const job = pdf.render(p.pdfPage, scale, priority, p.rot || 0);
-    this.bgTask = { scale, cancel: job.cancel, setPriority: job.setPriority };
+    const job = pdf.renderForDisplay(this.viewer.editor, p.pdfPage, scale, priority, p.rot || 0);
+    const task = { scale, cancel: job.cancel, setPriority: job.setPriority };
+    this.bgTask = task;
     job.promise.then((canvas) => {
+      if (this.bgTask !== task || this.destroyedView) { releaseCanvas(canvas); return; }
       this.bgTask = null;
       const cur = this.viewer.cache.get(this.key);
       if (!cur || Math.abs(cur.scale - scale) > 1e-3 || cur.canvas !== canvas) this.viewer.cache.set(this.key, canvas, scale);
       if (this.el.isConnected) this.setBg(canvas, scale);
       if (scale < target && !this.viewer.fastScrolling) this.viewer.scheduleUpdate();
     }, (err) => {
-      this.bgTask = null;
+      if (this.bgTask === task) this.bgTask = null;
       if (!isCancel(err)) console.error('render failed', err);
     });
   }
@@ -296,11 +306,12 @@ class PageView {
     if (t && contains(t.rect, visible) && t.scale >= scale * 0.97) return; // still good
     if (this.tileTask && contains(this.tileTask.rect, visible) && Math.abs(this.tileTask.scale - scale) < 1e-3) { this.tileTask.setPriority(priority); return; }
     this.cancelTile();
-    const job = pdf.render(p.pdfPage, scale, priority - 1, p.rot || 0, rect);
+    const job = pdf.renderForDisplay(this.viewer.editor, p.pdfPage, scale, priority - 1, p.rot || 0, rect);
     const task = { rect, scale, cancel: job.cancel, setPriority: job.setPriority };
     this.tileTask = task;
     job.promise.then((canvas) => {
-      if (this.tileTask === task) this.tileTask = null;
+      if (this.tileTask !== task) { releaseCanvas(canvas); return; }
+      this.tileTask = null;
       if (!this.el.isConnected || this.destroyedView) { releaseCanvas(canvas); return; }
       canvas.className = 'region-canvas pdf-tile';
       this.placeRegion(canvas, rect);
@@ -313,7 +324,12 @@ class PageView {
     });
   }
 
+  inkColor(c) { return extensions.inkColor(c, this.viewer.editor, this.page.kind, this.displayEffects); }
+
+  highlighterBlend() { return extensions.highlighterBlend(this.viewer.editor, this.page.kind, this.displayEffects); }
+
   drawInk(force = false) {
+    this.hlCanvas.style.mixBlendMode = this.highlighterBlend() || '';
     const data = this.viewer.editor.pageData(this.page.id);
     if (!data.strokes.length) {
       if (this.inkCanvas.width) { this.inkCanvas.width = 0; this.inkCanvas.height = 0; }
@@ -325,11 +341,11 @@ class PageView {
     if (!realloc && !force) return;
     const r = this.ink.rect;
     if (!r) return;
-    // highlighters live on their own multiply-blended canvas so black text stays black
+    // Highlighter blending is independent of the pen layer.
     if (this.hlCanvas.width !== this.inkCanvas.width) this.hlCanvas.width = this.inkCanvas.width;
     if (this.hlCanvas.height !== this.inkCanvas.height) this.hlCanvas.height = this.inkCanvas.height;
     this.placeRegion(this.hlCanvas, r);
-    const o = { ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, skip: this.inkSkip, clip: r };
+    const o = { ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, skip: this.inkSkip, clip: r, color: (c) => this.inkColor(c) };
     drawStrokes(this.inkCanvas.getContext('2d'), data.strokes, this.ink.scale, { ...o, only: 'pen' });
     drawStrokes(this.hlCanvas.getContext('2d'), data.strokes, this.ink.scale, { ...o, only: 'hl' });
   }
@@ -338,7 +354,7 @@ class PageView {
   addStroke(st) {
     if (!this.ink.rect || !this.inkCanvas.width || st.t === 'hl') return this.drawInk(true);
     const r = this.ink.rect;
-    drawStrokes(this.inkCanvas.getContext('2d'), [st], this.ink.scale, { only: 'pen', ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, clear: false });
+    drawStrokes(this.inkCanvas.getContext('2d'), [st], this.ink.scale, { only: 'pen', ox: -r[0] * this.ink.scale, oy: -r[1] * this.ink.scale, clear: false, color: (c) => this.inkColor(c) });
   }
 
   // A temporary canvas over the visible part of the page (live strokes, selections).
@@ -681,6 +697,22 @@ export class Viewer {
 
   invalidateAll() {
     for (const v of this.views.values()) { v.bgScale = 0; v.ink.rect = null; v.paper.rect = null; v.dropTile(); }
+    this.scheduleUpdate();
+  }
+
+  invalidateDisplayEffects() {
+    for (const v of this.views.values()) {
+      if (v.page.kind === 'pdf') {
+        v.cancelBg();
+        const bg = v.bgHost.firstChild;
+        if (bg && !this.cache.has(bg)) releaseCanvas(bg);
+        v.bgScale = 0;
+        v.displayEffects = undefined;
+        v.dropTile();
+      }
+      v.ink.rect = null;
+    }
+    this.cache.clear();
     this.scheduleUpdate();
   }
 

@@ -71,4 +71,15 @@ function darkenImage(im, { mode = 'full', keep = [] } = {}) {
   return im;
 }
 
-module.exports = { darkColor, darkenImage };
+function inkForDark(hex) {
+  if (typeof hex !== 'string' || !/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) return hex;
+  const normalized = hex.length === 4 ? hex.replace(/[0-9a-f]/gi, (digit) => digit.repeat(2)) : hex;
+  const rgb = normalized.slice(1).match(/../g).map((byte) => parseInt(byte, 16));
+  // HSL lightness uses the midpoint of the lightest and darkest channels.
+  const display = Math.max(...rgb) + Math.min(...rgb) < 255 ? darkColor(...rgb, 'full') : rgb;
+  return '#' + display.map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+const highlightBlend = (dark) => (dark ? 'screen' : 'multiply');
+
+module.exports = { darkColor, darkenImage, inkForDark, highlightBlend };

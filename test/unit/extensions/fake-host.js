@@ -17,7 +17,8 @@ const WHERE = new Set(['textbox-more', 'page-more', 'view']);
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 function fakeHost(id, { settings = {}, notebook = {}, prompt = async () => null } = {}) {
-  const calls = { transforms: [], inline: new Map(), menus: [], passes: [], ink: null, classes: new Set(), toasts: [], refreshes: 0, logs: [] };
+  const calls = { transforms: [], inline: new Map(), menus: [], passes: [], ink: null, blend: null, classes: new Set(), toasts: [], refreshes: 0, logs: [] };
+  const passPredicates = new Map();
   const data = JSON.parse(JSON.stringify(settings));
   const nb = JSON.parse(JSON.stringify(notebook));
   const watchers = [];
@@ -52,8 +53,15 @@ function fakeHost(id, { settings = {}, notebook = {}, prompt = async () => null 
       visible(where, ctx) { return calls.menus.filter((m) => m.where === where && (!m.item.when || m.item.when(ctx))).map((m) => m.item); },
     },
     view: {
-      addPagePass(fn) { calls.passes.push(fn); },
+      addPagePass(fn, { when } = {}) { calls.passes.push(fn); passPredicates.set(fn, when); },
+      async runPagePasses(ctx) {
+        for (const pass of calls.passes) {
+          const when = passPredicates.get(pass);
+          if (!when || when(ctx)) await pass(ctx);
+        }
+      },
       setInkFilter(fn) { calls.ink = fn; },
+      setHighlighterBlend(fn) { calls.blend = fn; },
       setClass(name, on) { if (on) calls.classes.add(name); else calls.classes.delete(name); },
       refresh() { calls.refreshes++; },
     },

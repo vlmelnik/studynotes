@@ -1172,7 +1172,7 @@ export class Editor {
       { label: s.mouseDraws ? 'Mouse draws: on' : 'Mouse draws: off', icon: 'pen', checked: s.mouseDraws, onClick: () => { s.mouseDraws = !s.mouseDraws; this.app.saveSettings(); toast(s.mouseDraws ? 'Mouse can draw' : 'Mouse scrolls, only the pen draws'); } },
       { label: s.pasteFormatting ? 'Paste keeps formatting: on' : 'Paste keeps formatting: off', icon: 'text', checked: s.pasteFormatting, onClick: () => { s.pasteFormatting = !s.pasteFormatting; this.app.saveSettings(); toast(s.pasteFormatting ? 'Pasted text keeps bold / italic / lists' : 'Text is pasted as plain text'); } },
       { label: document.documentElement.dataset.theme === 'dark' ? 'Dark mode: on' : 'Dark mode: off', icon: 'moon', checked: document.documentElement.dataset.theme === 'dark', onClick: () => this.app.toggleDark() },
-      ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex })),
+      ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex }), this),
       'sep',
       { label: 'Keyboard shortcuts', icon: 'more', onClick: () => this.app.showShortcuts() },
     ], 0, 0, anchor);

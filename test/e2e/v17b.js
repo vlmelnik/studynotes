@@ -226,7 +226,9 @@ async function makePdf(file) {
     const sw2 = win.locator('.addon', { hasText: 'Editable scans' }).locator('.switch');
     await sw2.click(); await win.waitForTimeout(150);
     const es = await ed(() => window.__app.settings.editableScans);
-    check('Q: Add-ons tab lists the add-ons, each switch turns its add-on on / off', names.join('|') === 'Searchable scans|Editable scans|Handwriting to text' && off === false && on === true && es === true, JSON.stringify({ names, off, on, es }));
+    const expectedAddons = ['Searchable scans', 'Editable scans', 'Handwriting to text', 'Dark pages'];
+    check('Q: Add-ons tab lists the bundled add-ons and their switches work',
+      expectedAddons.every((name) => names.includes(name)) && off === false && on === true && es === true, JSON.stringify({ names, off, on, es }));
     await win.locator('.addon', { hasText: 'Handwriting to text' }).locator('button', { hasText: 'Settings' }).click();
     await win.locator('.chip', { hasText: 'Google (online)' }).click();
     const eng = await ed(() => window.__app.settings.inkEngine);
