@@ -667,6 +667,21 @@ handle('ocr:spell', (lines) => spellCheck(lines));
 app.on('will-quit', () => { if (speller.proc) speller.proc.kill(); });
 app.on('will-quit', () => { if (ocr) ocr.stop(); });
 
+// ---------- AI (1.9) ----------
+// Providers and keys live here only; the renderer builds the request and checks the plan.
+const { Ai, PROVIDERS } = require('./ai');
+let ai = null;
+const aiInst = () => (ai ||= new Ai({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage }));
+handle('ai:info', async () => {
+  const a = aiInst();
+  const keys = {};
+  for (const p of Object.keys(PROVIDERS)) keys[p] = PROVIDERS[p].key ? await a.hasKey(p) : true;
+  return { providers: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, { name: v.name, key: v.key, base: v.base }])), keys, used: await a.usedThisMonth() };
+});
+handle('ai:setKey', (provider, key) => aiInst().setKey(provider, key));
+handle('ai:models', (cfg) => aiInst().models(cfg));
+handle('ai:request', (cfg, req) => aiInst().request(cfg, req));
+
 // ---------- Claude (MCP) ----------
 // Claude Desktop starts mcp-bridge.js, which connects to this pipe. Off until
 // the user switches it on (Settings → Add-ons); tool calls run in the renderer.

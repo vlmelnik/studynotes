@@ -1,6 +1,6 @@
 # Roadmap 1.9: AI in the notebook, study sessions, handwriting to text
 
-Status: planned (2026-11-24). Version 1.9 brings the AI core. The two larger
+Status (2026-11-24): the AI core is built (AI panel, providers, edit plans, Claude over MCP); study session, handwriting and host API v2 are planned. Version 1.9 brings the AI core. The two larger
 features after it ship as extensions in 1.9.x, so they can be switched off
 and worked on separately.
 
@@ -145,10 +145,11 @@ still have no network and no file access of their own:
 
 ## Queue tasks (now)
 
+`ai-plan.js` and `ai-context.js` were built with the AI core and left the queue.
+
+
 | Task | Module |
 |---|---|
-| `sn-ai-edit-plan` | `src/shared/ai-plan.js` |
-| `sn-ai-context` | `src/shared/ai-context.js` |
 | `sn-capture-session` | `src/shared/capture-session.js` |
 | `sn-scroll-stitch` | `src/shared/scroll-stitch.js` |
 | `sn-ink-lines` | `src/shared/ink-lines.js` |

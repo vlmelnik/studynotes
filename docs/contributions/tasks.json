@@ -11,25 +11,6 @@
     "chain": "outline"
   },
   {
-    "id": "sn-paste-parse",
-    "title": "Paste: one parser for clipboard HTML, Markdown and LaTeX into the rich-text subset",
-    "instructions": "Goal: text copied from a chat answer or a web page keeps its formulas, bold words, headings and lists when pasted into a text box. paste-math.js already has findMath (keep it and its tests); read docs/NOTES-PASTE.md, src/shared/richtext.js and docs/EXTENSIONS.md (inline elements). A formula is stored as <span data-x=\"rich-paste:math\" data-v=\"SOURCE\" data-display=\"1\"></span> (data-display only for display formulas, SOURCE HTML-escaped). (1) mathFromHtml in paste-math.js: When rendered formulas are copied from a web page the clipboard HTML holds the rendering, not the source. KaTeX keeps the source in <annotation encoding=\"application/x-tex\">...</annotation> inside a <span class=\"katex\">; display formulas sit in <span class=\"katex-display\">. MathJax keeps it in a data-latex attribute or a <script type=\"math/tex\"> (add '; mode=display' for display). Without a DOM (string processing only), return the HTML with every rendered formula replaced by a placeholder element the stored formula element above (data-display only for display formulas; SOURCE HTML-escaped) and all other markup untouched. Decode entities in the source (&lt; &amp; ...). Tests in test/unit/shared/paste-math.test.js with small real-looking KaTeX and MathJax snippets, two formulas in one paragraph, and HTML without formulas returned unchanged. (2) Add src/shared/paste-markdown.js with markdownToRich(text, baseSize). Text boxes store a small HTML subset: <b> <i> <u> <br> <div> and <span data-fs data-ff data-c> (see src/shared/richtext.js, parseRich). Convert Markdown only when the text has at least two Markdown marks (so a lone * or # stays text): **bold** and __bold__ -> <b>, *italic* -> <i>, '# ', '## ', '### ' headings -> a <div> with <span data-fs> of 1.6, 1.35, 1.15 x baseSize (rounded to 0.5) around <b>, '- ' / '* ' items -> a <div> starting with '• ', numbered items keep their numbers, each line a <div>, empty lines kept as <div><br></div>. Escape all text. Return { html, plain } where plain = richToPlain(html). Tests in test/unit/shared/paste-markdown.test.js: a typical chat answer (heading, bold, list), text with one stray *, nested bold inside a list item, and that parseRich(html) accepts the result. (3) src/shared/paste-parse.js: pasteToRich({ html, text }, baseSize) -> { html, plain, formulas } | null. Order: HTML with rendered formulas -> mathFromHtml, then the app's tags only (b/strong, i/em, u, br, div/p/li/h1-h3 mapped like the Markdown rules, everything else unwrapped, all text escaped); else plain text: Markdown via markdownToRich and $..$/\\[..\\] formulas via findMath (display formulas get their own <div>); return null when there is neither a formula nor two Markdown marks (normal paste goes on). plain uses $...$ and $$...$$ for formulas; formulas counts them. parseRich(html) must accept the result. Tests with realistic samples: a chat answer with heading, list and \\frac formulas, a KaTeX web snippet, a MathJax snippet, money text, the text '\\[ \\frac{400}{230}\\approx 1{,}73=\\sqrt{3} \\]'. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PASTE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/paste-math.js",
-      "src/shared/paste-markdown.js",
-      "src/shared/paste-parse.js",
-      "test/unit/shared/paste-math.test.js",
-      "test/unit/shared/paste-markdown.test.js",
-      "test/unit/shared/paste-parse.test.js",
-      "docs/NOTES-PASTE.md"
-    ],
-    "chain": "paste",
-    "context": [
-      "src/shared/richtext.js",
-      "docs/EXTENSIONS.md"
-    ]
-  },
-  {
     "id": "sn-render-scheduler",
     "title": "Scroll and zoom: render plan, pixel-budget cache and scroll velocity",
     "instructions": "Goal: long PDFs scroll without blank or blurry pages: pages on screen first, the next ones in the scroll direction prefetched, previews while moving, sharp pages when still, and a cache that never drops what is on screen. viewer.js (readable, do not change) keeps rendered pages in an LRU cache limited to 28 million pixels. (1) Add src/shared/scroll-velocity.js with createVelocityTracker({ windowMs = 120 }): add(t, y) records the scroll position y at time t (ms, increasing); velocity(t) returns px per ms from a least-squares line through the samples of the last windowMs (0 with fewer than 2 samples, or when the newest sample is older than windowMs at time t - the scroll has stopped); reset(). Keep at most 32 samples. Tests in test/unit/shared/scroll-velocity.test.js: steady scrolling, a stop, a reversal, irregular timestamps, many samples. (2) Add src/shared/render-plan.js with planRender(state). state: { pages: [{ index, top, height, width }] (screen px at the current zoom), viewTop, viewHeight, zoom, dpr, moving: boolean (scroll or zoom gesture in progress), velocityY (px per ms, + = down), cached: { [index]: scale }, maxCanvasPx: 16e6 }. Return an ordered list [{ index, scale, reason }]: pages intersecting the view first (by distance of their centre to the view centre), then up to 2 pages ahead in the direction of motion (velocity sign; both directions when |velocityY| < 0.05), then 1 page behind. Target scale = zoom * dpr, reduced so width*height*scale^2 <= maxCanvasPx. While moving: a page with any cached bitmap is skipped (the stretched bitmap is shown), and pages without one get scale * 0.5 (fast preview, reason 'preview'). When not moving: a page is listed only if its cached scale is outside 0.97..1.04 of the target (reason 'sharp'). Never list a page twice. Tests in test/unit/shared/render-plan.test.js for each rule, including a fast fling (velocity 3) and a huge page hitting the pixel cap. (3) Add src/shared/bitmap-cache.js exporting class PixelCache(budget, { onEvict }). Rendered pages are canvases; this pure class only does the bookkeeping by key with { px (pixels), scale, value }. set(key, value, px, scale) replaces an entry (calling onEvict for the old value unless it is the same value); get(key) marks it recently used; has, delete, clear (onEvict for all), size, used. When used > budget: evict entries not in the protected set (protect(keys) - the pages on screen) by oldest use first; never evict a protected entry, even if that leaves the cache over budget (report it with overBudget()). An entry larger than the whole budget is not stored (onEvict called at once, set returns false). Tests in test/unit/shared/bitmap-cache.test.js: LRU order, protection, oversize entries, replacing with the same value, clear. Also one test that drives all three together over a simulated fling across a 200-page PDF and checks the plan stays within budget. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PERFORMANCE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
@@ -73,28 +54,6 @@
     ]
   },
   {
-    "id": "sn-ext-rich-paste",
-    "title": "Extension: formulas and formatting on paste, and on existing text boxes",
-    "instructions": "Goal (user request): text with LaTeX such as '\\[ \\frac{400}{230}\\approx 1{,}73=\\sqrt{3} \\]', copied from a chat, shows as a set formula; bold, headings and lists are kept. Build extension 'rich-paste' on src/shared/paste-parse.js (pasteToRich): (1) host.paste.addTransform: pasteToRich on the clipboard; (2) host.inline.register('rich-paste:math'): render with KaTeX (katex.render(src, el, { displayMode, throwOnError: false })), display formulas centred on their own line, inherit text colour and size; a formula KaTeX cannot parse shows its source in red; toText gives $...$ / $$...$$, toHtml the KaTeX HTML with the source annotation; edit opens host.ui.prompt with the source (Enter applies, Esc cancels); (3) host.menus.add('textbox-more', 'Render formulas and formatting'): for a box whose text already contains formulas or Markdown, replace its content via ctx.textbox.setHtml(pasteToRich({ text })) (one undo step), hidden when there is nothing to convert; (4) setting 'convert on paste' (default on while the extension is on). KaTeX CSS: import 'katex/dist/katex.min.css' in index.js (the build bundles it with its fonts). e2e: paste the formula above into a box, check a .katex element and no raw \\frac text; double-click edits it; Ctrl+Z restores; the menu action converts an existing box; switching the extension off shows the $...$ text again. Read docs/EXTENSIONS.md first and follow it. If src/renderer/extensions.js or test/unit/extensions/fake-host.js is missing in your checkout, stop and report 'blocked'. ES module, default export with apiVersion 1, defaultEnabled false. Imports only from the extension's own folder, ../../shared/*.js and allowed packages; test/unit/main/extensions-guard.test.js must pass. Everything user-visible goes through host.ui.t() for translation. Unit tests with the fake host for all logic; an e2e test that goes through the user's path in the real app (switch on in Settings, use, undo, switch off) with check(...) lines like test/e2e/run.js. Run node --test, npm test and, if you can run Electron, the e2e file; say exactly which ran. Append a dated section to docs/NOTES-PASTE.md (keep earlier sections): what you did, decisions, open points, how a user tries it. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/extensions/rich-paste/index.js",
-      "src/extensions/rich-paste/math.js",
-      "src/extensions/rich-paste/styles.css",
-      "test/unit/extensions/rich-paste.test.js",
-      "test/e2e/extensions/rich-paste.js",
-      "docs/NOTES-PASTE.md"
-    ],
-    "chain": "paste",
-    "after": [
-      "sn-paste-parse"
-    ],
-    "context": [
-      "docs/EXTENSIONS.md",
-      "src/shared/paste-parse.js",
-      "src/shared/richtext.js"
-    ]
-  },
-  {
     "id": "sn-ext-rich-paste-export",
     "title": "Extension: formulas in the PDF export and when copying out",
     "instructions": "Goal: exported PDFs show the set formulas exactly like the screen; copying a box to another program gives $...$ in plain text and rendered HTML. Implement exportImage for 'rich-paste:math' in src/extensions/rich-paste/export.js: render the KaTeX HTML into an SVG foreignObject with the KaTeX CSS and the needed fonts inlined as data URLs, draw it on a canvas at the requested scale, return { png, width, height, baseline } in the units of fontSize (baseline from the .katex-html base box), colour from the style; if the canvas turns out tainted, say so and fall back to drawing the KaTeX output with canvas text (document the choice). Cache by source + size + colour + scale inside the extension. Unit tests: cache keys, size and baseline maths with stubbed measurements, colour handling. e2e: a box with an inline and a display formula -> export PDF -> pdftotext must not contain the LaTeX source and pdfimages (or the page render) shows the formula area inked at the right place (compare with the on-screen box position within 2 pt; use the e2e flow of test/e2e/extensions-host.js: inlineImages + exportTo); Ctrl+C on the box puts $...$ in text/plain. Read docs/EXTENSIONS.md first and follow it. If src/renderer/extensions.js or test/unit/extensions/fake-host.js is missing in your checkout, stop and report 'blocked'. ES module, default export with apiVersion 1, defaultEnabled false. Imports only from the extension's own folder, ../../shared/*.js and allowed packages; test/unit/main/extensions-guard.test.js must pass. Everything user-visible goes through host.ui.t() for translation. Unit tests with the fake host for all logic; an e2e test that goes through the user's path in the real app (switch on in Settings, use, undo, switch off) with check(...) lines like test/e2e/run.js. Run node --test, npm test and, if you can run Electron, the e2e file; say exactly which ran. Append a dated section to docs/NOTES-PASTE.md (keep earlier sections): what you did, decisions, open points, how a user tries it. Report: what changed, tests actually run, open points, Next.",
@@ -112,56 +71,6 @@
     "context": [
       "docs/EXTENSIONS.md",
       "src/extensions/rich-paste/index.js"
-    ]
-  },
-  {
-    "id": "sn-ext-dark-view",
-    "title": "Extension: dark view for PDF pages with readable ink",
-    "instructions": "Goal (user request): a view setting that shows PDF pages dark grey with light text, without changing the document. src/shared/dark-view.js has darkColor and darkenImage (keep them and their tests). (1) Add to dark-view.js: inkForDark(hex) and highlightBlend(dark). In the dark view black or dark-blue pen ink would vanish; stored colours must not change, only the shown ones. inkForDark returns the colour to draw: dark colours (lightness < 0.5) get the 'full' mapping of darkColor, light ones stay, results as '#rrggbb' lower case. highlightBlend returns 'multiply' for light pages and 'screen' for dark. Tests in test/unit/shared/dark-view.test.js. (2) Extension 'dark-view': host.menus.add('view', 'Dark pages') toggles it per notebook (host.settings.notebook); host.view.addPagePass darkens the canvas with darkenImage but leaves imageRegions (photos, figures) untouched; host.view.setInkFilter(inkForDark); host.view.refresh() on toggle. e2e: open a notebook with a text PDF page and a black pen stroke, switch on: page background pixel dark, text light, the stroke light on screen but its stored colour unchanged (read the notebook data), a picture region unchanged; export PDF is identical to before; switch off restores the page. Read docs/EXTENSIONS.md first and follow it. If src/renderer/extensions.js or test/unit/extensions/fake-host.js is missing in your checkout, stop and report 'blocked'. ES module, default export with apiVersion 1, defaultEnabled false. Imports only from the extension's own folder, ../../shared/*.js and allowed packages; test/unit/main/extensions-guard.test.js must pass. Everything user-visible goes through host.ui.t() for translation. Unit tests with the fake host for all logic; an e2e test that goes through the user's path in the real app (switch on in Settings, use, undo, switch off) with check(...) lines like test/e2e/run.js. Run node --test, npm test and, if you can run Electron, the e2e file; say exactly which ran. Append a dated section to docs/NOTES-DARK.md (keep earlier sections): what you did, decisions, open points, how a user tries it. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/extensions/dark-view/index.js",
-      "src/shared/dark-view.js",
-      "test/unit/shared/dark-view.test.js",
-      "test/unit/extensions/dark-view.test.js",
-      "test/e2e/extensions/dark-view.js",
-      "docs/NOTES-DARK.md"
-    ],
-    "chain": "dark",
-    "context": [
-      "docs/EXTENSIONS.md",
-      "src/shared/paper.js"
-    ]
-  },
-  {
-    "id": "sn-ai-edit-plan",
-    "title": "AI 1.9: check and apply an AI edit plan to notebook pages",
-    "instructions": "Goal (ROADMAP-1.9 'Edit plan'): the AI never changes a notebook directly; it returns a JSON edit plan that the app checks, previews and applies as one undo step. Read docs/ROADMAP-1.9.md (section named in the goal) first. Read src/shared/format.js for page data (texts, items, strokes, bookmarks) and src/shared/richtext.js. Add src/shared/ai-plan.js: (1) PLAN_SCHEMA: a JSON Schema (draft 2020-12, plain object) of the plan { version: 1, summary, ops: [...] } with ops addText { page, x?, y?, w?, html|text, fs? }, replaceText { page, id, html|text }, underline { page, id, terms: [string] }, highlight { page, id, terms }, addBookmark { page, title, level? }, moveItem { from, id, to }, addImage { page, ref, x?, y?, w? } (ref: an id of the session material), addPage { after, title }. (2) checkPlan(plan, notebook, { allowRemove = false, refs = [] }) -> { ok, ops, problems } where problems are { index, reason } for unknown ops, missing pages or ids, unknown refs, text over 20000 chars, more than 200 ops, html that parseRich would lose; pages by 0-based index or page id; addPage targets resolve later ops that use 'new:<n>'. (3) applyPlan(pages, ops, { newId, layout }) -> { pages, changed: [pageIds], added: [pageIds] } without mutating input: free space for addText found below the last object (layout gives page size), underline/highlight wrap each case-insensitive whole-word match in <u> or <span data-hl> without breaking existing tags or inline elements (data-x spans stay untouched), bookmarks inserted in page order. (4) describePlan(ops) -> short English lines for the preview ('Page 3: underline 4 terms'). Tests: every op, every refusal, a realistic 15-op study plan, idempotence of underline, no input mutation. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-AI.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/ai-plan.js",
-      "test/unit/shared/ai-plan.test.js",
-      "docs/NOTES-AI.md"
-    ],
-    "chain": "ai",
-    "context": [
-      "docs/ROADMAP-1.9.md",
-      "src/shared/format.js",
-      "src/shared/richtext.js"
-    ]
-  },
-  {
-    "id": "sn-ai-context",
-    "title": "AI 1.9: build the request context from a notebook within a size budget",
-    "instructions": "Goal (ROADMAP-1.9 'Context'): what is sent to the AI is complete enough, small enough and every piece can be pointed at by the edit plan. Read docs/ROADMAP-1.9.md (section named in the goal) first. Add src/shared/ai-context.js: (1) pageText(page) -> plain text of a page in reading order: text boxes (richToPlain), table cells row by row, recognised scan text (page.ocr if present), PDF text passed in by the caller; each piece { id, page, kind, text }. (2) buildContext(notebook, { current, selection, budget = 60000, pdfText = {} }) -> { pieces, text, used, dropped } : order selection, current page, its neighbours, bookmarked pages, the rest; cut pieces at sentence ends, never inside a piece id line; text is the prompt block with lines '[p3#t12] ...' so the model can quote ids; dropped lists what did not fit. (3) estimateTokens(text) (chars/4 rounding up, CJK and Cyrillic counted per char/2) and splitForSummary(pieces, budget) -> chunks for long notebooks. (4) parseRefs(answer) -> ids quoted in an answer. Tests: order and budget, cutting, empty pages, tables, Cyrillic, a 300-page notebook under 200 ms. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-AI.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/ai-context.js",
-      "test/unit/shared/ai-context.test.js",
-      "docs/NOTES-AI.md"
-    ],
-    "chain": "ai",
-    "context": [
-      "docs/ROADMAP-1.9.md",
-      "src/shared/format.js",
-      "src/shared/richtext.js"
     ]
   },
   {

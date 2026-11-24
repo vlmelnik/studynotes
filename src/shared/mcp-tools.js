@@ -52,6 +52,20 @@ const TOOLS = [
     },
   },
   {
+    name: 'apply_edit_plan',
+    description: 'Applies several changes at once as one undo step: add pages with titles, add or rewrite text boxes, underline terms, move text boxes, bookmark pages. '
+      + 'Text boxes are named by the ids that read_notebook shows as [t:<id>]. Pages are numbers from 1, or "new:<n>" for the n-th page added by this plan. '
+      + 'Changes that do not fit (missing page, unknown id) are left out and reported.',
+    inputSchema: {
+      type: 'object', required: ['notebook', 'plan'],
+      properties: {
+        notebook: notebookArg,
+        plan: { type: 'object', description: 'An edit plan: { "version": 1, "ops": [ { "op": "addPage", "after": 2, "title": "Summary" }, { "op": "addText", "page": "new:1", "text": "…" }, { "op": "underline", "page": 1, "id": "<text box id>", "terms": ["…"] }, { "op": "replaceText", "page": 1, "id": "…", "text": "…" }, { "op": "moveText", "from": 1, "id": "…", "to": 3 }, { "op": "addBookmark", "page": 4 } ] }' },
+        allow_remove: { type: 'boolean', description: 'Allow "removeText" changes (only when the user asked to delete text)' },
+      },
+    },
+  },
+  {
     name: 'bookmark_page',
     description: 'Sets or removes the bookmark of a page.',
     inputSchema: { type: 'object', required: ['notebook', 'page'], properties: { notebook: notebookArg, page: pageArg, on: { type: 'boolean', description: 'default true' } } },
@@ -90,7 +104,12 @@ function notebookText(notebook, pageData, textIndex, { from = 1, to = Infinity, 
   let end = first - 1;
   for (let n = first; n <= last; n++) {
     const p = pages[n - 1];
-    const body = pageText(p, pageData[p.id], textIndex) || '(no text)';
+    // text boxes carry their id, so apply_edit_plan can change them
+    const d = pageData[p.id] || {};
+    const pdf = pageText(p, { texts: [], items: [] }, textIndex);
+    const boxes = (d.texts || []).filter((t) => t.text && t.text.trim()).sort((a, b) => a.y - b.y || a.x - b.x).map((t) => `[t:${t.id}] ${t.text.trim()}`);
+    const tables = pageText({ kind: 'paper' }, { texts: [], items: d.items || [] }, null);
+    const body = [pdf, ...boxes, tables].filter(Boolean).join('\n\n') || '(no text)';
     const block = `\n## Page ${n}${p.bm ? ' (bookmarked)' : ''}${p.kind === 'pdf' ? '' : p.kind === 'board' ? ' (board)' : ''}\n${body}\n`;
     if (text.length + block.length > max && end >= first) break;
     text += block;

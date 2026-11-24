@@ -425,7 +425,7 @@ class App {
     this.setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
   }
 
-  showSettings() {
+  showSettings(tab = 'general') {
     const s = this.settings;
     const libPath = h('code', { class: 'path' }, this.info.libraryRoot);
     const check = (label, key, hint) => {
@@ -483,11 +483,67 @@ class App {
         general.hidden = pane !== general; addons.hidden = pane !== addons;
       },
     }, label));
+    if (tab === 'addons') tabs[1].click();
     modal({
       title: 'Settings',
       width: 720,
       body: h('div', { class: 'settings' }, h('div', { class: 'settings-tabs' }, ...tabs), general, addons),
       actions: [{ label: 'Done', primary: true, result: true }],
+    });
+  }
+
+  // ---------- AI assistant (Settings → Add-ons) ----------
+  aiCard(card) {
+    const ai = this.settings.ai = { provider: '', model: '', baseUrl: '', monthlyLimit: 200, custom: '', enabled: false, ...(this.settings.ai || {}) };
+    const save = () => this.saveSettings();
+    const state = h('small', { class: 'addon-state' }, '');
+    const keyRow = h('div', { class: 'row' });
+    const baseRow = h('div', { class: 'row', hidden: true });
+    const modelSel = h('select', { class: 'rec-select', 'aria-label': 'Model', onchange: () => { ai.model = modelSel.value; save(); } });
+    const setModels = (list) => {
+      const all = [...new Set([ai.model, ...list].filter(Boolean))];
+      modelSel.replaceChildren(h('option', { value: '' }, '– choose a model –'), ...all.map((m) => h('option', { value: m, class: 'no-i18n', selected: m === ai.model }, m)));
+    };
+    let info = null;
+    const refresh = async () => {
+      info = await window.api.aiInfo().catch(() => null);
+      if (!info) return;
+      const p = info.providers[ai.provider];
+      keyRow.hidden = !p || !p.key;
+      baseRow.hidden = ai.provider !== 'local';
+      state.textContent = !ai.provider ? 'Not set up' : `${p ? p.name : ai.provider}${p && p.key ? (info.keys[ai.provider] ? ' · key saved' : ' · no key yet') : ''} · ${info.used} ${'requests this month'}`;
+    };
+    const provSel = h('select', { class: 'rec-select', 'aria-label': 'AI provider', onchange: () => { ai.provider = provSel.value; ai.model = ''; setModels([]); save(); refresh(); } },
+      h('option', { value: '' }, '– choose –'),
+      ...[['anthropic', 'Anthropic (Claude) – API key'], ['openai', 'OpenAI (GPT) – API key'], ['gemini', 'Google (Gemini) – API key'], ['local', 'Local model (Ollama, LM Studio)']]
+        .map(([v, l]) => h('option', { value: v, selected: v === ai.provider }, l)));
+    const keyIn = h('input', { type: 'password', class: 'ai-key', placeholder: 'API key', autocomplete: 'off', 'aria-label': 'API key' });
+    keyRow.append(keyIn,
+      h('button', { class: 'btn small', onclick: async () => {
+        try { await window.api.aiSetKey(ai.provider, keyIn.value); keyIn.value = ''; toast('Key saved (encrypted on this computer)'); refresh(); } catch (err) { toast(errorText(err), { error: true }); }
+      } }, 'Save key'),
+      h('button', { class: 'btn ghost small', onclick: async () => { await window.api.aiSetKey(ai.provider, '').catch(() => {}); refresh(); } }, 'Remove key'));
+    const baseIn = h('input', { type: 'text', value: ai.baseUrl || 'http://localhost:11434/v1', class: 'ai-base', 'aria-label': 'Server address', onchange: () => { ai.baseUrl = baseIn.value.trim(); save(); } });
+    baseRow.append(h('span', { class: 'tk-label' }, 'Server'), baseIn);
+    const limitIn = h('input', { type: 'number', min: 0, step: 10, value: ai.monthlyLimit, class: 'ai-limit', 'aria-label': 'Monthly limit', onchange: () => { ai.monthlyLimit = Math.max(0, Number(limitIn.value) || 0); save(); } });
+    const customIn = h('textarea', { rows: 2, class: 'ai-custom', placeholder: 'Your standing instructions, e.g. "Answer in German, short, keep formulas in LaTeX."', 'aria-label': 'Standing instructions', onchange: () => { ai.custom = customIn.value; save(); } }, ai.custom || '');
+    setModels([]);
+    refresh();
+    return card({
+      name: 'AI assistant',
+      about: 'Ask about your notes, summarise, explain, make glossaries or exam questions, underline key terms. Uses your own API key or a model on this computer. You see what is sent; changes are previewed and undone with Ctrl+Z.',
+      state, on: !!ai.enabled, setOn: (v) => { ai.enabled = v; save(); },
+      settings: [
+        h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Provider'), provSel),
+        keyRow, baseRow,
+        h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model'), modelSel,
+          h('button', { class: 'btn small', onclick: async () => {
+            try { setModels(await window.api.aiModels({ provider: ai.provider, baseUrl: ai.baseUrl })); toast('Models loaded'); } catch (err) { toast(errorText(err), { error: true }); }
+          } }, 'Load models')),
+        h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Requests per month (0: no limit)'), limitIn),
+        customIn,
+        h('small', { class: 'hint' }, 'API keys are stored encrypted on this computer and are only sent to the provider you choose. With a Claude subscription and no API key, use "Claude (MCP)" below.'),
+      ],
     });
   }
 
@@ -559,6 +615,8 @@ class App {
         about: 'Your pen writing → text: select it → "Copy as text" or "To text". Windows reads it on this PC; Google reads it online with your Google account (better for untidy writing).',
         settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
       }),
+      // AI assistant (1.9): own API key or a local model; keys stay in the main process
+      this.aiCard(card),
       // Claude (MCP): Claude Desktop reads and edits notebooks with the user's own Claude plan
       card({
         name: 'Claude (MCP)',

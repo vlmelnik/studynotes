@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld('api', {
   onCloudStatus: (fn) => ipcRenderer.on('cloud:status', (_e, st) => fn(st)),
   onCloudRequestSync: (fn) => ipcRenderer.on('cloud:request-sync', () => fn()),
   onLibraryChanged: (fn) => ipcRenderer.on('lib:changed', () => fn()),
+  // AI (1.9): keys stay in the main process
+  aiInfo: invoke('ai:info'),
+  aiSetKey: invoke('ai:setKey'),
+  aiModels: invoke('ai:models'),
+  aiRequest: invoke('ai:request'),
   // Claude (MCP): the app answers tool calls that come in over the local pipe
   mcpSetEnabled: invoke('mcp:setEnabled'),
   mcpInstallClaude: invoke('mcp:installClaude'),

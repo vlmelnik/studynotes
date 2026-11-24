@@ -70,7 +70,7 @@ function bridge(cfg, env) {
   await toggle.press('Space');
   await win.waitForTimeout(500);
   check('the switch turns it on', await toggle.isChecked() && await ed(() => window.__app.settings.mcp === true));
-  const addon = win.locator('.addon', { hasText: 'Claude (MCP)' });
+  const addon = win.locator('.addon', { has: win.locator('.addon-title b', { hasText: /^Claude \(MCP\)$/ }) });
   await addon.getByRole('button', { name: 'Settings' }).click();
   await addon.getByRole('button', { name: 'Connect Claude Desktop' }).click();
   await win.waitForTimeout(500);
@@ -86,7 +86,7 @@ function bridge(cfg, env) {
   b.notify('notifications/initialized');
   check('initialize: StudyNotes answers with its version', init.result && init.result.serverInfo.name === 'StudyNotes' && init.result.protocolVersion === '2025-06-18', JSON.stringify(init));
   const list = await b.send('tools/list', {});
-  check('tools/list: six tools', list.result.tools.length === 6, list.result.tools.map((t) => t.name).join(' '));
+  check('tools/list: seven tools', list.result.tools.length === 7, list.result.tools.map((t) => t.name).join(' '));
 
   const nbs = await b.call('list_notebooks', {});
   check('list_notebooks names the notebook and its pages', nbs.text.includes('Power electronics') && nbs.text.includes('3 pages'), nbs.text);
@@ -107,13 +107,21 @@ function bridge(cfg, env) {
   await b.call('bookmark_page', { notebook: 'Power electronics', page: 1 });
   check('bookmark_page sets the bookmark', await ed(() => !!window.__app.active.pages[0].bm));
 
+  // a whole plan as one undo step, text boxes named by the ids read_notebook shows
+  const withIds = await b.call('read_notebook', { notebook: 'Power electronics', from: 2, to: 2 });
+  const boxId = (/\[t:([\w-]+)\] Summary: a buck/.exec(withIds.text) || [])[1];
+  const plan = await b.call('apply_edit_plan', { notebook: 'Power electronics', plan: { version: 1, ops: [
+    { op: 'underline', page: 2, id: boxId, terms: ['buck converter'] }, { op: 'addText', page: 99, text: 'nowhere' } ] } });
+  const html = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[1].id).texts[0].html; });
+  check('apply_edit_plan: applies the valid changes and reports the rest', !!boxId && !plan.isError && /underline 1 term/.test(plan.text) && /page 99 does not exist/.test(plan.text) && /<u>buck converter<\/u>/.test(html), JSON.stringify({ boxId, plan, html }));
+
   const bad1 = await b.call('read_notebook', { notebook: 'Thermodynamics' });
   const bad2 = await b.call('add_text', { notebook: 'Power electronics', page: 99, text: 'x' });
   const bad3 = await b.call('add_text', { notebook: 'Power electronics', page: 1 });
   check('errors come back as readable results', bad1.isError && /No notebook/.test(bad1.text) && bad2.isError && /does not exist/.test(bad2.text) && bad3.isError && /Missing: text/.test(bad3.text), JSON.stringify([bad1, bad2, bad3]));
 
   // undo in the app: page, bookmark title, text
-  await ed(async () => { const e = window.__app.active; e.tools.clearSelection(true); for (let k = 0; k < 5; k++) e.undo(); }); // text; page, its title, its bookmark; bookmark of page 1
+  await ed(async () => { const e = window.__app.active; e.tools.clearSelection(true); for (let k = 0; k < 6; k++) e.undo(); }); // text; page, its title, its bookmark; bookmark of page 1; the plan
   await win.waitForTimeout(400);
   const undone = await ed(() => { const e = window.__app.active; return { n: e.pages.length, p2: e.pageData(e.pages[1].id).texts.length, bm1: !!e.pages[0].bm }; });
   check('Ctrl+Z in the app undoes what Claude did', undone.n === 3 && undone.p2 === 0 && !undone.bm1, JSON.stringify(undone));

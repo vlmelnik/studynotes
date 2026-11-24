@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**AI assistant (1.9)**
+- A new AI button (Ctrl+J) in the notebook: ask about the selection, the page or the whole notebook; one click for a summary, an explanation, a glossary, exam questions or underlining key terms.
+- Works with your own API key (Anthropic, OpenAI, Google Gemini) or a model on your computer (Ollama, LM Studio). Keys are stored encrypted. You see what is sent before it goes, and there is a monthly request limit.
+- The AI never changes your notes directly: it proposes changes, you see them line by line and choose; Apply is one undo step.
+- Claude (MCP) can apply such a plan too (apply_edit_plan) and sees the ids of text boxes.
+
 **Claude (MCP)**
 - The Claude app can read your notebooks and, when you ask it to, add text, pages and bookmarks, with your own Claude plan (Settings → Add-ons → Claude (MCP) → Connect Claude Desktop). Changes show up in the open notebook and can be undone with Ctrl+Z. Off by default.
 
