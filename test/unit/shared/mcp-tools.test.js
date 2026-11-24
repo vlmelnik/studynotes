@@ -16,7 +16,7 @@ const data = {
 const text = { main: { pages: { 1: 'Buck converter   \nduty cycle' } }, s1: { pages: { 2: 'Second source page' } } };
 
 test('the tool list is complete and every tool has a schema', () => {
-  assert.deepStrictEqual(TOOLS.map((t) => t.name), ['list_notebooks', 'read_notebook', 'search_notes', 'add_text', 'add_page', 'apply_edit_plan', 'bookmark_page']);
+  assert.deepStrictEqual(TOOLS.map((t) => t.name), ['list_notebooks', 'read_notebook', 'search_notes', 'add_text', 'add_page', 'apply_edit_plan', 'write_notes', 'clear_page', 'bookmark_page']);
   for (const t of TOOLS) assert.strictEqual(t.inputSchema.type, 'object');
 });
 

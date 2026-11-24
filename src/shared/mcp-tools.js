@@ -5,6 +5,8 @@
 // through the open notebook, with undo. Pages are numbered from 1 here,
 // because that is how people (and the model) talk about them.
 
+const { pageSummary } = require('./notes-layout');
+
 const notebookArg = { type: 'string', description: 'Notebook path or title, as listed by list_notebooks' };
 const pageArg = { type: 'integer', minimum: 1, description: 'Page number, starting at 1' };
 
@@ -66,6 +68,32 @@ const TOOLS = [
     },
   },
   {
+    name: 'write_notes',
+    description: 'The best way to write notes: send their structure and StudyNotes lays them out like a person would – on the ruled lines, inside the margins, '
+      + 'below what is already on the page, headings bigger and coloured, colours that suit light or dark paper (the user\'s notes style), and onto the next or a new page when a page is full. '
+      + 'Never over a PDF page: notes for a PDF page go on a new page after it. Inline: **bold** (key terms), *italic*, __underline__, $LaTeX$ formulas. One undo step.',
+    inputSchema: {
+      type: 'object', required: ['notebook', 'page', 'blocks'],
+      properties: {
+        notebook: notebookArg, page: { ...pageArg, description: 'The page the user means, or the page they have open' },
+        place: { type: 'string', enum: ['next_page', 'free_space', 'below'], description: 'next_page (default): on the next empty page after "page", or a new one. '
+          + 'free_space: on "page" itself, in its empty rows between what is there (when the user names the page). below: under everything on "page".' },
+        blocks: {
+          type: 'array', maxItems: 400,
+          description: 'In order. { "type": "heading", "level": 1|2|3, "text": "…" } | { "type": "paragraph", "text": "…" } | { "type": "list", "items": ["…"], "ordered": false } | '
+            + '{ "type": "formula", "latex": "U_2 > U_1" } (a formula on its own line) | { "type": "box", "title": "Remember", "text": "…" } (a framed key statement) | { "type": "pagebreak" }',
+          items: { type: 'object', required: ['type'], properties: { type: { type: 'string', enum: ['heading', 'paragraph', 'list', 'formula', 'box', 'pagebreak'] }, level: { type: 'integer' }, text: { type: 'string' }, title: { type: 'string' }, latex: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, ordered: { type: 'boolean' } } },
+        },
+      },
+    },
+  },
+  {
+    name: 'clear_page',
+    description: 'Removes everything the user put on a page – typed text, handwriting, highlights, shapes, pictures – when the user asked to replace or delete the old notes. '
+      + 'StudyNotes asks the user to confirm first; Ctrl+Z brings it back. PDF content itself stays.',
+    inputSchema: { type: 'object', required: ['notebook', 'pages'], properties: { notebook: notebookArg, pages: { type: 'array', items: pageArg, minItems: 1, maxItems: 200, description: 'Page numbers' } } },
+  },
+  {
     name: 'bookmark_page',
     description: 'Sets or removes the bookmark of a page.',
     inputSchema: { type: 'object', required: ['notebook', 'page'], properties: { notebook: notebookArg, page: pageArg, on: { type: 'boolean', description: 'default true' } } },
@@ -73,6 +101,15 @@ const TOOLS = [
 ];
 
 const INSTRUCTIONS = 'StudyNotes is the user\'s note-taking app for lectures and PDFs. Read with list_notebooks, read_notebook and search_notes. '
+  + 'Write notes with write_notes: send headings, paragraphs, lists, formulas and boxes, not positions, sizes or colours – StudyNotes places them on the lines and styles them. '
+  + 'Where: when the user just asks to add notes, use place "next_page" (the next empty page after the open one); when they name a page, use "free_space" on that page; '
+  + 'only when they ask to replace or delete what is there, call clear_page for those pages first (the user confirms it) and then write on them. '
+  + 'read_notebook also says what else is on a page (handwriting, pictures, shapes) that you cannot read, and which paper it is. '
+  + 'Good notes: a level-1 heading for the topic, level-2 headings for sections, short paragraphs, **bold** only for key terms, lists for steps or properties, '
+  + 'formulas as formula blocks (LaTeX), one "box" with the key statement to remember at the end. '
+  + 'Example: [{"type":"heading","level":1,"text":"Ferranti effect"},{"type":"paragraph","text":"On a long **unloaded** line the voltage at the end rises."},'
+  + '{"type":"heading","level":2,"text":"Why"},{"type":"list","items":["capacitive charging current","line inductance"]},{"type":"formula","latex":"U_2 > U_1"},'
+  + '{"type":"box","title":"Remember","text":"Long, lightly loaded AC lines: the voltage at the end is higher."}]. '
   + 'Write only what the user asked for; every change shows up in the open notebook and can be undone there.';
 
 /** The text of one page (PDF text from the text index, typed text boxes, table cells). */
@@ -110,7 +147,7 @@ function notebookText(notebook, pageData, textIndex, { from = 1, to = Infinity, 
     const boxes = (d.texts || []).filter((t) => t.text && t.text.trim()).sort((a, b) => a.y - b.y || a.x - b.x).map((t) => `[t:${t.id}] ${t.text.trim()}`);
     const tables = pageText({ kind: 'paper' }, { texts: [], items: d.items || [] }, null);
     const body = [pdf, ...boxes, tables].filter(Boolean).join('\n\n') || '(no text)';
-    const block = `\n## Page ${n}${p.bm ? ' (bookmarked)' : ''}${p.kind === 'pdf' ? '' : p.kind === 'board' ? ' (board)' : ''}\n${body}\n`;
+    const block = `\n## Page ${n}${p.bm ? ' (bookmarked)' : ''} [${pageSummary(p, d)}]\n${body}\n`;
     if (text.length + block.length > max && end >= first) break;
     text += block;
     end = n;

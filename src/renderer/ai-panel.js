@@ -54,6 +54,22 @@ export class AiPanel {
         this.isChat && this.ready() ? h('button', { class: 'btn ghost small', title: 'Start a new conversation', onclick: () => { this.stopChat(); this.chat = null; this.open(); } }, 'New chat') : null,
         h('button', { class: 'icon-btn', title: 'Close (Ctrl+J)', html: icon('close', 16), onclick: () => this.close() })),
       body);
+    // drag the left edge to make the panel wider or narrower (remembered)
+    const W = (v) => Math.max(280, Math.min(Math.round(v), Math.max(320, ed.body.clientWidth - 360)));
+    this.el.style.width = W(this.settings.aiPanelWidth || 360) + 'px';
+    const grip = h('div', { class: 'ai-resize', role: 'separator', 'aria-orientation': 'vertical', 'aria-label': tr('Resize the AI panel'), title: tr('Drag to resize') });
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      const x0 = e.clientX, w0 = this.el.offsetWidth;
+      const move = (ev) => { this.el.style.width = W(w0 + x0 - ev.clientX) + 'px'; ed.viewer.scheduleUpdate(); };
+      const up = () => {
+        grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up);
+        this.settings.aiPanelWidth = this.el.offsetWidth; ed.app.saveSettings(); ed.viewer.scheduleUpdate();
+      };
+      grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up);
+    });
+    this.el.prepend(grip);
     if (ed.el.classList.contains('searching')) ed.searchPanel.close?.();
     ed.body.append(this.el);
     ed.el.classList.add('ai-open');

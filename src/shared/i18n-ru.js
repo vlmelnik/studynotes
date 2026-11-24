@@ -381,6 +381,11 @@ const words = {
   'Message Claude…': 'Сообщение для Claude…', 'Message Claude': 'Сообщение для Claude', 'Claude is working…': 'Claude работает…', 'New chat': 'Новый чат', 'Start a new conversation': 'Начать новый разговор', '(done)': '(готово)',
   'Ask Claude about this notebook or tell it what to do: "Summarise page 3 on a new page", "Make a glossary of the terms", "Underline the key terms on this page".': 'Спросите Claude об этой тетради или скажите, что сделать: «Перескажи страницу 3 на новой странице», «Составь глоссарий терминов», «Подчеркни ключевые термины на этой странице».',
   'Runs your Claude Code with your Claude plan. Claude reads and changes notes only through StudyNotes; Ctrl+Z undoes every change.': 'Работает через ваш Claude Code и вашу подписку Claude. Claude читает и меняет конспекты только через StudyNotes; Ctrl+Z отменяет каждое изменение.',
+  // Notes style (write_notes)
+  'Notes style': 'Стиль конспектов', 'Resize the AI panel': 'Ширина панели ИИ', 'Drag to resize': 'Потяните, чтобы изменить ширину', 'Claude wants to clear pages': 'Claude хочет очистить страницы',
+  'How Claude writes notes: on the lines of the paper, headings bigger and coloured, colours to suit white or dark paper. A notebook can have its own style (chat settings).': 'Как Claude пишет конспекты: по линейкам, заголовки крупнее и цветные, цвета под белую или тёмную бумагу. У тетради может быть свой стиль (настройки чата).',
+  'Size': 'Размер', 'Reset to default': 'Сбросить', 'Heading 1': 'Заголовок 1', 'Heading 2': 'Заголовок 2', 'Heading 3': 'Заголовок 3', 'Key terms': 'Термины', 'Box fill': 'Заливка рамки', 'Box border': 'Граница рамки',
+  'Heading': 'Заголовок', 'Text with a ': 'Текст с ', 'key term': 'термином', 'Remember': 'Запомнить', ': a framed statement': ': главное в рамке', 'Notes font': 'Шрифт конспектов', 'Notes text size': 'Размер текста конспектов',
   // Claude (MCP)
   'Claude (MCP)':'Claude (MCP-сервер)',
   'Lets the Claude app read your notebooks and add text, pages and bookmarks when you ask it to. Uses your own Claude plan. Changes can be undone with Ctrl+Z.': 'Приложение Claude читает ваши тетради и по вашей просьбе добавляет текст, страницы и закладки. Работает с вашей подпиской Claude. Изменения отменяются через Ctrl+Z.',
@@ -460,6 +465,8 @@ const patterns = [
   [/^The PDF was changed outside StudyNotes\. Notes that were not in it yet are kept in your library: "(.+)"\.$/, 'PDF был изменён вне StudyNotes. Записи, которых ещё не было в нём, сохранены в библиотеке: «$1».'],
   [/^New e-mail opened in (.+) with the PDF attached$/, 'Открыто новое письмо в $1 с вложенным PDF'],
   [/^Alignment: (.+)$/, 'Выравнивание: $1'],
+  [/^Claude wrote notes in "(.+)" – Ctrl\+Z undoes them$/, 'Claude записал конспект в «$1» – Ctrl+Z отменяет'],
+  [/^Remove all ink, text, pictures and shapes from page (.+) of "(.+)"\? You can undo this with Ctrl\+Z\.$/, 'Удалить все записи, текст, картинки и фигуры со страницы $1 тетради «$2»? Можно отменить через Ctrl+Z.'],
 ];
 
 module.exports = { words, patterns, plural };
