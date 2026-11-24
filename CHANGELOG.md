@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+**Claude (MCP)**
+- The Claude app can read your notebooks and, when you ask it to, add text, pages and bookmarks, with your own Claude plan (Settings → Add-ons → Claude (MCP) → Connect Claude Desktop). Changes show up in the open notebook and can be undone with Ctrl+Z. Off by default.
+
 **Extensions**
 - Optional features can now come as extensions (Settings → Add-ons): each one is switched on and off on its own, and a broken one switches itself off instead of stopping the app. Notes stay readable when an extension is off. For developers: docs/EXTENSIONS.md.
 

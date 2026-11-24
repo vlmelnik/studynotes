@@ -666,6 +666,56 @@ function spellCheck(lines) {
 handle('ocr:spell', (lines) => spellCheck(lines));
 app.on('will-quit', () => { if (speller.proc) speller.proc.kill(); });
 app.on('will-quit', () => { if (ocr) ocr.stop(); });
+
+// ---------- Claude (MCP) ----------
+// Claude Desktop starts mcp-bridge.js, which connects to this pipe. Off until
+// the user switches it on (Settings → Add-ons); tool calls run in the renderer.
+const { startMcp } = require('./mcp-server');
+let mcp = null;
+const mcpPending = new Map();
+let mcpSeq = 0;
+function mcpCall(name, args) {
+  if (!win || win.isDestroyed()) return Promise.reject(new Error('The StudyNotes window is closed.'));
+  const id = ++mcpSeq;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { mcpPending.delete(id); reject(new Error('StudyNotes did not answer in time.')); }, 120000);
+    mcpPending.set(id, { resolve, reject, timer });
+    win.webContents.send('mcp:call', { id, name, args });
+  });
+}
+ipcMain.on('mcp:result', (_e, id, payload) => {
+  const p = mcpPending.get(id);
+  if (!p) return;
+  mcpPending.delete(id);
+  clearTimeout(p.timer);
+  if (payload && payload.ok) p.resolve(payload.result); else p.reject(new Error((payload && payload.error) || 'failed'));
+});
+handle('mcp:setEnabled', async (on) => {
+  if (on && !mcp) {
+    try { mcp = await startMcp({ version: app.getVersion(), call: mcpCall }); } catch (err) { mcp = null; throw new Error('Could not open the connection for Claude: ' + err.message); }
+  } else if (!on && mcp) { const m = mcp; mcp = null; await m.stop(); }
+  return !!mcp;
+});
+// Adds StudyNotes to Claude Desktop's list of MCP servers (a backup of the file is kept).
+handle('mcp:installClaude', async () => {
+  const home = app.getPath('home');
+  const file = process.env.STUDYNOTES_CLAUDE_CONFIG || (process.platform === 'win32' ? path.join(app.getPath('appData'), 'Claude', 'claude_desktop_config.json')
+    : process.platform === 'darwin' ? path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
+      : path.join(home, '.config', 'Claude', 'claude_desktop_config.json'));
+  let cfg = {};
+  const old = await fsp.readFile(file, 'utf8').catch(() => null);
+  if (old !== null && old.trim()) {
+    try { cfg = JSON.parse(old); } catch { throw new Error('Claude Desktop\'s settings file could not be read, so it was left unchanged: ' + file); }
+    await fsp.writeFile(file + '.bak', old);
+  }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new Error('Unexpected content in ' + file);
+  cfg.mcpServers = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
+  cfg.mcpServers.studynotes = { command: process.execPath, args: [path.join(__dirname, 'mcp-bridge.js')], env: { ELECTRON_RUN_AS_NODE: '1' } };
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await atomicWrite(file, JSON.stringify(cfg, null, 2));
+  return { file };
+});
+app.on('will-quit', () => { if (mcp) mcp.stop().catch(() => {}); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));
 handle('app:startupReport', () => { const r = startupReport; startupReport = null; return r; });
 handle('backup:snapshotNow', () => snapshotNow());

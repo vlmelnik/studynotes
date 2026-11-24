@@ -41,9 +41,11 @@ Facts checked on 2026-11-24 (sources at the end):
 - Per request: provider and model chosen in Settings → AI, a monthly limit
   for the number of requests, and a log of the requests (time, provider,
   size, without content).
-- A subscription that may be used without an API key, for example through the
-  Claude app connecting to StudyNotes as an MCP server, is a separate idea
-  that is not planned for 1.9.
+- **With a Claude subscription (no API key):** the Claude app connects to
+  StudyNotes as an MCP server ([CLAUDE-MCP.md](CLAUDE-MCP.md), built
+  2026-11-24). The work then happens in the Claude window, with the user's
+  plan. Next MCP tools: page pictures, underlining, applying an edit plan with
+  a preview (after `sn-ai-edit-plan`).
 
 ### Edit plan (shared, queue task `sn-ai-edit-plan`)
 The AI answers with JSON in a fixed format. `src/shared/ai-plan.js` checks it

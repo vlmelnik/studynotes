@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld('api', {
   onCloudStatus: (fn) => ipcRenderer.on('cloud:status', (_e, st) => fn(st)),
   onCloudRequestSync: (fn) => ipcRenderer.on('cloud:request-sync', () => fn()),
   onLibraryChanged: (fn) => ipcRenderer.on('lib:changed', () => fn()),
+  // Claude (MCP): the app answers tool calls that come in over the local pipe
+  mcpSetEnabled: invoke('mcp:setEnabled'),
+  mcpInstallClaude: invoke('mcp:installClaude'),
+  onMcpCall: (fn) => ipcRenderer.on('mcp:call', (_e, req) => fn(req)),
+  mcpResult: (id, payload) => ipcRenderer.send('mcp:result', id, payload),
 
   startupReport: invoke('app:startupReport'),
   backupSnapshotNow: invoke('backup:snapshotNow'),

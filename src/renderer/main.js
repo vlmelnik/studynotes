@@ -8,6 +8,7 @@ import { uid } from './tools.js';
 import { maybeShowWhatsNew, showWhatsNew } from './whats-new.js';
 import { setLang } from './i18n.js';
 import { extensions } from './extensions.js';
+import { McpTools } from './mcp.js';
 
 class App {
   async init() {
@@ -29,6 +30,9 @@ class App {
     this.editors = []; // { editor, tabEl }
     this.extensions = extensions;
     extensions.init(this); // after settings and saveSettings exist
+    // Claude (MCP): the pipe opens only when the user switched it on
+    this.mcp = new McpTools(this);
+    if (this.settings.mcp) this.mcp.setEnabled(true).catch((err) => { this.settings.mcp = false; toast(String(err.message || err), { error: true }); });
     this.opening = new Set(); // rels being loaded right now
     this.active = null; // null = library
     this.loading = new Map();
@@ -554,6 +558,24 @@ class App {
         name: 'Handwriting to text',
         about: 'Your pen writing → text: select it → "Copy as text" or "To text". Windows reads it on this PC; Google reads it online with your Google account (better for untidy writing).',
         settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
+      }),
+      // Claude (MCP): Claude Desktop reads and edits notebooks with the user's own Claude plan
+      card({
+        name: 'Claude (MCP)',
+        about: 'Lets the Claude app read your notebooks and add text, pages and bookmarks when you ask it to. Uses your own Claude plan. Changes can be undone with Ctrl+Z.',
+        on: !!s.mcp,
+        setOn: (v) => { this.mcp.setEnabled(v).catch((err) => toast(String(err.message || err), { error: true })); },
+        settings: [
+          h('div', { class: 'row' },
+            h('button', { class: 'btn small', onclick: async () => {
+              try {
+                const r = await window.api.mcpInstallClaude();
+                toast('StudyNotes was added to Claude Desktop. Restart Claude Desktop to use it.', { timeout: 6000 });
+                console.log('[mcp] Claude Desktop config', r.file);
+              } catch (err) { toast(String(err.message || err), { error: true }); }
+            } }, 'Connect Claude Desktop')),
+          h('small', { class: 'hint' }, 'Then ask Claude for example: "Summarise page 3 of my notebook Power electronics and add the summary on a new page."'),
+        ],
       }),
       // extensions (src/extensions, docs/EXTENSIONS.md): off until switched on
       ...extensions.list().map((x) => card({
