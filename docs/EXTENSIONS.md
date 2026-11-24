@@ -130,6 +130,12 @@ English fallback).
 ### `host.log(...)`
 Writes to the developer console with the extension id.
 
+## Planned: API version 2 (1.9)
+
+`host.ai`, `host.notebook`, `host.capture`, `host.ink` and `host.models`, see
+[ROADMAP-1.9.md](ROADMAP-1.9.md#extension-host-api-v2-maintainer-19). Version 1
+extensions keep working.
+
 ## Tests
 
 - **Unit** (`test/unit/extensions/<id>*.test.js`, run in the sandbox):

@@ -30,17 +30,6 @@
     ]
   },
   {
-    "id": "sn-zoom-motion",
-    "title": "Scroll and zoom: frame-rate independent easing, wheel and pinch input, zoom anchor",
-    "instructions": "Goal: zoom feels the same on 60 Hz and 144 Hz screens, a touchpad pinch follows the fingers, and the point under the cursor stays put. Today src/renderer/viewer.js (readable) eases zoom with a fixed factor per frame (zoom *= (target/zoom)^0.32), re-renders sharply 160 ms after zooming stops; zoom range 0.1 to 8. Read the zoom code in viewer.js so your API fits the call sites; do not change viewer.js. (1) (1) easeZoom(current, target, dtMs, tauMs = 60): the next zoom after dtMs milliseconds, moving geometrically (in log space) towards target so that the remaining log distance shrinks by exp(-dt/tau); returns target when the remaining ratio is within 0.4 %. Same result whether a 120 ms move is done in 2, 8 or 15 steps (within 1e-9 in log space). dtMs is clamped to 0..100 (a stalled tab must not jump). (2) wheelZoomFactor({ deltaY, deltaMode, ctrlKey }): factor for one wheel event: deltaMode 1 (lines) exp(-deltaY * 0.05), pixels exp(-deltaY * 0.0025), the result clamped to 0.5..2 per event. (3) isTouchpadPinch(e): true for pixel-mode events with |deltaY| < 40 (pinches send many tiny deltas and must be followed directly, not animated). (4) clampZoom(z) to 0.1..8. Tests in test/unit/shared/zoom-motion.test.js: step-count independence, convergence time for factor 2 at tau 60 ms (state it), clamping, line and pixel wheel events, touchpad detection. (2) Add anchorScroll({ zoom, newZoom, scrollLeft, scrollTop, pointX, pointY, pageX, pageY }): pages are laid out at pageX/pageY (screen units at the current zoom, scaled linearly with zoom, page positions given for zoom 1 as layoutX/layoutY: pageX = layoutX * zoom + gapX, pageY = layoutY * zoom + gapY, gaps fixed in screen pixels); the point under the cursor (pointX/pointY relative to the scroller's top-left) must stay under the cursor after the zoom. Return { scrollLeft, scrollTop } for newZoom, never negative. Document the formula in a comment. Tests: zoom in and out around the centre, a corner, a point on the second page with a fixed gap between pages, and a round trip (zoom 1 -> 3 -> 1 returns to the start within half a pixel). In the notes, list each place in viewer.js that should call which function. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PERFORMANCE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/zoom-motion.js",
-      "test/unit/shared/zoom-motion.test.js",
-      "docs/NOTES-PERFORMANCE.md"
-    ],
-    "chain": "performance"
-  },
-  {
     "id": "sn-render-scheduler",
     "title": "Scroll and zoom: render plan, pixel-budget cache and scroll velocity",
     "instructions": "Goal: long PDFs scroll without blank or blurry pages: pages on screen first, the next ones in the scroll direction prefetched, previews while moving, sharp pages when still, and a cache that never drops what is on screen. viewer.js (readable, do not change) keeps rendered pages in an LRU cache limited to 28 million pixels. (1) Add src/shared/scroll-velocity.js with createVelocityTracker({ windowMs = 120 }): add(t, y) records the scroll position y at time t (ms, increasing); velocity(t) returns px per ms from a least-squares line through the samples of the last windowMs (0 with fewer than 2 samples, or when the newest sample is older than windowMs at time t - the scroll has stopped); reset(). Keep at most 32 samples. Tests in test/unit/shared/scroll-velocity.test.js: steady scrolling, a stop, a reversal, irregular timestamps, many samples. (2) Add src/shared/render-plan.js with planRender(state). state: { pages: [{ index, top, height, width }] (screen px at the current zoom), viewTop, viewHeight, zoom, dpr, moving: boolean (scroll or zoom gesture in progress), velocityY (px per ms, + = down), cached: { [index]: scale }, maxCanvasPx: 16e6 }. Return an ordered list [{ index, scale, reason }]: pages intersecting the view first (by distance of their centre to the view centre), then up to 2 pages ahead in the direction of motion (velocity sign; both directions when |velocityY| < 0.05), then 1 page behind. Target scale = zoom * dpr, reduced so width*height*scale^2 <= maxCanvasPx. While moving: a page with any cached bitmap is skipped (the stretched bitmap is shown), and pages without one get scale * 0.5 (fast preview, reason 'preview'). When not moving: a page is listed only if its cached scale is outside 0.97..1.04 of the target (reason 'sharp'). Never list a page twice. Tests in test/unit/shared/render-plan.test.js for each rule, including a fast fling (velocity 3) and a huge page hitting the pixel cap. (3) Add src/shared/bitmap-cache.js exporting class PixelCache(budget, { onEvict }). Rendered pages are canvases; this pure class only does the bookkeeping by key with { px (pixels), scale, value }. set(key, value, px, scale) replaces an entry (calling onEvict for the old value unless it is the same value); get(key) marks it recently used; has, delete, clear (onEvict for all), size, used. When used > budget: evict entries not in the protected set (protect(keys) - the pages on screen) by oldest use first; never evict a protected entry, even if that leaves the cache over budget (report it with overBudget()). An entry larger than the whole budget is not stored (onEvict called at once, set returns false). Tests in test/unit/shared/bitmap-cache.test.js: LRU order, protection, oversize entries, replacing with the same value, clear. Also one test that drives all three together over a simulated fling across a 200-page PDF and checks the plan stays within budget. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-PERFORMANCE.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
@@ -67,31 +56,6 @@
       "docs/NOTES-READER.md"
     ],
     "chain": "reader"
-  },
-  {
-    "id": "sn-reader-documents",
-    "title": "Reference reader: dropped documents, remembered positions and tabs",
-    "instructions": "StudyNotes gets a reference reader: a PDF opens in a small always-on-top window to move, resize, scroll and zoom while notes are taken elsewhere, or is docked into the main window as one side of a split view (swappable); more documents come by drag and drop or from a folder. Windows, drawing and files are wired in by the maintainer. (1) Add src/shared/reader-docs.js. (1) acceptDocs(files, open): files = [{ name, size, type? }] dropped or picked; accept PDFs (.pdf or type application/pdf) and images (.png .jpg .jpeg .webp); ignore other files, empty files and files over 500 MB; skip documents already open (same name and size); keep the drop order; return { add: [...], skipped: [{ name, reason }] }. (2) A per-document view state store: remember(store, docKey, { page, zoom, scrollY, fit }) and recall(store, docKey) with at most 50 documents, least recently used dropped first; zoom clamped to 0.1..8, page >= 0; recall of an unknown key returns { page: 0, zoom: null, scrollY: 0, fit: true }. The store is plain JSON (it is saved with the settings). (3) docKey(file) = a stable key from name and size (lower-case name). Tests in test/unit/shared/reader-docs.test.js. (2) Add a tab model: openTabs(state, docs) appends new tabs and activates the first new one; closeTab(state, key) activates the right neighbour, else the left one, else none; moveTab(state, key, toIndex); nextTab / prevTab wrap around; at most 12 tabs (opening more closes the least recently active, never the active one). State is plain JSON { tabs: [key], active: key | null, used: { key: counter } }. Tests in test/unit/shared/reader-docs.test.js. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-READER.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/reader-docs.js",
-      "test/unit/shared/reader-docs.test.js",
-      "docs/NOTES-READER.md"
-    ],
-    "chain": "reader"
-  },
-  {
-    "id": "sn-names-android",
-    "title": "Android prep: file name rules and safe renames in one pure module",
-    "instructions": "Goal: Windows and Android get identical, safe file and folder names, and renames that differ only in letter case work on both. Add src/shared/names.js. Desktop code cleans user-given names like this today: replace < > : \" / \\ | ? * and control characters with a space, collapse spaces, trim, strip trailing dots and spaces, prefix '_' to CON, PRN, AUX, NUL, COM1-9, LPT1-9 (case-insensitive), 'Untitled' when empty, at most 120 characters. Export safeName(name) doing exactly that (cut at 120 without splitting a surrogate pair), uniqueName(base, taken) returning base, 'base (2)', 'base (3)' ... compared case-insensitively (Windows and Android file systems), and caseOnlyRename(from, to) -> true when the names differ only in letter case (such a rename needs a temporary name on those systems). Tests in test/unit/shared/names.test.js. Also renamePlan(from, to, taken) -> the list of rename steps: [[from, to]] normally, [[from, tmp], [tmp, to]] for a case-only rename (tmp from uniqueName(from + '.renaming', taken)), [] when from === to; to is cleaned with safeName and made unique against taken (without from). Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-ANDROID.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/names.js",
-      "test/unit/shared/names.test.js",
-      "docs/NOTES-ANDROID.md"
-    ],
-    "chain": "android",
-    "context": [
-      "src/shared/paths.js"
-    ]
   },
   {
     "id": "sn-blocks-ragged",
@@ -166,6 +130,83 @@
     "context": [
       "docs/EXTENSIONS.md",
       "src/shared/paper.js"
+    ]
+  },
+  {
+    "id": "sn-ai-edit-plan",
+    "title": "AI 1.9: check and apply an AI edit plan to notebook pages",
+    "instructions": "Goal (ROADMAP-1.9 'Edit plan'): the AI never changes a notebook directly; it returns a JSON edit plan that the app checks, previews and applies as one undo step. Read docs/ROADMAP-1.9.md (section named in the goal) first. Read src/shared/format.js for page data (texts, items, strokes, bookmarks) and src/shared/richtext.js. Add src/shared/ai-plan.js: (1) PLAN_SCHEMA: a JSON Schema (draft 2020-12, plain object) of the plan { version: 1, summary, ops: [...] } with ops addText { page, x?, y?, w?, html|text, fs? }, replaceText { page, id, html|text }, underline { page, id, terms: [string] }, highlight { page, id, terms }, addBookmark { page, title, level? }, moveItem { from, id, to }, addImage { page, ref, x?, y?, w? } (ref: an id of the session material), addPage { after, title }. (2) checkPlan(plan, notebook, { allowRemove = false, refs = [] }) -> { ok, ops, problems } where problems are { index, reason } for unknown ops, missing pages or ids, unknown refs, text over 20000 chars, more than 200 ops, html that parseRich would lose; pages by 0-based index or page id; addPage targets resolve later ops that use 'new:<n>'. (3) applyPlan(pages, ops, { newId, layout }) -> { pages, changed: [pageIds], added: [pageIds] } without mutating input: free space for addText found below the last object (layout gives page size), underline/highlight wrap each case-insensitive whole-word match in <u> or <span data-hl> without breaking existing tags or inline elements (data-x spans stay untouched), bookmarks inserted in page order. (4) describePlan(ops) -> short English lines for the preview ('Page 3: underline 4 terms'). Tests: every op, every refusal, a realistic 15-op study plan, idempotence of underline, no input mutation. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-AI.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/shared/ai-plan.js",
+      "test/unit/shared/ai-plan.test.js",
+      "docs/NOTES-AI.md"
+    ],
+    "chain": "ai",
+    "context": [
+      "docs/ROADMAP-1.9.md",
+      "src/shared/format.js",
+      "src/shared/richtext.js"
+    ]
+  },
+  {
+    "id": "sn-ai-context",
+    "title": "AI 1.9: build the request context from a notebook within a size budget",
+    "instructions": "Goal (ROADMAP-1.9 'Context'): what is sent to the AI is complete enough, small enough and every piece can be pointed at by the edit plan. Read docs/ROADMAP-1.9.md (section named in the goal) first. Add src/shared/ai-context.js: (1) pageText(page) -> plain text of a page in reading order: text boxes (richToPlain), table cells row by row, recognised scan text (page.ocr if present), PDF text passed in by the caller; each piece { id, page, kind, text }. (2) buildContext(notebook, { current, selection, budget = 60000, pdfText = {} }) -> { pieces, text, used, dropped } : order selection, current page, its neighbours, bookmarked pages, the rest; cut pieces at sentence ends, never inside a piece id line; text is the prompt block with lines '[p3#t12] ...' so the model can quote ids; dropped lists what did not fit. (3) estimateTokens(text) (chars/4 rounding up, CJK and Cyrillic counted per char/2) and splitForSummary(pieces, budget) -> chunks for long notebooks. (4) parseRefs(answer) -> ids quoted in an answer. Tests: order and budget, cutting, empty pages, tables, Cyrillic, a 300-page notebook under 200 ms. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-AI.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/shared/ai-context.js",
+      "test/unit/shared/ai-context.test.js",
+      "docs/NOTES-AI.md"
+    ],
+    "chain": "ai",
+    "context": [
+      "docs/ROADMAP-1.9.md",
+      "src/shared/format.js",
+      "src/shared/richtext.js"
+    ]
+  },
+  {
+    "id": "sn-capture-session",
+    "title": "Study session: model of captured items, grouping and order",
+    "instructions": "Goal (ROADMAP-1.9 'Study session'): during a learning session the user captures regions, windows, whole pages, selected text and notes from any app; at the end the AI files them into the notebook. Read docs/ROADMAP-1.9.md (section named in the goal) first. Add src/shared/capture-session.js: (1) newSession({ id, topic, prompt, startedAt }) and addItem(session, item) -> new session; item { id, kind: region|window|page|text|note, at, app, title, url?, text?, image?: { hash, width, height } } with url taken from the title for known browsers ('… - Google Chrome', '… — Mozilla Firefox', '… - Microsoft Edge') only when it looks like an address, else null; duplicate images (same hash) or same text within 10 minutes are merged (count kept). (2) groups(session) -> items grouped by source (same app + same page title/url) in time order, with a short label. (3) forPrompt(session, { budget }) -> { text, refs }: text lists every item as '[c7] (window, Chrome: <title>) <text or 'picture WxH'>', refs maps ids for sn-ai-edit-plan's addImage. (4) summary(session) -> counts per kind, duration. Pure: images are only referenced by hash. Tests: each kind, merging, grouping across interleaved apps, budget cut, title parsing for the three browsers and a non-browser. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-STUDY.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/shared/capture-session.js",
+      "test/unit/shared/capture-session.test.js",
+      "docs/NOTES-STUDY.md"
+    ],
+    "chain": "study",
+    "context": [
+      "docs/ROADMAP-1.9.md",
+      "src/shared/hash.js"
+    ]
+  },
+  {
+    "id": "sn-scroll-stitch",
+    "title": "Study session: stitch scrolled screenshots into one page picture",
+    "instructions": "Goal (ROADMAP-1.9, shortcut Ctrl+Alt+P): capture a whole web page or document by scrolling the window and joining the screenshots, for any app (no browser extension). Read docs/ROADMAP-1.9.md (section named in the goal) first. Add src/shared/scroll-stitch.js working on { width, height, data } RGBA frames: (1) fixedBands(frames) -> { top, bottom } rows that stay identical across frames (sticky header, footer, scrollbar strip excluded by columns that change), (2) overlap(a, b, { top, bottom }) -> the vertical shift of b against a (row hashes of the scrolling area, best match by a run of equal rows, tolerant to a few changed pixels per row, e.g. a blinking caret), or null when no overlap, (3) stitch(frames, { maxHeight = 30000 }) -> { image, shifts, stoppedAt } : header once at the top, footer once at the bottom, stops when two frames are equal (end of page) or no overlap is found, (4) plan(viewportHeight) -> scroll steps of 80 % so consecutive frames overlap. Tests with generated frames: plain text page, sticky header and footer, a page with an animated corner, end of page, no-overlap, 1 px rounding, a 20-frame page under 300 ms at 1280 px width. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-STUDY.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/shared/scroll-stitch.js",
+      "test/unit/shared/scroll-stitch.test.js",
+      "docs/NOTES-STUDY.md"
+    ],
+    "chain": "study",
+    "context": [
+      "docs/ROADMAP-1.9.md"
+    ]
+  },
+  {
+    "id": "sn-ink-lines",
+    "title": "Handwriting: group strokes into lines and words and prepare them for recognition",
+    "instructions": "Goal (ROADMAP-1.9 'Handwriting to text'): written ink becomes typed text at the same place, recognised locally; this task prepares the strokes. Read docs/ROADMAP-1.9.md (section named in the goal) first. Strokes are { id, p: [x, y, pressure, ...], s (width), c, t } (see src/shared/ink.js and format.js). Add src/shared/ink-lines.js: (1) classify(strokes) -> { text: [ids], other: [ids] } : long straight lines (underlines, rules), arrows, closed shapes and large drawings are other; dots and accents near text stay text. (2) lines(textStrokes) -> [{ ids, box, baseline, xHeight, slant }] ordered top to bottom, robust to slanted and slightly curved lines and to i-dots and t-bars above the line. (3) words(line) -> gaps by the distribution of horizontal gaps (bigger than 0.6 x height). (4) toImage(line, strokes, { height = 64 }) -> { width, height, data } Uint8 grayscale, deslanted, baseline at 3/4, stroke width scaled, white background, for an image model; toSequence(line) -> resampled points (equal distance, normalised by xHeight) with pen-up flags, for a sequence model. (5) placeText(line) -> { x, y, fs } for the typed text box (fs from xHeight). Tests with generated handwriting-like strokes: two lines, slant 15 degrees, dots and bars, an underline and an arrow as other, word gaps, image size and baseline. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-HANDWRITING.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
+    "paths": [
+      "src/shared/ink-lines.js",
+      "test/unit/shared/ink-lines.test.js",
+      "docs/NOTES-HANDWRITING.md"
+    ],
+    "chain": "handwriting",
+    "context": [
+      "docs/ROADMAP-1.9.md",
+      "src/shared/ink.js",
+      "src/shared/format.js"
     ]
   }
 ]
