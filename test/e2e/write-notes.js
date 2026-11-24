@@ -107,6 +107,40 @@ const { launch } = require('./harness/app');
   const bad = await run('write_notes', { notebook: 'Ferranti', page: 1, blocks: [{ type: 'picture' }] });
   check('only bad blocks: a readable error', /Nothing to write/.test(bad.err || '') && /unknown type "picture"/.test(bad.err || ''), JSON.stringify(bad));
 
+  // ---- presets from real notes: pastel markers on white paper, night pastel on dark paper ----
+  await ed(async () => { const r = await window.api.createNotebook('', { title: 'Pastel', paper: 'grid', pageCount: 1 }); await window.__app.openNotebook(r); });
+  await win.waitForFunction(() => window.__app.active?.doc?.nb?.title === 'Pastel' && window.__app.active.viewer.views.size > 0);
+  await ed(() => { window.__app.settings.notesStyle = { preset: 'pastel' }; });
+  const sample = [
+    { type: 'heading', level: 1, text: 'Benzodiazepinas y ISRS' },
+    { type: 'heading', level: 3, text: 'Características' },
+    { type: 'definition', term: 'Benzo', text: 'alivio rápido.' },
+    { type: 'definition', term: 'ISRS', text: 'tratamiento de mantenimiento.' },
+    { type: 'heading', level: 2, text: 'Benzodiazepinas' },
+    { type: 'list', items: ['more effective with acute anxiety', 'prescribe only lowest effective dose', 'de latencia rápida: entre 30–90 min'] },
+    { type: 'paragraph', tone: 'note', text: 'Fundamentals of clinical psychopharmacology – Anderson, p. 110' },
+    { type: 'paragraph', tone: 'warning', text: 'Can make anxiety symptoms worse in the initial phase of treatment.' },
+    { type: 'formula', latex: 'N = \\bar{n} \\cdot D \\cdot 10^4' },
+    { type: 'box', title: 'Merksatz', text: 'Benzos for short, acute relief; SSRIs for maintenance.' },
+  ];
+  const w3 = await run('write_notes', { notebook: 'Pastel', page: 1, place: 'free_space', blocks: sample });
+  const p3 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.map((t) => ({ text: t.text, c: t.c, bg: t.bg, w: t.w, ff: t.ff })));
+  check('pastel preset: handwriting font, marker only as wide as the heading, pink subheading, red warning', /Wrote 10 block/.test(w3.r || '') && p3[0].ff === 'pangolin' && p3[0].bg === '#f8c8dc' && p3[0].w < 320 && p3[1].c === '#d0418a' && p3.some((t) => t.c === '#e0332f' && /worse/.test(t.text)), JSON.stringify({ w3, p3 }));
+  if (process.env.SHOT) { await win.waitForTimeout(600); await win.screenshot({ path: path.join(process.env.SHOT, 'preset-pastel.png') }); }
+  await ed(async () => { const r = await window.api.createNotebook('', { title: 'Night', paper: 'grid', pc: 'dark', pageCount: 1 }); await window.__app.openNotebook(r); });
+  await win.waitForFunction(() => window.__app.active?.doc?.nb?.title === 'Night' && window.__app.active.viewer.views.size > 0);
+  await ed(() => { window.__app.settings.notesStyle = { preset: 'night' }; });
+  await run('write_notes', { notebook: 'Night', page: 1, place: 'free_space', blocks: [
+    { type: 'paragraph', text: 'Each haemocytometer holds exactly 0.1 mm³ of liquid, so the cell count in 1 mL of nutrient broth is:' },
+    { type: 'formula', latex: '\\text{cells per mL} = \\bar{n} \\times D \\times 10^4' },
+    { type: 'paragraph', tone: 'note', text: 'D: multiplied to get the count in the original broth rather than the diluted one; 10⁴: mm³ → cm³ (mL).' },
+    { type: 'heading', level: 2, text: 'Optical methods (turbidity)' },
+    { type: 'list', items: ['Turbidimetry is a specialised form of colorimetry to count cells.', 'Turbidity measures how cloudy a solution is: ↑ turbidity ↑ cloudiness.'] },
+  ] });
+  const p4 = await ed(() => window.__app.active.pageData(window.__app.active.pages[0].id).texts.map((t) => t.c));
+  check('night preset on dark paper: white text, lavender formula, yellow note', p4[0] === '#f4f4f4' && p4[1] === '#c9a7f5' && p4[2] === '#f5f57a', JSON.stringify(p4));
+  if (process.env.SHOT) { await win.waitForTimeout(600); await win.screenshot({ path: path.join(process.env.SHOT, 'preset-night.png') }); }
+
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   finish(errors);

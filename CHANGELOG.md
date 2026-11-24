@@ -15,7 +15,8 @@
 - Chat history: all chats are saved on this computer; open an old one to continue it, or delete it.
 - Chat settings: model, your own standing instructions for Claude, and a notes style for this notebook only. Answers show bold text and lists.
 - Claude writes notes the way a person would: you get headings, paragraphs, lists, formulas and a framed "remember" box on the ruled lines, inside the margins, below what is already on the page, and onto a new page when one is full – never over a PDF page (new tool write_notes).
-- A notes style (Settings → AI assistant → Notes style): font, size and colours for white and dark paper; dark paper gets light text by default.
+- A notes style (Settings → AI assistant → Notes style): font, size and colours for white and dark paper; dark paper gets light text by default. Three ready styles: Classic, Pastel markers (handwriting, a pastel marker behind headings, pink subheadings, red warnings) and Night pastel (white text, lavender formulas, yellow side notes).
+- Claude can also write definitions (term: explanation), warnings in red and side notes / page references in their own colour.
 - Claude sees handwriting and pictures it cannot read and can clear pages when you want old notes replaced – StudyNotes asks first, Ctrl+Z brings them back (clear_page).
 - Settings → AI assistant → Claude Code: the AI panel (Ctrl+J) becomes a chat with your own Claude Code and Claude plan, like the Claude plugins for Obsidian. Claude reads and changes the notebook only through the StudyNotes tools (no files, no commands); every change is undone with Ctrl+Z. The conversation continues until "New chat".
 

@@ -935,3 +935,4 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 .ai-head .icon-btn.active { background: rgba(127,127,127,.2); }
 .ns-fields { display: grid; grid-template-columns: max-content minmax(0, 260px); gap: 8px 14px; align-items: center; }
 .chat-file-busy { display: inline-flex; align-items: center; gap: 4px; color: var(--muted, #888); }
+.ns-presets { gap: 6px; }

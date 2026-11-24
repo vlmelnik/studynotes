@@ -5,7 +5,9 @@ import { h } from './ui.js';
 import { FONTS } from '../shared/fonts.js';
 import { DEFAULT_STYLE, notesStyle } from '../shared/notes-layout.js';
 
-const COLORS = [['text', 'Text'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'], ['accent', 'Key terms'], ['boxBg', 'Box fill'], ['boxBorder', 'Box border']];
+const COLORS = [['text', 'Text'], ['h1', 'Heading 1'], ['h1Bg', 'Marker heading 1'], ['h2', 'Heading 2'], ['h2Bg', 'Marker heading 2'], ['h3', 'Heading 3'], ['accent', 'Key terms'],
+  ['formula', 'Formulas'], ['note', 'Side notes'], ['warn', 'Warnings'], ['boxBg', 'Box fill'], ['boxBorder', 'Box border']];
+const PRESET_NAMES = [['classic', 'Classic'], ['pastel', 'Pastel markers'], ['night', 'Night pastel']];
 
 export function notesStyleEditor(value, onChange, { base = null, resetLabel = 'Reset to default' } = {}) {
   let cur = JSON.parse(JSON.stringify(value || {}));
@@ -28,13 +30,18 @@ export function notesStyleEditor(value, onChange, { base = null, resetLabel = 'R
     const preview = (mode) => {
       const c = eff[mode];
       return h('div', { class: `ns-preview ${mode}`, style: { fontFamily: `"${(FONTS[eff.ff] || FONTS[DEFAULT_STYLE.ff]).css}"`, fontSize: eff.fs + 'px' } },
-        h('div', { style: { color: c.h1, fontSize: eff.fs * 1.5 + 'px', fontWeight: 700 } }, 'Heading'),
+        h('div', { style: { color: c.h1, fontSize: eff.fs * 1.5 + 'px', fontWeight: 700, ...(eff.marker ? { background: c.h1Bg, borderRadius: '10px', padding: '0 8px', display: 'inline-block' } : {}) } }, 'Heading'),
         h('div', { style: { color: c.text } }, 'Text with a ', h('b', { style: { color: c.accent } }, 'key term'), '.'),
+        h('div', { style: { color: c.formula } }, 'U₂ > U₁ ', h('span', { style: { color: c.note } }, '← side note'), ' ', h('span', { style: { color: c.warn } }, 'warning')),
         h('div', { style: { color: c.text, background: c.boxBg, border: `1.5px solid ${c.boxBorder}`, borderRadius: '6px', padding: '2px 6px', marginTop: '4px' } }, h('b', { style: { color: c.accent } }, 'Remember'), ': a framed statement'));
     };
-    root.replaceChildren(
+    const presets = h('div', { class: 'row wrap ns-presets', role: 'radiogroup', 'aria-label': 'Notes style preset' },
+      ...PRESET_NAMES.map(([k, label]) => h('button', { class: `chip${eff.preset === k ? ' active' : ''}`, role: 'radio', 'aria-checked': String(eff.preset === k), onclick: () => { cur = { preset: k }; emit(); } }, label)));
+    const marker = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!eff.marker, onchange: (e) => { cur.marker = e.target.checked; emit(); } }), h('span', {}, 'Marker behind headings'));
+    root.replaceChildren(presets,
       h('div', { class: 'ns-fields' }, h('span', {}, 'Font'), font, h('span', {}, 'Size'),
         h('div', { class: 'row' }, size, h('button', { class: 'btn ghost small', onclick: () => { cur = {}; emit(); } }, resetLabel))),
+      marker,
       h('div', { class: 'ns-previews' }, preview('light'), preview('dark')),
       grid);
   };

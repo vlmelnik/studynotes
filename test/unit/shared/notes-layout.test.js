@@ -173,3 +173,32 @@ test('image block: an attached picture, centred, below the text before it, capti
   assert.ok(cap.html.includes('<i>'));
   assert.deepStrictEqual(r.problems, ['picture "nope" is not attached']);
 });
+
+test('presets: pastel puts a marker behind headings only as wide as the text; tones and definitions', () => {
+  const style = L.notesStyle({ preset: 'pastel' });
+  assert.strictEqual(style.ff, 'pangolin');
+  const { blocks } = L.checkBlocks([
+    { type: 'heading', level: 1, text: 'Benzodiazepines' },
+    { type: 'definition', term: 'Benzo', text: 'fast relief' },
+    { type: 'definition', term: 'SSRI', text: 'maintenance' },
+    { type: 'paragraph', tone: 'warning', text: 'Can make anxiety worse at first.' },
+    { type: 'paragraph', tone: 'note', text: 'p. 110' },
+    { type: 'formula', latex: 'x' },
+  ]);
+  const r = L.layoutNotes(blocks, 0, ctx([lined('a')], {}, { style }));
+  const [h1, d1, d2, warn, note, f] = r.changes[0].after.texts;
+  assert.strictEqual(h1.bg, style.light.h1Bg);
+  assert.ok(h1.w < 300, `marker fits the text: ${h1.w}`);
+  assert.ok(d1.html.startsWith(`<span data-c="${style.light.accent}"><b>Benzo</b></span>: fast relief`), d1.html);
+  assert.ok(Math.abs(d2.y - d1.y - 24) < 0.01, 'definitions follow each other without an empty line');
+  assert.strictEqual(warn.c, style.light.warn);
+  assert.strictEqual(note.c, style.light.note);
+  assert.strictEqual(f.c, style.light.formula);
+});
+
+test('presets: night pastel on dark paper; own changes on top of a preset', () => {
+  const s = L.notesStyle({ preset: 'night' }, { dark: { note: '#ffff00' } });
+  assert.strictEqual(s.dark.formula, '#c9a7f5');
+  assert.strictEqual(s.dark.note, '#ffff00');
+  assert.strictEqual(L.notesStyle({ preset: 'night' }, { preset: 'classic' }).ff, 'inter');
+});

@@ -14,22 +14,41 @@ const MATH = 'rich-paste:math';
 
 // ---------- notes style ----------
 
-const DEFAULT_STYLE = {
-  ff: 'inter',
-  fs: 15,
-  light: { text: '#1c1c1e', h1: '#1f3f8f', h2: '#0f6b52', h3: '#8a4b00', accent: '#1f3f8f', boxBg: '#eef4ff', boxBorder: '#1f3f8f' },
-  dark: { text: '#e9ecf2', h1: '#8cc8ff', h2: '#9be3b0', h3: '#ffd88a', accent: '#ffd88a', boxBg: '#2e3a4d', boxBorder: '#8cc8ff' },
+// Presets (from examples of nice handwritten notes): classic, pastel (marker
+// behind headings, pink subheadings, red warnings, blue boxes – white paper)
+// and night pastel (white text, lavender formulas, yellow notes – dark paper).
+// marker: a pastel highlight behind level-1/2 headings (h1Bg, h2Bg).
+const PRESETS = {
+  classic: {
+    ff: 'inter', fs: 15, marker: false,
+    light: { text: '#1c1c1e', h1: '#1f3f8f', h2: '#0f6b52', h3: '#8a4b00', accent: '#1f3f8f', formula: '#1c1c1e', note: '#8a4b00', warn: '#c62828', boxBg: '#eef4ff', boxBorder: '#1f3f8f', h1Bg: '#dfe8ff', h2Bg: '#dff3ea' },
+    dark: { text: '#e9ecf2', h1: '#8cc8ff', h2: '#9be3b0', h3: '#ffd88a', accent: '#ffd88a', formula: '#e9ecf2', note: '#ffd88a', warn: '#ff8a80', boxBg: '#2e3a4d', boxBorder: '#8cc8ff', h1Bg: '#33415c', h2Bg: '#2f4a3c' },
+  },
+  pastel: {
+    ff: 'pangolin', fs: 15, marker: true,
+    light: { text: '#1c1c1e', h1: '#1c1c1e', h2: '#1c1c1e', h3: '#d0418a', accent: '#d0418a', formula: '#2949a8', note: '#2949a8', warn: '#e0332f', boxBg: '#f1f3ff', boxBorder: '#7f8fe0', h1Bg: '#f8c8dc', h2Bg: '#cdd6f6' },
+    dark: { text: '#f2f2f2', h1: '#1c1c1e', h2: '#1c1c1e', h3: '#f59ac3', accent: '#f59ac3', formula: '#c9b6ff', note: '#a9b8ff', warn: '#ff8a80', boxBg: '#2e3350', boxBorder: '#9aa8f0', h1Bg: '#f8c8dc', h2Bg: '#cdd6f6' },
+  },
+  night: {
+    ff: 'pangolin', fs: 15, marker: false,
+    light: { text: '#1c1c1e', h1: '#5b2a9e', h2: '#5b2a9e', h3: '#7b4fc4', accent: '#8a6d00', formula: '#6b3fb8', note: '#8a6d00', warn: '#c62828', boxBg: '#f4efff', boxBorder: '#7b4fc4', h1Bg: '#ece2ff', h2Bg: '#fff6c2' },
+    dark: { text: '#f4f4f4', h1: '#f4f4f4', h2: '#f4f4f4', h3: '#c9a7f5', accent: '#f5f57a', formula: '#c9a7f5', note: '#f5f57a', warn: '#ff8a80', boxBg: '#34303f', boxBorder: '#c9a7f5', h1Bg: '#4a3d66', h2Bg: '#4d4a2a' },
+  },
 };
+const DEFAULT_STYLE = PRESETS.classic;
 const COLOR_KEYS = Object.keys(DEFAULT_STYLE.light);
 const HEX = /^#[0-9a-f]{6}$/i;
+const clone = (p) => ({ preset: p, ff: PRESETS[p].ff, fs: PRESETS[p].fs, marker: PRESETS[p].marker, light: { ...PRESETS[p].light }, dark: { ...PRESETS[p].dark } });
 
-/** The notes style: defaults, then the app setting, then the notebook's own (each may be partial). */
+/** The notes style: defaults, then the app setting, then the notebook's own (each may be partial; "preset" starts from a preset). */
 function notesStyle(...layers) {
-  const out = { ff: DEFAULT_STYLE.ff, fs: DEFAULT_STYLE.fs, light: { ...DEFAULT_STYLE.light }, dark: { ...DEFAULT_STYLE.dark } };
+  let out = clone('classic');
   for (const s of layers) {
     if (!s || typeof s !== 'object') continue;
+    if (PRESETS[s.preset]) out = clone(s.preset);
     if (typeof s.ff === 'string' && s.ff) out.ff = s.ff;
     if (Number(s.fs) >= 9 && Number(s.fs) <= 32) out.fs = Number(s.fs);
+    if (typeof s.marker === 'boolean') out.marker = s.marker;
     for (const mode of ['light', 'dark']) for (const k of COLOR_KEYS) if (s[mode] && HEX.test(s[mode][k] || '')) out[mode][k] = s[mode][k];
   }
   return out;
@@ -134,7 +153,7 @@ function runsHtml(runs, base) {
 
 // ---------- blocks ----------
 
-const BLOCKS = ['heading', 'paragraph', 'list', 'formula', 'box', 'image', 'pagebreak'];
+const BLOCKS = ['heading', 'paragraph', 'definition', 'list', 'formula', 'box', 'image', 'pagebreak'];
 
 /** Checks the blocks the model sent: { blocks, problems }. */
 function checkBlocks(input) {
@@ -161,10 +180,15 @@ function checkBlocks(input) {
       return blocks.push({ type: 'formula', latex: tex });
     }
     const text = String(b.text == null ? '' : b.text).replace(/\r/g, '').trim();
-    if (!text && !(b.type === 'box' && b.title)) return bad('no text');
+    if (!text && !(b.type === 'box' && b.title) && b.type !== 'definition') return bad('no text');
     if (b.type === 'heading') return blocks.push({ type: 'heading', text, level: [1, 2, 3].includes(Number(b.level)) ? Number(b.level) : 2 });
     if (b.type === 'box') return blocks.push({ type: 'box', title: String(b.title || '').trim(), text });
-    return blocks.push({ type: 'paragraph', text });
+    if (b.type === 'definition') {
+      const term = String(b.term || '').trim();
+      if (!term) return bad('a definition needs "term"');
+      return blocks.push({ type: 'definition', term, text });
+    }
+    return blocks.push({ type: 'paragraph', text, tone: ['warning', 'note'].includes(b.tone) ? b.tone : '' });
   });
   return { blocks, problems };
 }
@@ -244,14 +268,14 @@ function layoutNotes(blocks, start, ctx) {
   const rowGap = () => (grid.rows[1] - grid.rows[0]) || fs * 1.6;
   // one text line spans k rows; the line box is centred so the baseline sits on the lower row
   const rowsPerLine = (size) => Math.max(1, Math.ceil((size * 1.12) / rowGap()));
-  const put = (html, { size, color, bold, lines, k, box, ix = 0 }) => {
+  const put = (html, { size, color, bold, lines, k, box, ix = 0, w = 0 }) => {
     const gap = rowGap();
     const L = k * gap;
     const lh = Math.round((L / size) * 1000) / 1000;
     const lastRow = grid.rows[row + k - 1];
     const y = lastRow - 2 - L / 2 - size * 0.32 - (box ? 4 : 0);
     const t = {
-      id: newId(), x: Math.round((grid.left + ix) * 100) / 100, y: Math.round(y * 100) / 100, w: Math.round((width() - ix) * 100) / 100,
+      id: newId(), x: Math.round((grid.left + ix) * 100) / 100, y: Math.round(y * 100) / 100, w: Math.round(Math.min(w || Infinity, width() - ix) * 100) / 100,
       fs: size, lh, c: color, ff: style.ff, text: richToPlain(html), html, b: !!bold, i: false, u: false, lines, lay: 'f', z: z++,
       h: Math.round(lines * L * 100) / 100,
     };
@@ -262,7 +286,7 @@ function layoutNotes(blocks, start, ctx) {
     row += lines * k;
   };
   // a paragraph (rich text) cut into pieces that fit the rest of each page
-  const flow = (html, { size, color, bold, ix = 0, box = null, keep = 0 }) => {
+  const flow = (html, { size, color, bold, ix = 0, box = null, keep = 0, fit = false }) => {
     const base = { b: !!bold, fs: size, c: color, ff: style.ff };
     const k = rowsPerLine(size);
     const pad = box ? 12 : 0;
@@ -277,7 +301,9 @@ function layoutNotes(blocks, start, ctx) {
       const piece = lines.slice(i, i + n);
       const out = [];
       for (const ln of piece) out.push(runsHtml(ln.runs, base).replace(/\s+$/, ''));
-      put(out.join(' ').trim() || '&nbsp;', { size, color, bold, lines: n, k, box, ix });
+      // fit: a box only as wide as its one line (a marker behind a heading)
+      const w = fit && lines.length === 1 ? lines[0].width / 0.97 + pad + 8 : 0;
+      put(out.join(' ').trim() || '&nbsp;', { size, color, bold, lines: n, k, box, ix, w });
       i += n;
     }
   };
@@ -289,15 +315,19 @@ function layoutNotes(blocks, start, ctx) {
     if (b.type === 'heading') {
       if (!first && row > 0) blank();
       const size = Math.round(fs * HEAD[b.level] * 2) / 2;
-      flow(inlineHtml(b.text), { size, color: colors['h' + b.level], bold: true, keep: 2 });
+      const bg = style.marker && b.level < 3 && colors['h' + b.level + 'Bg'];
+      flow(inlineHtml(b.text), { size, color: colors['h' + b.level], bold: true, keep: 2, box: bg ? { bg, br: 10 } : null, fit: !!bg });
       return;
     }
-    if (!first && blocks[bi - 1].type !== 'heading') blank();
+    const prev = blocks[bi - 1];
+    if (!first && prev.type !== 'heading' && !(b.type === 'definition' && prev.type === 'definition')) blank();
     if (b.type === 'paragraph') {
       for (const [pi, para] of b.text.split(/\n\s*\n/).entries()) {
         if (pi) blank();
-        flow(inlineHtml(para.replace(/\s*\n\s*/g, ' '), colors.accent), { size: fs, color: colors.text });
+        flow(inlineHtml(para.replace(/\s*\n\s*/g, ' '), colors.accent), { size: fs, color: b.tone === 'warning' ? colors.warn : b.tone === 'note' ? colors.note : colors.text });
       }
+    } else if (b.type === 'definition') {
+      flow(`<span data-c="${colors.accent}"><b>${escHtml(b.term)}</b></span>${b.text ? ': ' + inlineHtml(b.text, colors.accent) : ''}`, { size: fs, color: colors.text });
     } else if (b.type === 'list') {
       b.items.forEach((it, n) => {
         const mark = b.ordered ? `${n + 1}.` : '•';
@@ -308,7 +338,7 @@ function layoutNotes(blocks, start, ctx) {
       const size = Math.round(fs * 1.35 * 2) / 2;
       const k = Math.max(2, rowsPerLine(size) * 2);
       seek(k);
-      put(mathHtml(b.latex, true), { size, color: colors.text, lines: 1, k });
+      put(mathHtml(b.latex, true), { size, color: colors.formula, lines: 1, k });
     } else if (b.type === 'image') {
       const img = ctx.images && ctx.images[b.ref];
       if (!img || !img.src) { problems.push(`picture "${b.ref}" is not attached`); return; }
@@ -355,4 +385,4 @@ function pageSummary(page, data) {
   return parts.join(', ');
 }
 
-module.exports = { DEFAULT_STYLE, notesStyle, isDarkPage, pageRows, contentBottom, contentBoxes, inlineHtml, checkBlocks, layoutNotes, pageSummary, BLOCKS };
+module.exports = { DEFAULT_STYLE, PRESETS, notesStyle, isDarkPage, pageRows, contentBottom, contentBoxes, inlineHtml, checkBlocks, layoutNotes, pageSummary, BLOCKS };
