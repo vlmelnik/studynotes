@@ -334,6 +334,12 @@ const words = {
   'Keyboard': 'Клавиатура', 'Shortcuts work with the Russian keyboard layout too.': 'Сочетания клавиш работают и в русской раскладке.',
   'Pictures, shapes and safer sync': 'Картинки, фигуры и надёжная синхронизация', 'Pictures': 'Картинки', 'Crop, rotate, transparency and AI background removal.': 'Обрезка, поворот, прозрачность и удаление фона с ИИ.',
   'Shapes': 'Фигуры', 'Clean corners, fill colour.': 'Ровные углы, заливка.', 'Backups': 'Резервные копии', 'Hourly local backups and repair after a crash or power cut.': 'Ежечасные локальные копии и восстановление после сбоя или отключения питания.',
+  // Claude (MCP)
+  'Claude (MCP)': 'Claude (MCP-сервер)',
+  'Lets the Claude app read your notebooks and add text, pages and bookmarks when you ask it to. Uses your own Claude plan. Changes can be undone with Ctrl+Z.': 'Приложение Claude читает ваши тетради и по вашей просьбе добавляет текст, страницы и закладки. Работает с вашей подпиской Claude. Изменения отменяются через Ctrl+Z.',
+  'Connect Claude Desktop': 'Подключить Claude Desktop',
+  'Then ask Claude for example: "Summarise page 3 of my notebook Power electronics and add the summary on a new page."': 'Потом попросите Claude, например: «Кратко перескажи страницу 3 тетради Силовая электроника и добавь пересказ на новую страницу».',
+  'StudyNotes was added to Claude Desktop. Restart Claude Desktop to use it.': 'StudyNotes добавлен в Claude Desktop. Перезапустите Claude Desktop.',
   'Signature…': 'Подпись…', 'Pen eraser end / barrel button ': 'Ластик на пере / боковая кнопка', 'Text': 'Текст', 'Date': 'Дата', 'Check': 'Галочка', 'Saved to ': 'Сохранено в ',
 };
 
