@@ -5,11 +5,15 @@
 // helpers. Everything an extension registers is removed when it is switched
 // off, and one broken extension never stops the app.
 import builtIn from 'studynotes:extensions';
-import { toast, promptDialog } from './ui.js';
+import { toast, promptDialog, confirmDialog } from './ui.js';
+import { buildContext } from '../shared/ai-context.js';
+import { checkPlan, applyPlan, describePlan, PLAN_SCHEMA } from '../shared/ai-plan.js';
+import { uid } from './tools.js';
 import { t as tr } from './i18n.js';
 import { inlineKey } from '../shared/richtext.js';
 
-const API_VERSION = 1;
+const API_VERSION = 2; // 1: paste, inline, menus, view, settings, ui; 2: + ai, notebook
+const API_VERSIONS = new Set([1, 2]);
 const ID = /^[a-z0-9-]+$/;
 const KIND = /^[a-z0-9-]+(?::[a-z0-9-]+)?$/;
 const WHERE = new Set(['textbox-more', 'page-more', 'view']);
@@ -58,7 +62,7 @@ class ExtensionHost {
 
   add(def, { enabled } = {}) {
     const id = def && def.id;
-    if (!id || !ID.test(id) || def.apiVersion !== API_VERSION || typeof def.activate !== 'function') {
+    if (!id || !ID.test(id) || !API_VERSIONS.has(def.apiVersion) || typeof def.activate !== 'function') {
       console.warn('[extensions] skipped an extension with a missing id, apiVersion or activate()', def && def.id);
       return false;
     }
@@ -217,9 +221,58 @@ class ExtensionHost {
         prompt: ({ title = '', value = '', multiline = false } = {}) => promptDialog(String(title), String(value), { multiline }),
         t: (text) => tr(String(text)),
       }),
+      // API v2 (docs/ROADMAP-1.9.md): the user's AI provider and the open notebook
+      ai: Object.freeze({
+        ready: () => host.aiReady(),
+        /** The user confirms what is sent; returns the model's text. */
+        request: async ({ system = '', user = '', purpose = '' } = {}) => {
+          if (!live()) throw new Error('extension is off');
+          const cfg = host.aiConfig();
+          if (!host.aiReady()) throw new Error(tr('Set up the AI assistant first (Settings → Add-ons).'));
+          const chars = String(system).length + String(user).length;
+          const name = tr(e().def.name || id);
+          const ok = await confirmDialog(tr('Send to the AI?'), `${name}: ${String(purpose || tr('a request')).slice(0, 200)}\n~${chars.toLocaleString()} ${tr('characters')} → ${cfg.provider} · ${cfg.model}`, { okLabel: tr('Send') });
+          if (!ok) throw new Error(tr('Cancelled'));
+          const r = await window.api.aiRequest({ provider: cfg.provider, model: cfg.model, baseUrl: cfg.baseUrl, monthlyLimit: cfg.monthlyLimit ?? 200 }, { system: String(system), user: String(user) });
+          return r.text;
+        },
+        planSchema: () => JSON.parse(JSON.stringify(PLAN_SCHEMA)),
+      }),
+      notebook: Object.freeze({
+        /** The open notebook's text with ids (as the AI panel sends it). */
+        read: ({ scope = 'notebook', budget = 60000 } = {}) => {
+          const ed = host.app && host.app.active;
+          if (!ed || !live()) return null;
+          const pageData = Object.fromEntries(ed.pages.map((p) => [p.id, ed.pageData(p.id)]));
+          const c = buildContext({ title: ed.doc.nb.title, pages: ed.pages }, pageData, ed.doc.textIndexes || {}, { current: ed.viewer.currentIndex + 1, scope, budget });
+          return { title: ed.doc.nb.title, pages: ed.pages.length, current: ed.viewer.currentIndex + 1, text: c.text, dropped: c.dropped };
+        },
+        preview: (plan, { allowRemove = false, refs = {} } = {}) => {
+          const ed = host.app && host.app.active;
+          if (!ed) return { ok: false, lines: [], problems: [{ index: -1, reason: 'no notebook is open' }] };
+          const r = checkPlan(plan, { pages: ed.pages, data: (pid) => ed.pageData(pid) }, { allowRemove, refs });
+          return { ok: r.ok, lines: describePlan(r.ops, ed.pages), problems: r.problems };
+        },
+        /** Applies the valid changes as one undo step: { applied, problems }. */
+        apply: (plan, { allowRemove = false, refs = {} } = {}) => {
+          const ed = host.app && host.app.active;
+          if (!ed || !live()) throw new Error('no notebook is open');
+          const r = checkPlan(plan, { pages: ed.pages, data: (pid) => ed.pageData(pid) }, { allowRemove, refs });
+          if (r.ops.length) {
+            ed.commitPlan(applyPlan({ pages: ed.pages, data: (pid) => ed.pageData(pid) }, r.ops, {
+              newId: uid, fontSize: ed.toolState.text.size || 14, color: ed.toolState.pen.color || '#1c1c1e', font: ed.toolState.text.ff, refs,
+            }));
+          }
+          return { applied: r.ops.length, problems: r.problems };
+        },
+      }),
       log: (...args) => console.log(`[${id}]`, ...args),
     });
   }
+
+  aiConfig() { return (this.app && this.app.settings && this.app.settings.ai) || {}; }
+
+  aiReady() { const c = this.aiConfig(); return !!(c.enabled && c.provider && c.model); }
 
   // ---------- used by the app ----------
   /** Paste: the first transform that claims the clipboard, or null. */

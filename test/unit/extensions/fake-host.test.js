@@ -24,3 +24,17 @@ test('the fake host records what an extension registers and behaves like the app
   let seen; host.settings.onChange('on', (v) => { seen = v; }); host.settings.set('on', false);
   assert.strictEqual(seen, false);
 });
+
+test('API v2 in the fake host: ai, notebook read, preview and apply', async () => {
+  const doc = { title: 'Notes', pages: [{ id: 'p1', kind: 'paper', w: 595, h: 842 }], data: { p1: { strokes: [], texts: [{ id: 'a', x: 40, y: 40, text: 'Gate oxide' }], items: [] } } };
+  const host = fakeHost('demo', { ai: async ({ user }) => `echo:${user.length}`, doc });
+  assert.ok(host.ai.ready());
+  assert.match(await host.ai.request({ system: 's', user: 'abc' }), /^echo:3$/);
+  assert.ok(host.notebook.read().text.includes('[p1 t:a] Gate oxide'));
+  const plan = { version: 1, ops: [{ op: 'underline', page: 1, id: 'a', terms: ['oxide'] }, { op: 'addText', page: 7, text: 'x' }] };
+  const pv = host.notebook.preview(plan);
+  assert.ok(!pv.ok && pv.lines.length === 1 && pv.problems.length === 1);
+  assert.deepStrictEqual(host.notebook.apply(plan).applied, 1);
+  assert.strictEqual(doc.data.p1.texts[0].html, 'Gate <u>oxide</u>');
+  await assert.rejects(fakeHost('demo').ai.request({}), /Set up/);
+});

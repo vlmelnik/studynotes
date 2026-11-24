@@ -356,6 +356,7 @@ const words = {
   'Apply': 'Применить', 'Discard': 'Отклонить', 'Left out': 'Пропущено', 'The AI had nothing to add.': 'ИИ нечего добавить.', 'Open settings': 'Открыть настройки',
   'Choose an AI provider and model first (Settings → Add-ons → AI assistant). With a Claude subscription, use "Claude (MCP)" there instead.': 'Сначала выберите сервис и модель (Настройки → Дополнения → ИИ-помощник). С подпиской Claude используйте там «Claude (MCP)».',
   'AI changes applied – Ctrl+Z undoes them': 'Изменения ИИ применены – Ctrl+Z отменяет их',
+  'Send to the AI?': 'Отправить ИИ?', 'Set up the AI assistant first (Settings → Add-ons).': 'Сначала настройте ИИ-помощника (Настройки → Дополнения).', 'Cancelled': 'Отменено', 'a request': 'запрос',
   // Claude (MCP)
   'Claude (MCP)': 'Claude (MCP-сервер)',
   'Lets the Claude app read your notebooks and add text, pages and bookmarks when you ask it to. Uses your own Claude plan. Changes can be undone with Ctrl+Z.': 'Приложение Claude читает ваши тетради и по вашей просьбе добавляет текст, страницы и закладки. Работает с вашей подпиской Claude. Изменения отменяются через Ctrl+Z.',

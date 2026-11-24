@@ -144,11 +144,32 @@ English fallback).
 ### `host.log(...)`
 Writes to the developer console with the extension id.
 
-## Planned: API version 2 (1.9)
+## API version 2 (1.9)
 
-`host.ai`, `host.notebook`, `host.capture`, `host.ink` and `host.models`, see
-[ROADMAP-1.9.md](ROADMAP-1.9.md#extension-host-api-v2-maintainer-19). Version 1
-extensions keep working.
+Extensions with `apiVersion: 2` also get the two parts below. Version 1
+extensions keep working unchanged.
+
+### `host.ai`
+- `ready()`: `true` when the user set up the AI assistant (Settings → Add-ons).
+- `request({ system, user, purpose }) → Promise<string>`: one request to the
+  user's provider and model. The user first sees a dialog with the
+  extension's name, `purpose` and the size, and can cancel (the promise then
+  rejects with "Cancelled"). It counts against the monthly limit. The
+  extension never sees keys.
+- `planSchema()`: the JSON Schema of an edit plan (`src/shared/ai-plan.js`),
+  for prompts that ask for changes.
+
+### `host.notebook`
+- `read({ scope = 'notebook' | 'page', budget })`: the open notebook as text
+  with ids (`[p3 t:<id>]`), as the AI panel sends it
+  (`src/shared/ai-context.js`), or `null`.
+- `preview(plan, { allowRemove, refs })` returns `{ ok, lines, problems }`.
+  It checks the plan and describes it, and changes nothing.
+- `apply(plan, { allowRemove, refs })` returns `{ applied, problems }`. It
+  applies the valid changes as one undo step.
+
+Planned for 1.9.x: `host.capture`, `host.ink`, `host.models`
+([ROADMAP-1.9.md](ROADMAP-1.9.md#extension-host-api-v2-maintainer-19)).
 
 ## Tests
 
