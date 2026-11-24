@@ -2,7 +2,10 @@
 // src/main/mcp-server.js, src/shared/mcp-tools.js). Reading works on closed
 // notebooks too; writing opens the notebook and goes through the editor, so
 // the change is visible at once and Ctrl+Z undoes it.
-import { toast } from './ui.js';
+import { toast, confirmDialog } from './ui.js';
+import { checkBlocks, layoutNotes, notesStyle } from '../shared/notes-layout.js';
+import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
+import { extensions } from './extensions.js';
 import { notebookText, freeSpot, findNotebook } from '../shared/mcp-tools.js';
 import { plainToHtml } from '../shared/richtext.js';
 import { checkPlan, applyPlan, describePlan } from '../shared/ai-plan.js';
@@ -10,6 +13,15 @@ import { uid } from './tools.js';
 import { round2 } from '../shared/geometry.js';
 
 const PAPERS = new Set(['blank', 'lined', 'grid', 'dots']);
+
+// text width as the text box will show it (canvas, same font)
+let canvas;
+function measureText(text, r) {
+  canvas ||= document.createElement('canvas').getContext('2d');
+  const f = FONTS[r.ff] || FONTS[DEFAULT_FONT];
+  canvas.font = `${r.i ? 'italic ' : ''}${r.b ? '700' : '400'} ${r.fs || 15}px "${f.css}", "Segoe UI", sans-serif`;
+  return canvas.measureText(text).width;
+}
 
 export class McpTools {
   constructor(app) {
@@ -154,6 +166,51 @@ export class McpTools {
         toast(`Claude changed "${nb.title}" – Ctrl+Z undoes it`);
         return `Applied ${checked.ops.length} change(s) to "${nb.title}" (one undo step):\n${describePlan(checked.ops, ed.pages).map((l) => '- ' + l).join('\n')}`
           + (problems.length ? `\nLeft out:\n${problems.join('\n')}` : '');
+      }
+      case 'write_notes': {
+        const nb = await this.notebookFor(a.notebook);
+        const ed = await this.editorFor(nb.path);
+        const index = this.pageIndex(ed, a.page);
+        const { blocks, problems } = checkBlocks(a.blocks);
+        if (!blocks.length) throw new Error('Nothing to write.\n' + problems.map((p) => '- ' + p).join('\n'));
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const style = notesStyle(this.app.settings.notesStyle, ed.doc.nb.notesStyle);
+        const r = layoutNotes(blocks, index, {
+          pages: ed.pages, data: (id) => ed.pageData(id), style, measure: measureText, newId: uid, place: { free_space: 'free', below: 'below' }[a.place] || 'next',
+          newPage: (ref) => { const s = ed.styleOf(ref); return { id: uid(), kind: 'paper', paper: ref.kind === 'pdf' && s.paper === 'blank' ? 'lined' : s.paper, ...(s.pc && s.pc !== 'cream' ? { pc: s.pc } : {}), w: s.w, h: s.h }; },
+        });
+        // formulas need the formula add-on to be shown as formulas
+        let note = '';
+        if (blocks.some((b) => b.type === 'formula' || /\$[^$]+\$/.test(b.text || '') || (b.items || []).some((x) => /\$[^$]+\$/.test(x)))) {
+          if (extensions.list().some((e) => e.id === 'rich-paste') && !extensions.isEnabled('rich-paste')) { extensions.setEnabled('rich-paste', true); note = '\nThe formula add-on was switched on so formulas show as formulas.'; }
+        }
+        ed.commitPlan(r);
+        const first = r.placed[0];
+        if (first) ed.viewer.scrollToPage(first.index);
+        toast(`Claude wrote notes in "${nb.title}" – Ctrl+Z undoes them`);
+        const where = r.placed.map((p) => `page ${p.index + 1}`).join(', ');
+        return `Wrote ${blocks.length} block(s) on ${where}${r.added.length ? ` (${r.added.length} new page${r.added.length === 1 ? '' : 's'})` : ''} of "${nb.title}" as one undo step.`
+          + (problems.length ? '\nLeft out:\n' + problems.map((p) => '- ' + p).join('\n') : '') + note;
+      }
+      case 'clear_page': {
+        const nb = await this.notebookFor(a.notebook);
+        const ed = await this.editorFor(nb.path);
+        const list = [...new Set((Array.isArray(a.pages) ? a.pages : [a.pages]).map((n) => this.pageIndex(ed, n)))].sort((x, y) => x - y);
+        const changes = [];
+        for (const i of list) {
+          const p = ed.pages[i];
+          const before = ed.pageData(p.id);
+          if (!before.strokes.length && !before.texts.length && !before.items.length) continue;
+          changes.push({ pageId: p.id, before, after: { ...before, strokes: [], texts: [], items: [] } });
+        }
+        if (!changes.length) return 'Those pages are already empty.';
+        const names = list.map((i) => i + 1).join(', ');
+        ed.viewer.scrollToPage(list[0]);
+        if (!(await confirmDialog('Claude wants to clear pages', `Remove all ink, text, pictures and shapes from page ${names} of "${nb.title}"? You can undo this with Ctrl+Z.`, { okLabel: 'Clear', danger: true }))) {
+          throw new Error('The user did not allow clearing the pages. Leave the old notes and ask what to do.');
+        }
+        ed.commitPlan({ pages: ed.pages, changes });
+        return `Cleared page ${names} of "${nb.title}" (one undo step).`;
       }
       case 'bookmark_page': {
         const nb = await this.notebookFor(a.notebook);

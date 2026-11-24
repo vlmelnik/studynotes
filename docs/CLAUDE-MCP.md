@@ -53,8 +53,10 @@ undoes it.
 | Tool | Does |
 |---|---|
 | `list_notebooks` | notebooks with folder, pages, last change |
-| `read_notebook` | text page by page (typed text, tables, PDF text, recognised scan text), page range for long notebooks |
+| `read_notebook` | text page by page (typed text, tables, PDF text, recognised scan text) and what else is on each page (paper, handwriting, pictures, how full), page range for long notebooks |
 | `search_notes` | search across all notebooks |
+| `write_notes` | notes as blocks (headings, paragraphs, lists, formulas, a framed box); StudyNotes places them on the ruled lines in the notes style, continues on new pages, never over a PDF page |
+| `clear_page` | removes the user's text, ink and pictures from pages, after the user confirms in StudyNotes |
 | `add_text` | a text box below what is on a page |
 | `add_page` | a new page after a given page, optional bookmarked title |
 | `bookmark_page` | set or remove a page bookmark |

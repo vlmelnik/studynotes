@@ -9,6 +9,7 @@ import { maybeShowWhatsNew, showWhatsNew } from './whats-new.js';
 import { setLang } from './i18n.js';
 import { extensions } from './extensions.js';
 import { McpTools } from './mcp.js';
+import { notesStyleEditor } from './notes-style.js';
 
 class App {
   async init() {
@@ -636,7 +637,10 @@ class App {
         h('div', {}, h('b', {}, 'AI button in notebooks (Ctrl+J)'), h('small', { class: 'hint wrap' }, 'Ask about your notes, summarise, explain, glossaries, exam questions, underline key terms. You see what is sent; changes are previewed and undone with Ctrl+Z.'))),
       status,
       h('div', { class: 'settings-h3' }, 'How to connect'),
-      wayBtns, wayBody);
+      wayBtns, wayBody,
+      h('div', { class: 'settings-h3' }, 'Notes style'),
+      h('small', { class: 'hint wrap' }, 'How Claude writes notes: on the lines of the paper, headings bigger and coloured, colours to suit white or dark paper. A notebook can have its own style (chat settings).'),
+      notesStyleEditor(s.notesStyle, (v) => { s.notesStyle = v; save(); }));
   }
 
   // ---------- add-ons ----------

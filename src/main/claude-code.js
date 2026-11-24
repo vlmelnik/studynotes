@@ -14,7 +14,7 @@ const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
 const { spawn, execFileSync } = require('child_process');
-const { TOOLS } = require('../shared/mcp-tools');
+const { TOOLS, INSTRUCTIONS } = require('../shared/mcp-tools');
 
 const MCP_TOOLS = TOOLS.map((t) => `mcp__studynotes__${t.name}`);
 // Claude Code's own tools that could touch the computer: never in this chat
@@ -61,6 +61,7 @@ class ClaudeCodeChat {
     await fsp.mkdir(this.dir, { recursive: true });
     const file = path.join(this.dir, 'studynotes-mcp.json');
     await fsp.writeFile(file, JSON.stringify({ mcpServers: { studynotes: this.bridge() } }, null, 2));
+    await fsp.writeFile(path.join(this.dir, 'studynotes-prompt.md'), `You are working inside StudyNotes, the user's note-taking app. ${INSTRUCTIONS}\n`);
     return file;
   }
 
@@ -73,6 +74,7 @@ class ClaudeCodeChat {
     const bin = findClaude(configured);
     if (!bin) { emit({ kind: 'done', error: 'Claude Code was not found. Install it (claude.com/claude-code), run "claude" once in a terminal and sign in, or set its path in Settings → AI assistant.' }); return; }
     const args = ['-p', '--output-format', 'stream-json', '--verbose', '--strict-mcp-config', '--mcp-config', await this.mcpConfig(),
+      '--append-system-prompt-file', path.join(this.dir, 'studynotes-prompt.md'),
       '--allowedTools', MCP_TOOLS.join(','), '--disallowedTools', BLOCKED.join(',')];
     if (sessionId && /^[\w-]+$/.test(sessionId)) args.push('--resume', sessionId);
     if (model && /^[\w.-]+$/.test(model)) args.push('--model', model);

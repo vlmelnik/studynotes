@@ -812,7 +812,7 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 .switch input:focus-visible + .switch-track { outline: 2px solid #3b6fb6; outline-offset: 2px; }
 
 /* AI assistant panel (1.9): docked on the right like search */
-.ai-panel { width: 360px; flex: none; background: var(--panel); color: var(--text); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; font-size: 14px; }
+.ai-panel { position: relative; width: 360px; flex: none; background: var(--panel); color: var(--text); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; font-size: 14px; }
 .ai-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .ai-head-ic { display: inline-flex; color: var(--accent); }
 .ai-head .ai-model { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
@@ -897,3 +897,15 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 .chat-tool { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; font-size: 12px; color: var(--muted); background: var(--hover); border-radius: 10px; padding: 2px 8px; }
 .chat-compose { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--line); }
 .chat-compose .chat-input { min-height: 44px; max-height: 160px; }
+
+/* notes style editor */
+.notes-style { display: flex; flex-direction: column; gap: 10px; }
+.ns-grid { display: grid; grid-template-columns: max-content 90px 90px; gap: 6px 14px; align-items: center; }
+.ns-grid input[type=color] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--line, #ccc); border-radius: 6px; background: none; }
+.ns-previews { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ns-preview { padding: 10px 12px; border-radius: 8px; line-height: 1.4; }
+.ns-preview.light { background: #fdfcf7; }
+.ns-preview.dark { background: #26272b; }
+.ai-num { width: 70px; }
+.ai-resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; }
+.ai-resize:hover, .ai-resize:active { background: var(--accent, #3b82f6); opacity: .5; }
