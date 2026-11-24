@@ -26,6 +26,12 @@ user data folder (history button); the gear button has the model, your own
 instructions and the notebook's notes style. Drag the panel's left edge to
 make it wider.
 
+Recordings (mp3, m4a, wav, ogg …) can be attached too once **Settings →
+Add-ons → Speech to text** is on: StudyNotes decodes them, transcribes them on
+this computer with Whisper (transformers.js on onnxruntime-node; the model is
+downloaded once into `models/speech` in the user data folder) and sends Claude
+the transcript.
+
 StudyNotes starts `claude -p` with `--strict-mcp-config` and only the
 StudyNotes tools allowed; built-in tools (files, shell, web) are blocked.
 Whether this use of a subscription is covered by Anthropic's terms is not

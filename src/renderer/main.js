@@ -10,6 +10,7 @@ import { setLang } from './i18n.js';
 import { extensions } from './extensions.js';
 import { McpTools } from './mcp.js';
 import { notesStyleEditor } from './notes-style.js';
+import { speechSettings, withProgress } from './speech.js';
 
 class App {
   async init() {
@@ -705,7 +706,48 @@ class App {
       },
     }, label)));
 
+    // speech to text (Whisper on this computer) for recordings in the chat
+    const sp = s.speech = speechSettings(s);
+    const spState = h('small', { class: 'addon-state' }, '');
+    const spLine = h('small', { class: 'hint wrap' }, '');
+    const spModel = h('select', { class: 'rec-select', 'aria-label': 'Speech model', onchange: () => { sp.model = spModel.value; this.saveSettings(); spRefresh(); } });
+    const spLang = h('select', { class: 'rec-select', 'aria-label': 'Language of the recordings', onchange: () => { sp.language = spLang.value; this.saveSettings(); } });
+    const spBtn = h('button', { class: 'btn small' }, 'Download the model');
+    const spDel = h('button', { class: 'btn ghost small', hidden: true }, 'Delete the model');
+    const spRefresh = async () => {
+      const st = await window.api.speechStatus(sp.model).catch(() => null);
+      const ok = !!(st && st.downloaded);
+      spState.textContent = ok ? 'On this computer · offline' : 'Model not downloaded yet';
+      spLine.textContent = ok ? `${(st.size / 1e6).toFixed(0)} MB in the StudyNotes data folder.` : 'Downloaded once from Hugging Face, then everything stays on this computer.';
+      spBtn.hidden = ok; spDel.hidden = !ok;
+    };
+    spBtn.onclick = async () => {
+      spBtn.disabled = true;
+      try {
+        await withProgress((id) => window.api.speechDownload(sp.model, id), (f) => { spLine.textContent = `Downloading… ${Math.round(f * 100)}%`; });
+      } catch (err) { toast(errorText(err), { error: true }); }
+      spBtn.disabled = false;
+      spRefresh();
+    };
+    spDel.onclick = async () => { await window.api.speechRemove(sp.model).catch(() => {}); spRefresh(); };
+    window.api.speechInfo().then((info) => {
+      for (const [k, label] of Object.entries(info.models)) spModel.append(h('option', { value: k, selected: sp.model === k }, label));
+      const names = { german: 'German', english: 'English', russian: 'Russian', french: 'French', spanish: 'Spanish', italian: 'Italian', ukrainian: 'Ukrainian', polish: 'Polish', turkish: 'Turkish' };
+      for (const l of info.languages) spLang.append(h('option', { value: l, selected: sp.language === l }, names[l] || l));
+      spRefresh();
+    }, () => {});
+
     list = h('div', { class: 'addon-grid' },
+      card({
+        name: 'Speech to text', icon: 'mic',
+        about: 'Recordings attached in the AI chat (lectures, voice notes; mp3, m4a, wav, ogg) become text on this computer with Whisper, and Claude works with the transcript. The model is downloaded once; nothing is sent anywhere.',
+        state: spState, on: !!sp.enabled, setOn: (v) => { sp.enabled = v; this.saveSettings(); },
+        settings: [
+          h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model'), spModel),
+          h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Language'), spLang),
+          h('div', { class: 'row wrap' }, spBtn, spDel), spLine,
+        ],
+      }),
       card({
         name: 'Searchable scans', icon: 'search',
         about: 'Scanned PDFs become searchable by themselves when they are opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.',

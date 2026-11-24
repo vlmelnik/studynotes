@@ -798,6 +798,16 @@ handle('chat:send', (id, req) => {
   return true;
 });
 handle('chat:stop', (id) => chatInst().stop(id));
+// Speech to text on this computer (src/main/speech.js), for audio in the chat
+const { Speech, MODELS: SPEECH_MODELS, LANGUAGES: SPEECH_LANGS } = require('./speech');
+let speech = null;
+const speechInst = () => (speech ||= new Speech(path.join(app.getPath('userData'), 'models', 'speech')));
+const speechProgress = (id) => (f, file) => { if (win && !win.isDestroyed()) win.webContents.send('speech:progress', id, f, file); };
+handle('speech:info', () => ({ models: Object.fromEntries(Object.entries(SPEECH_MODELS).map(([k, m]) => [k, m.label])), languages: SPEECH_LANGS }));
+handle('speech:status', (key) => speechInst().status(key));
+handle('speech:download', (key, id) => speechInst().download(key, speechProgress(id)));
+handle('speech:remove', (key) => speechInst().remove(key));
+handle('speech:transcribe', (samples, opts, id) => speechInst().transcribe(samples, opts, speechProgress(id)));
 const chatHistory = new ChatHistory(path.join(app.getPath('userData'), 'chats.json'));
 handle('chat:list', () => chatHistory.list());
 handle('chat:get', (id) => chatHistory.get(id));

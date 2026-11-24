@@ -10,6 +10,7 @@
 - "Dark pages" is one switch in the More menu, like Dark mode.
 
 **Chat with Claude in StudyNotes**
+- Recordings in the chat (lectures, voice notes): the new add-on "Speech to text" turns them into text on this computer with Whisper (model downloaded once, about 80 or 250 MB; offline after that), and Claude works with the transcript.
 - Attach pictures, PDFs and text files to a chat message (paper clip, drag and drop, Ctrl+V). Claude sees them and can put an attached picture into your notes.
 - Chat history: all chats are saved on this computer; open an old one to continue it, or delete it.
 - Chat settings: model, your own standing instructions for Claude, and a notes style for this notebook only. Answers show bold text and lists.
