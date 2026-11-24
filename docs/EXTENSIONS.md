@@ -97,30 +97,44 @@ shows its fallback text, so nothing is lost.
 
 ### `host.menus.add(where, item)`
 `where`: `'textbox-more'` (the `…` menu of a selected text box),
-`'page-more'`, `'view'`. `item = { id, label, icon?, when?(ctx), run(ctx) }`.
+`'page-more'`, `'view'`. `item = { id, label, icon?, when?(ctx), checked?(ctx), run(ctx) }`.
 `ctx` for `'textbox-more'` (one box selected or edited):
 `{ textbox: { text, html, setHtml(html) } }`. `setHtml` is one undo step. For
 `'view'` (the editor's `…` menu) and `'page-more'` (right-click on a page):
-`{ notebook, pageIndex }`. The host translates labels with `host.ui.t`.
+`{ notebook, pageIndex }`. View menu items additionally receive `isExternal`,
+`notebookSettings.get(key, fallback)`, `notebookSettings.set(key, value)` and
+`refreshView()`, all bound to the notebook that opened the menu. `checked(ctx)`
+marks the current choice. The host translates labels with `host.ui.t`.
 
-### `host.view.addPagePass(fn)` and `host.view.setInkFilter(fn)`
-- `fn({ canvas, ctx, page, scale, imageRegions })` runs after a PDF page (or
+### Display effects
+- `host.view.addPagePass(fn, { when } = {})` registers
+  `fn({ canvas, ctx, page, scale, imageRegions, pageKind, settings })`. It runs after a PDF page (or
   a sharp part of it when zoomed in) is drawn, on that canvas only. It never
   runs for exports or stored data. `page` is the 0-based page of the PDF.
   `imageRegions` are the picture rectangles `{ x0, y0, x1, y1 }` in canvas
   pixels (`src/shared/pdf-images.js`), so they can be left alone (see
-  `darkenImage(…, { keep })`). It may be `async`. Call `host.view.refresh()`
-  after the effect changes.
-- `setInkFilter(color => color)` changes the colours used to *draw* ink and
-  highlighter on screen. The stored colours stay as they are.
-- `setClass(name, on)` puts the class `ext-<id>-<name>` on the editor, so the
+  `darkenImage(…, { keep })`). If the host cannot read the image positions, it
+  leaves the raster unchanged. `fn` may be `async` and can return a JSON
+  effect state that its ink callbacks read for the displayed page bitmap.
+  Optional
+  `when({ pageKind, settings })` is synchronous and avoids picture lookup when false.
+- `host.view.setInkFilter((color, { pageKind, settings, effect, isExternal }) => color)` changes the
+  colours used to *draw* ink and highlighter in the editor, never stored colours.
+- `host.view.setHighlighterBlend(({ pageKind, settings, effect, isExternal }) => 'screen')`
+  can return `screen` or `multiply`; any other value keeps the existing draw
+  and CSS defaults. `effect` is undefined if no page pass supplied a state.
+- `settings.get(key, fallback)` in a display callback reads the owning notebook
+  even when another tab is active. Use `refreshView()` from a View menu action to
+  update just that notebook; `host.view.refresh()` redraws all open notebooks.
+- `host.view.setClass(name, on)` puts the class `ext-<id>-<name>` on every editor, so the
   extension's CSS can change the look (for example the highlighter's blend
   mode).
 
 ### `host.settings`
 `get(key, fallback)`, `set(key, value)` (JSON values) and
 `onChange(key, fn)`. They are stored per extension. `host.settings.notebook`
-works the same way but is stored per notebook.
+works the same way for the active notebook. Use the scoped settings from the
+display and View menu callbacks when targeting a specific notebook.
 
 ### `host.ui`
 `toast(text)`, `prompt({ title, value }) → Promise<string|null>` (the app's

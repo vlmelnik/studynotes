@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { darkColor, darkenImage } = require('../../../src/shared/dark-view');
+const { darkColor, darkenImage, inkForDark, highlightBlend } = require('../../../src/shared/dark-view');
 
 test('full mode reverses greyscale lightness within the target range', () => {
   assert.deepStrictEqual(darkColor(255, 255, 255, 'full'), [31, 31, 31]);
@@ -51,4 +51,18 @@ test('background mode respects overlapping and clipped keep rectangles across ro
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 30, 30, 30, 255,
     30, 30, 30, 255, 255, 255, 255, 255, 255, 255, 255, 255, 30, 30, 30, 255,
   ]);
+});
+
+test('dark ink gets the full lightness mapping while light ink retains its color', () => {
+  assert.strictEqual(inkForDark('#000000'), '#e0e0e0');
+  assert.strictEqual(inkForDark('#000080'), '#6161ff');
+  assert.strictEqual(inkForDark('#D4B8FF'), '#d4b8ff');
+  assert.strictEqual(inkForDark('#FF0000'), '#ff0000'); // exactly HSL 0.5
+  assert.strictEqual(inkForDark('#FFF'), '#ffffff');
+  assert.strictEqual(inkForDark('currentColor'), 'currentColor');
+});
+
+test('highlighter screen blend brightens dark pages, but light pages keep multiply', () => {
+  assert.strictEqual(highlightBlend(true), 'screen');
+  assert.strictEqual(highlightBlend(false), 'multiply');
 });

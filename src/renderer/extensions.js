@@ -16,6 +16,23 @@ const WHERE = new Set(['textbox-more', 'page-more', 'view']);
 
 const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escText = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const clone = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+
+function notebookSettings(id, getEditor, writable = false) {
+  const get = (key, fallback) => {
+    const value = getEditor()?.doc?.nb?.ext?.[id]?.[key];
+    return value === undefined ? fallback : clone(value);
+  };
+  if (!writable) return Object.freeze({ get });
+  return Object.freeze({ get, set(key, value) {
+    const editor = getEditor();
+    const nb = editor?.doc?.nb;
+    if (!nb || editor.closing) return;
+    ((nb.ext ||= {})[id] ||= {})[key] = clone(value);
+    editor.nbDirty = true;
+    editor.saveSoon();
+  } });
+}
 
 class ExtensionHost {
   constructor() {
@@ -24,8 +41,10 @@ class ExtensionHost {
     this.transforms = []; // { id, fn, priority }
     this.inline = new Map(); // kind -> { id, def }
     this.menus = { 'textbox-more': [], 'page-more': [], view: [] }; // { id, item }
-    this.passes = []; // { id, fn }
+    this.passes = []; // { id, fn, when }
     this.ink = null; // { id, fn }
+    this.blend = null; // { id, fn }
+    this.pageEffects = new WeakMap(); // rendered bitmap -> effect state per extension
     this.classes = new Map(); // id -> Set(class names on the editor roots)
     this.watchers = []; // { id, key, fn }
     this.imageCache = new Map(); // export images by kind | value | style
@@ -93,6 +112,7 @@ class ExtensionHost {
     for (const k of Object.keys(this.menus)) this.menus[k] = this.menus[k].filter((x) => x.id !== id);
     this.passes = this.passes.filter((x) => x.id !== id);
     if (this.ink && this.ink.id === id) this.ink = null;
+    if (this.blend && this.blend.id === id) this.blend = null;
     this.watchers = this.watchers.filter((x) => x.id !== id);
     this.classes.delete(id);
     for (const key of [...this.imageCache.keys()]) if (key.startsWith(id + ':') || key.startsWith(id + '|')) this.imageCache.delete(key);
@@ -107,12 +127,16 @@ class ExtensionHost {
       try {
         this.applyClasses(editor.el);
         if (editor.viewer) {
-          editor.viewer.cache.clear();
-          editor.viewer.invalidateAll();
+          this.refreshView(editor);
           for (const v of editor.viewer.views.values()) editor.renderObjects(v);
         }
       } catch (err) { console.error('[extensions] refresh', err); }
     }
+  }
+
+  refreshView(editor) {
+    editor.viewer?.invalidateDisplayEffects();
+    editor.tools?.refreshDisplayInk();
   }
 
   applyClasses(root) {
@@ -137,8 +161,6 @@ class ExtensionHost {
     const host = this;
     const e = () => host.entries.get(id);
     const live = () => e() && e().enabled;
-    const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
-    const notebook = () => host.app && host.app.active && host.app.active.doc && host.app.active.doc.nb;
     const notify = (key, value) => { for (const w of host.watchers) if (w.id === id && w.key === key) { try { w.fn(value); } catch (err) { console.error(err); } } };
     return Object.freeze({
       id,
@@ -167,8 +189,9 @@ class ExtensionHost {
         },
       }),
       view: Object.freeze({
-        addPagePass(fn) { if (live() && typeof fn === 'function') { host.passes.push({ id, fn }); host.changed(); } },
+        addPagePass(fn, { when } = {}) { if (live() && typeof fn === 'function') { host.passes.push({ id, fn, when }); host.changed(); } },
         setInkFilter(fn) { if (live()) { host.ink = typeof fn === 'function' ? { id, fn } : null; host.changed(); } },
+        setHighlighterBlend(fn) { if (live()) { host.blend = typeof fn === 'function' ? { id, fn } : null; host.changed(); } },
         setClass(name, on) {
           if (!live() || !ID.test(name)) return;
           const set = host.classes.get(id) || new Set();
@@ -187,17 +210,7 @@ class ExtensionHost {
           notify(key, clone(value));
         },
         onChange(key, fn) { if (live() && typeof fn === 'function') host.watchers.push({ id, key, fn }); },
-        notebook: Object.freeze({
-          get(key, fallback) { const nb = notebook(); const v = nb && nb.ext && nb.ext[id] && nb.ext[id][key]; return v === undefined ? fallback : clone(v); },
-          set(key, value) {
-            const ed = host.app && host.app.active;
-            const nb = notebook();
-            if (!nb) return;
-            ((nb.ext ||= {})[id] ||= {})[key] = clone(value);
-            ed.nbDirty = true;
-            if (ed.saveSoon) ed.saveSoon();
-          },
-        }),
+        notebook: notebookSettings(id, () => host.app?.active, true),
       }),
       ui: Object.freeze({
         toast: (text) => toast(String(text)),
@@ -299,29 +312,70 @@ class ExtensionHost {
     return out;
   }
 
-  menuItems(where, ctx) {
+  menuItems(where, ctx, editor) {
     const items = [];
     for (const { id, item } of this.menus[where] || []) {
-      try { if (item.when && !item.when(ctx)) continue; } catch (err) { console.error(err); continue; }
-      items.push({ label: tr(item.label), icon: item.icon || 'more', onClick: () => { try { const r = item.run(ctx); if (r && r.catch) r.catch((err) => console.error(`[extensions] ${id}: menu`, err)); } catch (err) { console.error(`[extensions] ${id}: menu`, err); } } });
+      const target = editor ? Object.freeze({ ...ctx,
+        isExternal: !!editor.isExternal,
+        notebookSettings: notebookSettings(id, () => editor, true), refreshView: () => this.refreshView(editor),
+      }) : ctx;
+      try {
+        if (item.when && !item.when(target)) continue;
+        items.push({ label: tr(item.label), icon: item.icon || 'more', checked: item.checked?.(target), onClick: () => {
+          if (!this.isEnabled(id) || editor?.closing) return;
+          try { const r = item.run(target); if (r && r.catch) r.catch((err) => console.error(`[extensions] ${id}: menu`, err)); }
+          catch (err) { console.error(`[extensions] ${id}: menu`, err); }
+        } });
+      } catch (err) { console.error(err); }
     }
     return items;
   }
 
   /** After a PDF page was drawn into `canvas` (screen only). */
-  async pagePass(canvas, { page, scale, viewport }) {
+  async pagePass(canvas, { editor, page, scale, viewport, cancelled }) {
     if (!this.passes.length) return;
     let regions = null;
-    const imageRegions = async () => regions || (regions = await page.imageRects(viewport).catch(() => []));
     const ctx = canvas.getContext('2d');
     for (const x of this.passes) {
-      try { await x.fn({ canvas, ctx, page: page.index, scale, imageRegions: await imageRegions() }); } catch (err) { console.error(`[extensions] ${x.id}: page pass`, err); }
+      if (cancelled()) return;
+      if (!this.isEnabled(x.id)) continue;
+      try {
+        const view = this.viewContext(x.id, editor, 'pdf');
+        if (x.when && !x.when(view)) continue;
+        // A failed lookup is not evidence that this page contains no pictures.
+        regions ??= await page.imageRects(viewport).catch(() => null);
+        if (!regions || cancelled()) return;
+        const effect = await x.fn({ ...view, canvas, ctx, page: page.index, scale, imageRegions: regions });
+        if (effect !== undefined && !cancelled()) {
+          const effects = this.pageEffects.get(canvas) || new Map();
+          effects.set(x.id, clone(effect));
+          this.pageEffects.set(canvas, effects);
+        }
+      } catch (err) { console.error(`[extensions] ${x.id}: page pass`, err); }
     }
   }
 
-  inkColor(c) {
-    if (!this.ink || !c) return c;
-    try { const v = this.ink.fn(c); return typeof v === 'string' ? v : c; } catch { return c; }
+  viewContext(id, editor, pageKind, effects) {
+    return Object.freeze({ pageKind, isExternal: !!editor?.isExternal,
+      settings: notebookSettings(id, () => editor), effect: clone(effects?.get(id)),
+    });
+  }
+
+  inkColor(c, editor, pageKind, effects) {
+    const ink = this.ink;
+    if (!ink || !c) return c;
+    try { const v = ink.fn(c, this.viewContext(ink.id, editor, pageKind, effects)); return typeof v === 'string' ? v : c; } catch { return c; }
+  }
+
+  highlighterBlend(editor, pageKind, effects) {
+    const blend = this.blend;
+    if (blend) {
+      try {
+        const mode = blend.fn(this.viewContext(blend.id, editor, pageKind, effects));
+        if (mode === 'screen' || mode === 'multiply') return mode;
+      } catch { /* keep the default */ }
+    }
+    return null;
   }
 }
 

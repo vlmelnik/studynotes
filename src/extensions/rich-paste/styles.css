@@ -1,0 +1,4 @@
+.rich-paste-math .katex { color: inherit; font-size: inherit; }
+.rich-paste-math[data-display="1"] { display: block; text-align: center; }
+.rich-paste-math .katex-display { margin: 0; }
+.rich-paste-math .katex-error { white-space: pre-wrap; }

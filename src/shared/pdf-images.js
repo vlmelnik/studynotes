@@ -16,24 +16,39 @@ const mul = (a, b) => [
  * than minSide pixels on a side are left out (bullets, rules drawn as images).
  */
 function imageRects(fnArray, argsArray, OPS, viewportTransform, { minSide = 4 } = {}) {
-  const paint = new Set(['paintImageXObject', 'paintInlineImageXObject', 'paintImageMaskXObject', 'paintImageXObjectRepeat', 'paintInlineImageXObjectGroup', 'paintImageMaskXObjectGroup']
+  const paint = new Set(['paintImageXObject', 'paintInlineImageXObject', 'paintImageMaskXObject']
     .map((k) => OPS[k]).filter((v) => v !== undefined));
   let ctm = viewportTransform.slice(0, 6);
   const stack = [];
   const out = [];
+  // Each placement paints into a unit square under its own transform.
+  const add = ([a, b, c, d, x, y]) => {
+    const r = {
+      x0: Math.floor(x + Math.min(0, a) + Math.min(0, c)),
+      y0: Math.floor(y + Math.min(0, b) + Math.min(0, d)),
+      x1: Math.ceil(x + Math.max(0, a) + Math.max(0, c)),
+      y1: Math.ceil(y + Math.max(0, b) + Math.max(0, d)),
+    };
+    if (r.x1 - r.x0 >= minSide && r.y1 - r.y0 >= minSide) out.push(r);
+  };
   for (let i = 0; i < fnArray.length; i++) {
     const fn = fnArray[i], args = argsArray[i];
     if (fn === OPS.save) stack.push(ctm);
     else if (fn === OPS.restore) ctm = stack.pop() || ctm;
     else if (fn === OPS.transform && args) ctm = mul(ctm, args);
-    else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm); if (args && Array.isArray(args[0])) ctm = mul(ctm, args[0]); }
+    else if (fn === OPS.paintFormXObjectBegin) {
+      stack.push(ctm);
+      if (args?.[0]?.length === 6) ctm = mul(ctm, args[0]); // PDF.js matrices may be typed arrays
+    }
     else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() || ctm;
-    else if (paint.has(fn)) {
-      // an image fills the unit square of the current matrix
-      const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]);
-      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-      const r = { x0: Math.floor(Math.min(...xs)), y0: Math.floor(Math.min(...ys)), x1: Math.ceil(Math.max(...xs)), y1: Math.ceil(Math.max(...ys)) };
-      if (r.x1 - r.x0 >= minSide && r.y1 - r.y0 >= minSide) out.push(r);
+    else if (paint.has(fn)) add(ctm);
+    else if (fn === OPS.paintImageXObjectRepeat || fn === OPS.paintImageMaskXObjectRepeat) {
+      const mask = fn === OPS.paintImageMaskXObjectRepeat;
+      const [sx, b, c, sy, positions] = mask ? args.slice(1) : [args[1], 0, 0, args[2], args[3]];
+      for (let p = 0; p < positions.length; p += 2) add(mul(ctm, [sx, b, c, sy, positions[p], positions[p + 1]]));
+    } else if (fn === OPS.paintInlineImageXObjectGroup || fn === OPS.paintImageMaskXObjectGroup) {
+      const placements = args[fn === OPS.paintInlineImageXObjectGroup ? 1 : 0];
+      for (const { transform } of placements) add(mul(ctm, transform));
     }
   }
   return out;

@@ -498,7 +498,7 @@ export class Tools {
     if (tool === 'pen' && opts.style && opts.style !== 'ball') st.ps = opts.style;
     if (tool === 'hl' && opts.round) st.rd = 1;
     const live = view.makeRegionCanvas('live-canvas');
-    if (tool === 'hl') live.canvas.style.mixBlendMode = 'multiply';
+    if (tool === 'hl') live.canvas.style.mixBlendMode = view.highlighterBlend() || 'multiply';
     this.cur = {
       kind: 'stroke', pointerId: e.pointerId, view, index: hit.index, pageId: hit.page.id, st, live,
       rect: this.viewer.pageClientRect(hit.index), isPen: e.pointerType === 'pen',
@@ -580,11 +580,12 @@ export class Tools {
       if (!c) return;
       if (c.kind === 'stroke') {
         this.pressureRule(c);
-        drawLive(c.live.ctx, c.st, c.live.scale, c.live.rect);
+        if (c.st.t === 'hl') c.live.canvas.style.mixBlendMode = c.view.highlighterBlend() || 'multiply';
+        drawLive(c.live.ctx, c.st, c.live.scale, c.live.rect, true, (color) => c.view.inkColor(color));
       } else if (c.kind === 'shape') {
         c.live.ctx.setTransform(1, 0, 0, 1, 0, 0);
         c.live.ctx.clearRect(0, 0, c.live.canvas.width, c.live.canvas.height);
-        for (const st of c.strokes) drawLive(c.live.ctx, st, c.live.scale, c.live.rect, false);
+        for (const st of c.strokes) drawLive(c.live.ctx, st, c.live.scale, c.live.rect, false, (color) => c.view.inkColor(color));
       }
     });
   }
@@ -854,8 +855,9 @@ export class Tools {
     // Selected strokes are drawn on their own canvas so moving/scaling is just a CSS transform.
     view.inkSkip = strokeIds;
     view.drawInk(true);
+    const highlighter = strokes.some((st) => st.t === 'hl') ? view.makeRegionCanvas('sel-canvas') : null;
     const reg = view.makeRegionCanvas('sel-canvas');
-    drawStrokes(reg.ctx, strokes, reg.scale, { ox: -reg.rect[0] * reg.scale, oy: -reg.rect[1] * reg.scale });
+    const inkLayers = highlighter ? [highlighter, reg] : [reg];
 
     const box = h('div', { class: 'sel-box' },
       ...['nw', 'ne', 'sw', 'se'].map((corner) => h('div', { class: `sel-handle ${corner}`, dataset: { corner } })));
@@ -866,7 +868,8 @@ export class Tools {
       ...items.map((it) => view.el.querySelector(`.item[data-id="${it.id}"]`)),
     ].filter(Boolean);
     domEls.forEach((el) => el.classList.add('selected'));
-    this.sel = { index, pageId, view, strokeIds, textIds, itemIds, bbox: b, canvas: reg.canvas, canvasRect: reg.rect, box, bar: null, domEls };
+    this.sel = { index, pageId, view, strokeIds, textIds, itemIds, bbox: b, inkLayers, canvasRect: reg.rect, box, bar: null, domEls };
+    this.refreshDisplayInk();
     this.sel.bar = this.selectionToolbar();
     // Only text boxes selected: the floating text bar takes over.
     if (texts.length && !strokes.length && !items.length) this.sel.bar.classList.add('hidden');
@@ -1004,8 +1007,10 @@ export class Tools {
     // p' = a + (p - a)·s + t. For an element whose top-left is at E:
     // translate((a - E)(1 - s) + t) scale(s), origin at the element's top-left.
     const R = sel.canvasRect;
-    sel.canvas.style.transformOrigin = '0 0';
-    sel.canvas.style.transform = `translate(${((ax - R[0]) * (1 - s) + tx) * z}px, ${((ay - R[1]) * (1 - s) + ty) * z}px) scale(${s})`;
+    for (const { canvas } of sel.inkLayers) {
+      canvas.style.transformOrigin = '0 0';
+      canvas.style.transform = `translate(${((ax - R[0]) * (1 - s) + tx) * z}px, ${((ay - R[1]) * (1 - s) + ty) * z}px) scale(${s})`;
+    }
     for (const el of sel.domEls) {
       el.style.transformOrigin = '0 0';
       // DOM layers are already scaled by zoom: translate in page units.
@@ -1273,8 +1278,10 @@ export class Tools {
     const sel = this.sel;
     const z = this.viewer.zoom;
     const R = sel.canvasRect;
-    sel.canvas.style.transformOrigin = `${(cx - R[0]) * z}px ${(cy - R[1]) * z}px`;
-    sel.canvas.style.transform = deg ? `rotate(${deg}deg)` : '';
+    for (const { canvas } of sel.inkLayers) {
+      canvas.style.transformOrigin = `${(cx - R[0]) * z}px ${(cy - R[1]) * z}px`;
+      canvas.style.transform = deg ? `rotate(${deg}deg)` : '';
+    }
     for (const el of sel.domEls) {
       el.style.transformOrigin = `${cx - el._x}px ${cy - el._y}px`;
       el.style.transform = deg ? `rotate(${deg}deg)` : '';
@@ -1387,11 +1394,25 @@ export class Tools {
     sel.domEls.forEach((el) => el.classList.add('selected'));
   }
 
+  refreshDisplayInk(pageView) {
+    if (this.cur?.live && (!pageView || this.cur.view === pageView)) this.requestLive();
+    const sel = this.sel;
+    if (!sel || (pageView && sel.view !== pageView)) return;
+    const { view, inkLayers, pageId, strokeIds } = sel;
+    const strokes = this.editor.pageData(pageId).strokes.filter((st) => strokeIds.has(st.id));
+    if (inkLayers.length === 2) inkLayers[0].canvas.style.mixBlendMode = view.highlighterBlend() || '';
+    inkLayers.forEach(({ ctx, scale, rect }, i) => drawStrokes(ctx, strokes, scale, {
+      only: inkLayers.length === 2 && i === 0 ? 'hl' : 'pen',
+      ox: -rect[0] * scale, oy: -rect[1] * scale, color: (c) => view.inkColor(c),
+    }));
+  }
+
   clearSelection(silent = false) {
     const sel = this.sel;
     if (!sel) return;
     this.sel = null;
-    releaseCanvas(sel.canvas); sel.box.remove(); sel.bar.remove();
+    for (const { canvas } of sel.inkLayers) releaseCanvas(canvas);
+    sel.box.remove(); sel.bar.remove();
     for (const el of sel.domEls) { el.classList.remove('selected'); el.style.transform = ''; }
     sel.view.inkSkip = null;
     if (sel.view.el.isConnected) sel.view.drawInk(true);

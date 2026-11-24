@@ -279,6 +279,12 @@ const words = {
   'Text in its layout': 'Текст в своей вёрстке',
   'Paragraphs and centred titles become one text box with the scan\'s line spacing; underlined words are recognised; logos stay as they are. Select several text boxes → "Combine".': 'Абзацы и заголовки по центру становятся одним текстовым полем с межстрочным интервалом скана; подчёркнутые слова распознаются; логотипы остаются как есть. Выделите несколько полей → «Объединить».',
   'Add-ons': 'Дополнения',
+  'Extension': 'Расширение',
+  'Dark pages': 'Тёмные страницы',
+  'Darkens PDF pages on screen without changing your document or export.': 'Затемняет страницы PDF на экране, не меняя документ и результат экспорта.',
+  'Dark pages: Off': 'Тёмные страницы: выкл.',
+  'Dark pages: Background only': 'Тёмные страницы: только фон',
+  'Dark pages: Full': 'Тёмные страницы: полный режим',
   'Text recognition': 'Распознавание текста',
   'Installed (English, German, Russian)': 'Установлено (английский, немецкий, русский)',
   'Remove': 'Удалить',
@@ -341,6 +347,12 @@ const words = {
   'Then ask Claude for example: "Summarise page 3 of my notebook Power electronics and add the summary on a new page."': 'Потом попросите Claude, например: «Кратко перескажи страницу 3 тетради Силовая электроника и добавь пересказ на новую страницу».',
   'StudyNotes was added to Claude Desktop. Restart Claude Desktop to use it.': 'StudyNotes добавлен в Claude Desktop. Перезапустите Claude Desktop.',
   'Signature…': 'Подпись…', 'Pen eraser end / barrel button ': 'Ластик на пере / боковая кнопка', 'Text': 'Текст', 'Date': 'Дата', 'Check': 'Галочка', 'Saved to ': 'Сохранено в ',
+  // extension: rich-paste
+  'Formulas and formatting on paste': 'Формулы и форматирование при вставке',
+  'Shows LaTeX formulas, bold text, headings and lists from pasted text.': 'Показывает формулы LaTeX, жирный текст, заголовки и списки из вставленного текста.',
+  'Render formulas and formatting': 'Показать формулы и форматирование', 'Edit formula': 'Изменить формулу',
+  'Edit formula ({break} marks a line break)': 'Изменить формулу ({break} – перенос строки)', 'Invalid LaTeX formula': 'Ошибка в формуле LaTeX',
+  'Disable conversion on paste': 'Не преобразовывать при вставке', 'Enable conversion on paste': 'Преобразовывать при вставке',
 };
 
 // Texts with numbers / names. [regex, replacement or function]

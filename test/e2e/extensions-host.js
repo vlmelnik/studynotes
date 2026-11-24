@@ -41,8 +41,19 @@ const { launch, root } = require('./harness/app');
           },
         });
         host.menus.add('textbox-more', { id: 'conv', label: 'E2E convert', when: (ctx) => !ctx.textbox.html.includes('data-x'), run: (ctx) => ctx.textbox.setHtml(host.inline.html('e2e:box', ctx.textbox.text)) });
-        host.view.addPagePass(({ canvas, imageRegions }) => { seen.passes++; seen.regions = imageRegions; canvas.getContext('2d').fillStyle = '#000'; });
+        host.view.addPagePass(({ canvas, imageRegions, settings, scale }) => {
+          seen.passes++;
+          seen.regions = imageRegions;
+          if (scale < 0.28) {
+            (seen.probes ||= []).push([scale, settings?.get('colour', '')]);
+            if (scale === 0.263) return new Promise((resolve) => { window.__extGate = { canvas, resolve }; });
+          }
+        });
         host.view.setInkFilter((c) => { seen.ink++; return c === '#000000' ? '#ffffff' : c; });
+        host.menus.add('view', {
+          id: 'scope', label: 'E2E per-notebook setting', checked: (ctx) => ctx.notebookSettings?.get('colour') === 'first',
+          run(ctx) { ctx.notebookSettings?.set('colour', 'first'); ctx.refreshView?.(); },
+        });
         host.view.setClass('on', true);
         host.settings.set('count', (host.settings.get('count', 0) || 0) + 1);
         seen.settings = host.settings.get('count');
@@ -103,12 +114,68 @@ const { launch, root } = require('./harness/app');
   const view = await ed(() => {
     const e = window.__app.active;
     const pg = e.pages[e.viewer.currentIndex];
-    return { ...window.__extSeen, stored: e.pageData(pg.id).strokes[0].c, cls: e.el.classList.contains('ext-e2e-on') };
+    const css = document.createElement('style');
+    css.textContent = '.ext-e2e-on .page-hl { mix-blend-mode: overlay }';
+    document.head.append(css);
+    const blend = getComputedStyle(e.viewer.view(e.viewer.currentIndex).hlCanvas).mixBlendMode;
+    return { ...window.__extSeen, stored: e.pageData(pg.id).strokes[0].c, cls: e.el.classList.contains('ext-e2e-on'), blend };
   });
   check('page pass runs on rendered PDF pages, with image regions', view.passes > 0 && Array.isArray(view.regions), JSON.stringify(view));
   check('ink filter is used for drawing, the stored colour stays', view.ink > 0 && view.stored === '#000000', JSON.stringify(view));
   check('setClass puts ext-<id>-<name> on the editor', view.cls);
+  check('legacy extension CSS can still set the highlighter blend mode', view.blend === 'overlay');
   check('settings are kept per extension', view.settings === 1);
+
+  // ---- scope, raw rendering and cancellation ----
+  const secondPdf = path.join(tmp, 'Other slides.pdf');
+  fs.copyFileSync(pdf, secondPdf);
+  const other = await ed(async (f) => (await window.api.importFiles('', [f]))[0], secondPdf);
+  await ed((r) => window.__app.openNotebook(r), other);
+  await win.waitForFunction(() => window.__app.active.viewer.view(0)?.bgScale > 0);
+  const scope = await ed(async ([first, second]) => {
+    const app = window.__app;
+    const a = app.editors.find(({ editor }) => editor.rel === first).editor;
+    const b = app.editors.find(({ editor }) => editor.rel === second).editor;
+    const source = a.pdfFor('main');
+    const bView = b.viewer.view(0);
+    const bBitmap = bView.bgHost.firstChild;
+    const items = () => app.extensions.menuItems('view', { notebook: first, pageIndex: 0 }, a);
+    const menu = () => items().find((item) => item.label === 'E2E per-notebook setting');
+    app.activate(a);
+    const pendingMenu = menu();
+    app.activate(b);
+    pendingMenu.onClick();
+    const bitmapUnchanged = bView.bgHost.firstChild === bBitmap && bBitmap.width > 0;
+    const menuWrites = a.doc.nb.ext?.e2e?.colour === 'first' && !b.doc.nb.ext?.e2e?.colour && menu().checked;
+    const seen = window.__extSeen;
+    await source.render(1, 0.251, -20).promise;
+    const raw = !(seen.probes || []).some(([scale]) => scale === 0.251);
+    if (typeof source.renderForDisplay !== 'function') return { raw, bitmapUnchanged, menuWrites, scoped: false };
+    app.activate(a);
+    const full = source.renderForDisplay(a, 1, 0.252, -20);
+    const tile = source.renderForDisplay(a, 1, 0.253, -20, 90, [10, 12, 150, 160]);
+    app.activate(b);
+    await Promise.all([full.promise, tile.promise]);
+    const scoped = [0.252, 0.253].every((s) => seen.probes.some(([scale, value]) => scale === s && value === 'first'));
+    const job = source.renderForDisplay(a, 1, 0.263, -20);
+    window.__extCancelled = job.promise.catch((e) => e.cancelled);
+    window.__extCancel = job.cancel;
+    return { raw, bitmapUnchanged, menuWrites, scoped };
+  }, [rel, other]);
+  check('raw PDF renders never run screen passes', scope.raw);
+  check('a notebook menu action stays bound to the notebook that opened it', scope.menuWrites);
+  check('a notebook refresh leaves the other tab bitmap in place', scope.bitmapUnchanged);
+  check('queued whole pages and rotated tiles use the owning notebook', scope.scoped);
+  if (scope.scoped) {
+    await win.waitForFunction(() => window.__extGate);
+    check('cancelling a render during an async pass rejects the result', await ed(async () => {
+      window.__extCancel();
+      window.__extGate.resolve();
+      return window.__extCancelled;
+    }));
+    await win.waitForFunction(() => window.__extGate.canvas.width === 0);
+  }
+  await ed((r) => window.__app.openNotebook(r), rel);
 
   // ---- export with the inline picture ----
   const out = path.join(tmp, 'out.pdf');
