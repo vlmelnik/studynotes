@@ -1,12 +1,6 @@
 import darkView from '../../shared/dark-view.js';
 
 const { darkenImage, inkForDark, highlightBlend } = darkView;
-const choices = [
-  ['off', 'Dark pages: Off'],
-  ['background', 'Dark pages: Background only'],
-  ['full', 'Dark pages: Full'],
-];
-
 function modeOf(settings) {
   const mode = settings?.get('mode', 'off');
   return mode === 'background' || mode === 'full' ? mode : 'off';
@@ -19,21 +13,22 @@ export default {
   id: 'dark-view',
   name: 'Dark pages',
   description: 'Darkens PDF pages on screen without changing your document or export.',
+  icon: 'moon',
   apiVersion: 1,
   defaultEnabled: false,
   activate(host) {
-    for (const [mode, label] of choices) {
-      host.menus.add('view', {
-        id: mode, label,
-        when: ({ notebookSettings, isExternal }) => !!notebookSettings && !isExternal,
-        checked: ({ notebookSettings }) => modeOf(notebookSettings) === mode,
-        run({ notebookSettings, refreshView }) {
-          if (modeOf(notebookSettings) === mode) return;
-          notebookSettings.set('mode', mode);
-          refreshView();
-        },
-      });
-    }
+    // One switch, like "Dark mode": on = full dark pages (older notebooks may
+    // still say "background", which keeps working)
+    host.menus.add('view', {
+      id: 'toggle',
+      label: 'Dark pages',
+      when: ({ notebookSettings, isExternal }) => !!notebookSettings && !isExternal,
+      checked: ({ notebookSettings }) => modeOf(notebookSettings) !== 'off',
+      run({ notebookSettings, refreshView }) {
+        notebookSettings.set('mode', modeOf(notebookSettings) === 'off' ? 'full' : 'off');
+        refreshView();
+      },
+    });
     host.view.addPagePass(({ canvas, ctx, imageRegions, settings }) => {
       const { width, height } = canvas;
       const mode = modeOf(settings);

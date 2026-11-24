@@ -42,15 +42,15 @@ const server = http.createServer((req, res) => {
 
   // ---- not set up: the panel says what to do ----
   await win.keyboard.press('Control+j');
-  check('Ctrl+J opens the AI panel; without setup it points to Settings', await win.locator('.ai-panel', { hasText: 'Choose an AI provider' }).isVisible());
+  check('Ctrl+J opens the AI panel; without setup it points to the AI settings', await win.locator('.ai-panel', { hasText: 'Set up the AI assistant' }).isVisible() && await win.locator('.ai-panel').getByRole('button', { name: 'Open AI settings' }).isVisible());
   await win.keyboard.press('Control+j');
 
   // ---- settings ----
-  await ed(() => window.__app.showSettings('addons'));
-  const card = win.locator('.addon', { has: win.locator('.addon-title b', { hasText: /^AI assistant$/ }) });
-  await card.getByRole('switch').press('Space');
-  await card.getByRole('button', { name: 'Settings' }).click();
-  await card.getByLabel('AI provider').selectOption('local');
+  await ed(() => window.__app.showSettings('ai'));
+  const card = win.locator('.ai-settings');
+  await card.getByRole('switch', { name: 'AI assistant' }).press('Space');
+  check('three ways to connect: Claude app, API key, local model', (await card.getByRole('radio').allTextContents()).join('|').startsWith('Claude app'));
+  await card.getByRole('radio', { name: /Local model/ }).click();
   await card.getByLabel('Server address').fill(base);
   await card.getByLabel('Server address').press('Tab');
   await card.getByRole('button', { name: 'Load models' }).click();
@@ -64,7 +64,7 @@ const server = http.createServer((req, res) => {
   check('an API key is not stored in plain text', keyErr ? /secure key store/.test(keyErr) : !fs.readFileSync(keyFile, 'utf8').includes('sk-test-plain-123'), keyErr || 'saved encrypted');
   await win.getByRole('button', { name: 'Done', exact: true }).click();
   const ai = await ed(() => window.__app.settings.ai);
-  check('settings saved: on, local, server, model', ai.enabled && ai.provider === 'local' && ai.baseUrl === base && ai.model === 'fake-small', JSON.stringify(ai));
+  check('settings saved: on, local, server, model', ai.enabled && ai.via === 'local' && ai.provider === 'local' && ai.baseUrl === base && ai.model === 'fake-small', JSON.stringify(ai));
 
   // ---- what is sent ----
   await win.keyboard.press('Control+j');

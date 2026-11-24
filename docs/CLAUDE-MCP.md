@@ -11,11 +11,19 @@ itself. Claude Desktop starts a small bridge that connects to the running
 app.
 
 ## Set up (once)
-1. StudyNotes: **Settings → Add-ons → Claude (MCP)**, switch it on.
-2. Open its **Settings**, click **Connect Claude Desktop**. This adds
-   StudyNotes to `claude_desktop_config.json` (Windows:
-   `%APPDATA%\Claude\`) and keeps a copy of the old file as `.bak`.
-3. Restart Claude Desktop. "studynotes" now appears in its list of tools.
+1. StudyNotes: **Settings → AI assistant → How to connect: Claude app**, switch
+   on **Let the Claude app use StudyNotes**.
+2. Click **Connect Claude Desktop**. This adds StudyNotes to every copy of
+   `claude_desktop_config.json` (Windows: `%APPDATA%\Claude\` and, for the
+   Microsoft Store build, `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\`)
+   and keeps a copy of each old file as `.bak`. The check below the buttons
+   shows which files now contain StudyNotes and whether the bridge answers.
+3. **Quit Claude Desktop completely** (tray icon next to the clock → Quit,
+   not only closing the window) and start it again. StudyNotes then appears
+   under "+" → Connectors.
+
+If it does not appear: click **Test connection**. Claude Desktop's own log is
+in `%APPDATA%\Claude\logs\mcp-server-studynotes.log`.
 
 ## Use
 Ask Claude in plain words, for example:

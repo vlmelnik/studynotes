@@ -66,9 +66,18 @@ async function fixture(ed, name, scan = false) {
       check(`Settings turns the add-on ${on ? 'on' : 'off'}`, (await toggle.isChecked()) === on);
       await win.getByRole('button', { name: 'Done', exact: true }).click();
     }
+    // "Dark pages" is one switch in the More menu (on = full). "Background only"
+    // is no menu entry any more; older notebooks can still carry it.
     async function choose(mode) {
-      await win.locator('.editor').getByRole('button', { name: 'More', exact: true }).click();
-      await win.getByRole('menuitem', { name: `Dark pages: ${mode}`, exact: true }).click();
+      const want = { Full: 'full', Off: 'off', 'Background only': 'background' }[mode];
+      if (want === 'background') {
+        await ed(() => { const e = window.__app.active; ((e.doc.nb.ext ||= {})['dark-view'] ||= {}).mode = 'background'; window.__app.extensions.refreshView(e); });
+      } else {
+        const now = await ed(() => window.__app.active.doc.nb.ext?.['dark-view']?.mode || 'off');
+        if ((now === 'off') === (want === 'off')) return;
+        await win.locator('.editor').getByRole('button', { name: 'More', exact: true }).click();
+        await win.getByRole('menuitem', { name: 'Dark pages', exact: true }).click();
+      }
       await win.waitForFunction(() => window.__app.active.viewer.view(0)?.bgScale > 0);
     }
     function sample([kind, point]) {
@@ -267,7 +276,7 @@ async function fixture(ed, name, scan = false) {
     assert(directOpen.external, JSON.stringify(directOpen));
     await win.locator('.editor').getByRole('button', { name: 'More', exact: true }).click();
     check('directly opened PDFs cannot write a display preference back into the file',
-      await win.getByRole('menuitem', { name: /^Dark pages:/ }).count() === 0 && fs.readFileSync(direct).equals(fs.readFileSync(name)));
+      await win.getByRole('menuitem', { name: 'Dark pages', exact: true }).count() === 0 && fs.readFileSync(direct).equals(fs.readFileSync(name)));
     await win.keyboard.press('Escape');
     await open(a);
 

@@ -11,6 +11,7 @@ export default {
   id: 'rich-paste',
   name: 'Formulas and formatting on paste',
   description: 'Shows LaTeX formulas, bold text, headings and lists from pasted text.',
+  icon: 'text',
   apiVersion: 1,
   defaultEnabled: false,
   activate(host) {

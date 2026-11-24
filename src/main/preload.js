@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld('api', {
   // Claude (MCP): the app answers tool calls that come in over the local pipe
   mcpSetEnabled: invoke('mcp:setEnabled'),
   mcpInstallClaude: invoke('mcp:installClaude'),
+  mcpTest: invoke('mcp:test'),
   onMcpCall: (fn) => ipcRenderer.on('mcp:call', (_e, req) => fn(req)),
   mcpResult: (id, payload) => ipcRenderer.send('mcp:result', id, payload),
 

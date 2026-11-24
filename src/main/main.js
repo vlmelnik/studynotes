@@ -711,24 +711,79 @@ handle('mcp:setEnabled', async (on) => {
   } else if (!on && mcp) { const m = mcp; mcp = null; await m.stop(); }
   return !!mcp;
 });
-// Adds StudyNotes to Claude Desktop's list of MCP servers (a backup of the file is kept).
-handle('mcp:installClaude', async () => {
+// Claude Desktop's config file. The Microsoft Store (MSIX) build keeps its own
+// copy under %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude, so
+// StudyNotes is written into every copy that exists.
+function claudeConfigFiles() {
+  if (process.env.STUDYNOTES_CLAUDE_CONFIG) return [process.env.STUDYNOTES_CLAUDE_CONFIG];
   const home = app.getPath('home');
-  const file = process.env.STUDYNOTES_CLAUDE_CONFIG || (process.platform === 'win32' ? path.join(app.getPath('appData'), 'Claude', 'claude_desktop_config.json')
-    : process.platform === 'darwin' ? path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
-      : path.join(home, '.config', 'Claude', 'claude_desktop_config.json'));
-  let cfg = {};
-  const old = await fsp.readFile(file, 'utf8').catch(() => null);
-  if (old !== null && old.trim()) {
-    try { cfg = JSON.parse(old); } catch { throw new Error('Claude Desktop\'s settings file could not be read, so it was left unchanged: ' + file); }
-    await fsp.writeFile(file + '.bak', old);
+  if (process.platform === 'darwin') return [path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')];
+  if (process.platform !== 'win32') return [path.join(home, '.config', 'Claude', 'claude_desktop_config.json')];
+  const files = [path.join(app.getPath('appData'), 'Claude', 'claude_desktop_config.json')];
+  const pkgs = path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Packages');
+  try {
+    for (const d of fs.readdirSync(pkgs)) if (/^Claude_/i.test(d)) files.push(path.join(pkgs, d, 'LocalCache', 'Roaming', 'Claude', 'claude_desktop_config.json'));
+  } catch { /* no Store apps */ }
+  return files;
+}
+const mcpEntry = () => ({ command: process.execPath, args: [path.join(__dirname, 'mcp-bridge.js')], env: { ELECTRON_RUN_AS_NODE: '1' } });
+// Adds StudyNotes to Claude Desktop's list of MCP servers (a backup of each file is kept).
+handle('mcp:installClaude', async () => {
+  const written = [];
+  for (const file of claudeConfigFiles()) {
+    let cfg = {};
+    const old = await fsp.readFile(file, 'utf8').catch(() => null);
+    if (old !== null && old.trim()) {
+      try { cfg = JSON.parse(old); } catch { throw new Error('Claude Desktop\'s settings file could not be read, so it was left unchanged: ' + file); }
+      await fsp.writeFile(file + '.bak', old);
+    }
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new Error('Unexpected content in ' + file);
+    cfg.mcpServers = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
+    cfg.mcpServers.studynotes = mcpEntry();
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    await atomicWrite(file, JSON.stringify(cfg, null, 2));
+    written.push(file);
   }
-  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new Error('Unexpected content in ' + file);
-  cfg.mcpServers = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
-  cfg.mcpServers.studynotes = { command: process.execPath, args: [path.join(__dirname, 'mcp-bridge.js')], env: { ELECTRON_RUN_AS_NODE: '1' } };
-  await fsp.mkdir(path.dirname(file), { recursive: true });
-  await atomicWrite(file, JSON.stringify(cfg, null, 2));
-  return { file };
+  return { file: written[0], files: written };
+});
+// Checks the connection the way Claude Desktop uses it: the config entry, and
+// the bridge started from it answering initialize and tools/list.
+handle('mcp:test', async () => {
+  const files = [];
+  let entry = null;
+  for (const file of claudeConfigFiles()) {
+    const txt = await fsp.readFile(file, 'utf8').catch(() => null);
+    let e = null;
+    try { e = txt ? (JSON.parse(txt).mcpServers || {}).studynotes || null : null; } catch { /* unreadable */ }
+    files.push({ file, exists: txt !== null, connected: !!e });
+    entry ||= e;
+  }
+  const out = { files, pipe: !!mcp, bridge: null, tools: 0, error: null };
+  const use = entry || mcpEntry();
+  await new Promise((resolve) => {
+    const { spawn } = require('child_process');
+    let p;
+    try { p = spawn(use.command, use.args || [], { env: { ...process.env, ...(use.env || {}), STUDYNOTES_MCP_NO_LAUNCH: '1', STUDYNOTES_MCP_WAIT: '1500' }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }); } catch (err) { out.error = err.message; resolve(); return; }
+    let buf = '', err = '';
+    const done = () => { clearTimeout(timer); try { p.kill(); } catch { /* gone */ } resolve(); };
+    const timer = setTimeout(() => { out.error = out.error || 'The bridge did not answer within 10 s.' + (err ? ' ' + err.slice(0, 300) : ''); done(); }, 10000);
+    p.on('error', (e) => { out.error = 'The bridge could not be started: ' + e.message; done(); });
+    p.stderr.on('data', (c) => { err += c; });
+    p.stdout.on('data', (c) => {
+      buf += c;
+      for (let i; (i = buf.indexOf('\n')) >= 0;) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let m; try { m = JSON.parse(line); } catch { continue; }
+        if (m.id === 1) {
+          if (m.error) { out.bridge = 'started'; out.error = m.error.message; done(); return; }
+          out.bridge = 'ok';
+          p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n');
+        } else if (m.id === 2) { out.tools = (m.result && m.result.tools || []).length; done(); return; }
+      }
+    });
+    p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'studynotes-test', version: '1' } } }) + '\n');
+  });
+  return out;
 });
 app.on('will-quit', () => { if (mcp) mcp.stop().catch(() => {}); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));
