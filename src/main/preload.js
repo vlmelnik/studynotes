@@ -90,6 +90,10 @@ contextBridge.exposeInMainWorld('api', {
   // Chat with the user's Claude Code (subscription), events per message id
   chatInfo: invoke('chat:info'),
   chatSend: invoke('chat:send'),
+  chatList: invoke('chat:list'),
+  chatGet: invoke('chat:get'),
+  chatSave: invoke('chat:save'),
+  chatDelete: invoke('chat:delete'),
   chatStop: invoke('chat:stop'),
   onChatEvent: (fn) => ipcRenderer.on('chat:event', (_e, id, ev) => fn(id, ev)),
   // Claude (MCP): the app answers tool calls that come in over the local pipe

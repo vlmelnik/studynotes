@@ -168,7 +168,11 @@ Each method registers a listener and returns nothing. They are plain
 | `aiModels` | `{ provider, baseUrl }` | `[model ids]` | The models the provider offers. | needed |
 | `aiRequest` | `{ provider, model, baseUrl, monthlyLimit }`, `{ system, user }` | `{ text, model, usage }` | One AI request (counted and logged without content). | needed |
 | `chatInfo` | `path` (optional) | `{ found, path, version }` | Finds the user's Claude Code (`claude`). | desktop-only |
-| `chatSend` | `id`, `{ prompt, sessionId, model, bin }` | `true` | One chat turn with Claude Code; events come through `onChatEvent`. | desktop-only |
+| `chatSend` | `id`, `{ prompt, sessionId, model, bin, attachments? }` | `true` | One chat turn with Claude Code; events come through `onChatEvent`. `attachments`: `[{ name, mime, data }]` (base64 pictures or PDFs, sent as content blocks). | desktop-only |
+| `chatList` | – | `[{ id, title, notebook, updated, sessionId }]` | All saved chats, newest first (userData/chats.json, up to 300). | needed |
+| `chatGet` | `id` | chat or `null` | One saved chat with its messages. | needed |
+| `chatSave` | `chat` | – | Saves a chat (`id`, `title`, `notebook`, `sessionId`, `messages`). | needed |
+| `chatDelete` | `id` | – | Deletes a saved chat. | needed |
 | `chatStop` | `id` | nothing | Stops a running chat turn. | desktop-only |
 | `onChatEvent` | `fn(id, { kind: 'session' \| 'text' \| 'tool' \| 'done', … })` | nothing | Events of a chat turn. | desktop-only |
 | `mcpSetEnabled` | `on` | `true` when the pipe for Claude is open | Opens or closes the local connection for Claude (MCP), see `src/main/mcp-server.js`. | desktop-only |

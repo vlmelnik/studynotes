@@ -18,6 +18,14 @@ plugins for Obsidian (Claudian):
    (or enter its path). Choose a model if you like.
 3. In a notebook press **Ctrl+J**: the chat opens on the right.
 
+In the chat you can attach pictures, PDFs and text files (paper clip, drag and
+drop, Ctrl+V); pictures and PDFs go to Claude as attachments, text files as
+part of the message, and Claude can place an attached picture in the notes
+(`write_notes` image block). All chats are kept in `chats.json` in the app's
+user data folder (history button); the gear button has the model, your own
+instructions and the notebook's notes style. Drag the panel's left edge to
+make it wider.
+
 StudyNotes starts `claude -p` with `--strict-mcp-config` and only the
 StudyNotes tools allowed; built-in tools (files, shell, web) are blocked.
 Whether this use of a subscription is covered by Anthropic's terms is not

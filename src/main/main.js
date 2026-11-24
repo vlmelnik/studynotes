@@ -787,7 +787,7 @@ handle('mcp:test', async () => {
 });
 // Chat with the user's own Claude Code (src/main/claude-code.js): it reaches the
 // notebooks only through the MCP bridge above.
-const { ClaudeCodeChat } = require('./claude-code');
+const { ClaudeCodeChat, ChatHistory } = require('./claude-code');
 let chat = null;
 const chatInst = () => (chat ||= new ClaudeCodeChat({ dir: path.join(app.getPath('userData'), 'claude-chat'), bridge: mcpEntry }));
 handle('chat:info', (bin) => chatInst().info(bin));
@@ -798,6 +798,11 @@ handle('chat:send', (id, req) => {
   return true;
 });
 handle('chat:stop', (id) => chatInst().stop(id));
+const chatHistory = new ChatHistory(path.join(app.getPath('userData'), 'chats.json'));
+handle('chat:list', () => chatHistory.list());
+handle('chat:get', (id) => chatHistory.get(id));
+handle('chat:save', (c) => chatHistory.save(c));
+handle('chat:delete', (id) => chatHistory.remove(id));
 app.on('will-quit', () => { if (chat) for (const id of [...chat.runs.keys()]) chat.stop(id); });
 app.on('will-quit', () => { if (mcp) mcp.stop().catch(() => {}); });
 handle('app:notices', () => fsp.readFile(path.join(ASSETS, 'THIRD-PARTY-NOTICES.txt'), 'utf8').catch(() => ''));

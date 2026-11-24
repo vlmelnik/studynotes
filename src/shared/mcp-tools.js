@@ -81,8 +81,9 @@ const TOOLS = [
         blocks: {
           type: 'array', maxItems: 400,
           description: 'In order. { "type": "heading", "level": 1|2|3, "text": "…" } | { "type": "paragraph", "text": "…" } | { "type": "list", "items": ["…"], "ordered": false } | '
-            + '{ "type": "formula", "latex": "U_2 > U_1" } (a formula on its own line) | { "type": "box", "title": "Remember", "text": "…" } (a framed key statement) | { "type": "pagebreak" }',
-          items: { type: 'object', required: ['type'], properties: { type: { type: 'string', enum: ['heading', 'paragraph', 'list', 'formula', 'box', 'pagebreak'] }, level: { type: 'integer' }, text: { type: 'string' }, title: { type: 'string' }, latex: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, ordered: { type: 'boolean' } } },
+            + '{ "type": "formula", "latex": "U_2 > U_1" } (a formula on its own line) | { "type": "box", "title": "Remember", "text": "…" } (a framed key statement) | '
+            + '{ "type": "image", "ref": "a1", "caption": "…", "size": "small"|"medium"|"full" } (a picture the user attached in the StudyNotes chat, by its id) | { "type": "pagebreak" }',
+          items: { type: 'object', required: ['type'], properties: { type: { type: 'string', enum: ['heading', 'paragraph', 'list', 'formula', 'box', 'image', 'pagebreak'] }, level: { type: 'integer' }, text: { type: 'string' }, title: { type: 'string' }, latex: { type: 'string' }, ref: { type: 'string' }, caption: { type: 'string' }, size: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, ordered: { type: 'boolean' } } },
         },
       },
     },
