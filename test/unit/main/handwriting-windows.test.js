@@ -36,7 +36,7 @@ test('Windows recognizer, live: one PowerShell answers several requests quickly'
   const c = await hw.recognizeLive([L]);
   const ms = Date.now() - t0;
   hw.stopLive();
-  console.log('live:', JSON.stringify([a.text, b.text, c.text]), ms, 'ms for two');
+  console.log('live:', JSON.stringify([a.text, b.text, c.text]), ms, 'ms for two', JSON.stringify(a.info));
   const names = await hw.recognizers();
   if (names.length) assert.ok(a.text.length > 0 && b.text.length > 0);
   assert.ok(ms < 4000, `${ms} ms`);

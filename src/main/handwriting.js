@@ -159,6 +159,7 @@ function startServer(recognizer) {
       const my = ++id;
       const r = await new Promise((res) => { waiting.set(my, res); ps.stdin.write(JSON.stringify({ id: my, strokes: strokes.map((p) => ({ p })) }) + '\n'); });
       if (!r.ok) throw new Error(r.error || 'Handwriting recognition failed');
+      this.last = r;
       return r.words || [];
     },
     stop() { try { ps.stdin.end(); ps.kill(); } catch { /* gone */ } },
@@ -179,7 +180,7 @@ async function recognizeLive(strokes, recognizer = '') {
     const alts = Array.isArray(w.alts) ? w.alts : [w.alts];
     return { text: String(alts[0] || ''), alts, x: w.x / SCALE, y: w.y / SCALE, w: w.w / SCALE, h: w.h / SCALE };
   }).filter((w) => w.text);
-  return { words, text: wordsToText(words) };
+  return { words, text: wordsToText(words), info: server && server.last ? { ...server.last.info, raw: JSON.stringify(server.last).slice(0, 400) } : null };
 }
 
 function stopLive() { if (server) { server.stop(); server = null; } }
