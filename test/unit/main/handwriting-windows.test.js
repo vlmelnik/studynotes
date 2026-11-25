@@ -21,5 +21,7 @@ test('Windows recognizer: lists recognizers and reads one stroke and several str
   assert.strictEqual(two.info.strokes, 2, JSON.stringify(two.info));
   assert.strictEqual(two.info.installed, names.length);
   if (names.some((n) => /English/.test(n))) assert.ok(/^l[o0]$/i.test(two.text), `an English recognizer reads "Lo": ${JSON.stringify(two)}`);
+  // with a recognizer installed, "LO" written big must give some letters
+  if (names.length) assert.ok(two.text.length > 0, JSON.stringify(two.info));
   console.log('recognizers:', names.join(', ') || '(none)', '| result:', JSON.stringify(two.text), JSON.stringify(two.info));
 });

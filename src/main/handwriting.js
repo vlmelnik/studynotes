@@ -74,7 +74,7 @@ async function recognize(strokes, recognizer = '') {
     const r = await runPowerShell({ mode: 'recognize', recognizer, strokes: scaled.map((p) => ({ p })) });
     // (PowerShell may wrap the list once more: flatten)
     raw = [].concat(r.words || []).flat(3).filter((w) => w && typeof w === 'object');
-    info = { ...(r.info || {}), installed: (r.recognizers || []).length };
+    info = { ...(r.info || {}), installed: (r.recognizers || []).length, raw: JSON.stringify(raw).slice(0, 300) };
   }
   const words = raw.map((w) => {
     const alts = [].concat(w.alts == null ? [] : w.alts).flat(2).map(String);
