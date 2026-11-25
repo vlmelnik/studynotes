@@ -68,12 +68,18 @@ async function recognizers() {
  */
 async function recognize(strokes, recognizer = '') {
   const scaled = strokes.map(thin);
-  const raw = fake() ? fakeRecognize(scaled) : (await runPowerShell({ mode: 'recognize', recognizer, strokes: scaled })).words || [];
+  let info = null, raw;
+  if (fake()) raw = fakeRecognize(scaled);
+  else {
+    const r = await runPowerShell({ mode: 'recognize', recognizer, strokes: scaled.map((p) => ({ p })) });
+    raw = r.words || [];
+    info = { ...(r.info || {}), installed: (r.recognizers || []).length };
+  }
   const words = raw.map((w) => {
     const alts = Array.isArray(w.alts) ? w.alts : [w.alts];
     return { text: String(alts[0] || ''), alts, x: w.x / SCALE, y: w.y / SCALE, w: w.w / SCALE, h: w.h / SCALE };
   }).filter((w) => w.text);
-  return { words, text: wordsToText(words) };
+  return { words, text: wordsToText(words), info };
 }
 
 // Scaled points, thinned to ~1 px apart (the recognizer doesn't need the
@@ -100,7 +106,7 @@ async function recognizeMany(groups, recognizer = '') {
   const scaled = groups.map((g) => g.map(thin));
   const raw = fake()
     ? scaled.map((g) => fakeRecognize(g))
-    : ((await runPowerShell({ mode: 'batch', recognizer, groups: scaled }, 30000 + groups.length * 15000)).results || []).map((r) => (r && r.words) || []);
+    : ((await runPowerShell({ mode: 'batch', recognizer, groups: scaled.map((g) => g.map((p) => ({ p }))) }, 30000 + groups.length * 15000)).results || []).map((r) => (r && r.words) || []);
   return groups.map((_, k) => {
     const words = (raw[k] || []).map((w) => {
       const alts = Array.isArray(w.alts) ? w.alts : [w.alts];

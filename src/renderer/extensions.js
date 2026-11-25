@@ -68,20 +68,21 @@ class ExtensionHost {
     }
     if (this.entries.has(id)) this.setEnabled(id, false);
     this.entries.set(id, { def, enabled: false, error: null, off: [] });
-    const on = enabled ?? this.store().enabled[id] ?? !!def.defaultEnabled;
+    // core: part of the app (always on, no switch); hidden: not listed under Add-ons
+    const on = def.core ? true : enabled ?? this.store().enabled[id] ?? !!def.defaultEnabled;
     if (on) this.activate(id);
     return true;
   }
 
   list() {
-    return [...this.entries.values()].map((e) => ({ id: e.def.id, name: e.def.name || e.def.id, description: e.def.description || '', icon: typeof e.def.icon === 'string' ? e.def.icon : null, enabled: e.enabled, error: e.error }));
+    return [...this.entries.values()].map((e) => ({ id: e.def.id, name: e.def.name || e.def.id, description: e.def.description || '', icon: typeof e.def.icon === 'string' ? e.def.icon : null, enabled: e.enabled, error: e.error, core: !!e.def.core, hidden: !!e.def.hidden }));
   }
 
   isEnabled(id) { const e = this.entries.get(id); return !!(e && e.enabled); }
 
   setEnabled(id, on) {
     const e = this.entries.get(id);
-    if (!e) return;
+    if (!e || (e.def.core && !on && e.enabled)) return;
     const s = this.store();
     s.enabled[id] = !!on;
     this.save();

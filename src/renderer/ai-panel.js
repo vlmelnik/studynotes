@@ -100,7 +100,7 @@ export class AiPanel {
     const body = h('div', { class: 'ai-body' });
     // a panel on the right like search: the page gets narrower, nothing is covered
     this.el = h('aside', { class: 'ai-panel', role: 'complementary', 'aria-label': tr('AI assistant') },
-      h('div', { class: 'ai-head' }, h('span', { class: 'ai-head-ic', html: icon('ai', 18) }), h('b', {}, 'AI assistant'),
+      h('div', { class: 'ai-head' }, h('span', { class: 'ai-head-ic', html: icon('ai', 18) }), h('b', { class: 'ai-title' }, 'AI assistant'),
         h('small', { class: 'ai-model no-i18n' }, !this.ready() ? '' : this.isChat ? `Claude Code${this.cfg.ccModel ? ' · ' + this.cfg.ccModel : ''}` : `${this.cfg.provider} · ${this.cfg.model}`),
         ...(this.isChat && this.ready() ? this.chatHeadButtons() : []),
         h('button', { class: 'icon-btn', title: 'Close (Ctrl+J)', html: icon('close', 16), onclick: () => this.close() })),
@@ -177,7 +177,7 @@ export class AiPanel {
   chatHeadButtons() {
     const b = (ic, title, view) => h('button', { class: `icon-btn${this.chatView === view ? ' active' : ''}`, title, 'aria-label': title, html: icon(ic, 16), onclick: () => this.showChatView(this.chatView === view ? 'chat' : view) });
     return [b('history', 'Chat history', 'history'), b('settings', 'Chat settings', 'settings'),
-      h('button', { class: 'btn ghost small', title: 'Start a new conversation', onclick: () => { this.stopChat(); this.chat = newChat(); this.files = []; this.chatView = 'chat'; this.open(); } }, 'New chat')];
+      h('button', { class: 'icon-btn', title: 'New chat', 'aria-label': 'New chat', html: icon('plus', 16), onclick: () => { this.stopChat(); this.chat = newChat(); this.files = []; this.chatView = 'chat'; this.open(); } })];
   }
 
   showChatView(view) {

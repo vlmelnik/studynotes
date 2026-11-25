@@ -141,6 +141,11 @@ const { launch } = require('./harness/app');
   check('night preset on dark paper: white text, lavender formula, yellow note', p4[0] === '#f4f4f4' && p4[1] === '#c9a7f5' && p4[2] === '#f5f57a', JSON.stringify(p4));
   if (process.env.SHOT) { await win.waitForTimeout(600); await win.screenshot({ path: path.join(process.env.SHOT, 'preset-night.png') }); }
 
+  await win.locator('.editor').getByRole('button', { name: 'More', exact: true }).click();
+  await win.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+  check('⋯ menu → Settings opens the settings', await win.locator('.settings-tab', { hasText: 'Add-ons' }).isVisible());
+  await win.getByRole('button', { name: 'Done', exact: true }).click();
+
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   finish(errors);

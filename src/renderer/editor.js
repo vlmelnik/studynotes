@@ -796,7 +796,14 @@ export class Editor {
     }
     busy.remove();
     if (this.destroyed) return;
-    if (!res.text) { toast('No handwriting recognised'); return; }
+    if (!res.text) {
+      // say why, so it can be fixed: no recognizer, strokes not read, or nothing recognised
+      const i = res.info;
+      const why = !i ? '' : !i.installed ? ' – Windows has no handwriting recognizer: Settings → Time & language → Language → (language) → Options → Handwriting.'
+        : ` (Windows: ${i.strokes || 0} strokes read, ${i.results || 0} words, recognizer ${i.recognizer}). Try "Read with Google" in Settings → Add-ons → Handwriting to text.`;
+      toast('No handwriting recognised' + why, { timeout: why ? 9000 : 3000 });
+      return;
+    }
     if (mode === 'copy') {
       await navigator.clipboard.writeText(res.text).catch(() => {});
       toast(h('span', {}, 'Copied: ', h('i', { class: 'no-i18n' }, res.text.length > 60 ? res.text.slice(0, 60) + '…' : res.text)), { timeout: 3000 });
@@ -1195,6 +1202,7 @@ export class Editor {
       ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex }), this),
       'sep',
       { label: 'Keyboard shortcuts', icon: 'more', onClick: () => this.app.showShortcuts() },
+      { label: 'Settings', icon: 'settings', onClick: () => this.app.showSettings() },
     ], 0, 0, anchor);
   }
 
@@ -1476,7 +1484,7 @@ export class Editor {
   // Scanned pages (no printed text) are recognised by themselves, like any
   // PDF reader does it: search, selection and the highlighter just work.
   async autoOcr(src = 'main') {
-    if (this.isBoard || this._ocrRun || this.destroyed || this.settings.autoOcr === false) return;
+    if (this.isBoard || this._ocrRun || this.destroyed) return;
     const idx = this.doc.textIndexes && this.doc.textIndexes[src];
     const ocr = this.doc.ocr && this.doc.ocr[src];
     if (!idx) return;

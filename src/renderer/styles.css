@@ -813,9 +813,11 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 
 /* AI assistant panel (1.9): docked on the right like search */
 .ai-panel { position: relative; width: 360px; flex: none; background: var(--panel); color: var(--text); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; font-size: 14px; }
-.ai-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.ai-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.ai-head > * { flex: none; }
+.ai-head .ai-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
 .ai-head-ic { display: inline-flex; color: var(--accent); }
-.ai-head .ai-model { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.ai-head .ai-model { flex: 1 1 0; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .ai-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 18px; }
 .ai-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 36px 10px; }
 .ai-empty b { font-size: 16px; }
@@ -936,3 +938,4 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 .ns-fields { display: grid; grid-template-columns: max-content minmax(0, 260px); gap: 8px 14px; align-items: center; }
 .chat-file-busy { display: inline-flex; align-items: center; gap: 4px; color: var(--muted, #888); }
 .ns-presets { gap: 6px; }
+.ai-panel { box-sizing: border-box; max-width: 100%; }

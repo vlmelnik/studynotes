@@ -751,7 +751,7 @@ class App {
       card({
         name: 'Searchable scans', icon: 'search',
         about: 'Scanned PDFs become searchable by themselves when they are opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.',
-        state: ocrState, on: s.autoOcr !== false, setOn: (v) => { s.autoOcr = v; this.saveSettings(); },
+        state: ocrState,
         settings: [h('small', { class: 'hint' }, 'By hand: Search → "Recognize text (OCR)".')],
       }),
       card({
@@ -769,10 +769,10 @@ class App {
         settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
       }),
       // extensions (src/extensions, docs/EXTENSIONS.md): off until switched on
-      ...extensions.list().map((x) => card({
+      ...extensions.list().filter((x) => !x.hidden).map((x) => card({
         name: x.name, about: x.description, icon: x.icon || 'star',
-        state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, 'Extension'),
-        on: x.enabled, setOn: (v) => extensions.setEnabled(x.id, v),
+        state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, x.core ? 'Built in' : 'Extension'),
+        on: x.enabled, setOn: x.core ? undefined : (v) => extensions.setEnabled(x.id, v),
       })));
     root.append(list);
     return root;

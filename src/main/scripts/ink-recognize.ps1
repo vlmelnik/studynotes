@@ -16,6 +16,8 @@ try {
   # loading it as a WinRT type fails on many PCs ("Unable to find type")
   try { $null = [Windows.Foundation.Point] } catch { $null = [Windows.Foundation.Point, Windows.Foundation, ContentType = WindowsRuntime] }
   $req = [Console]::In.ReadToEnd() | ConvertFrom-Json
+  $script:added = 0
+  $script:results = 0
   $rc = New-Object Windows.UI.Input.Inking.InkRecognizerContainer
   $names = @($rc.GetRecognizers() | ForEach-Object { $_.Name })
   if ($req.mode -eq 'list') { Out-Json @{ ok = $true; recognizers = $names }; exit 0 }
@@ -38,7 +40,9 @@ try {
 
   function Read-Strokes($strokes) {
     $container = New-Object Windows.UI.Input.Inking.InkStrokeContainer
-    foreach ($s in $strokes) {
+    foreach ($o in $strokes) {
+      # strokes come as { p: [x,y,...] }: a bare [[...]] with one stroke would be unrolled by ConvertFrom-Json
+      $s = if ($o.p) { $o.p } else { $o }
       $n = $s.Count
       if ($n -lt 2) { continue }
       $pts = New-Object 'System.Collections.Generic.List[Windows.Foundation.Point]' ($n / 2 + 1)
@@ -47,9 +51,11 @@ try {
       $container.AddStroke($builder.CreateStroke($pts))
     }
     $words = New-Object 'System.Collections.Generic.List[object]'
+    $script:added += $container.GetStrokes().Count
     if ($container.GetStrokes().Count -eq 0) { return ,$words }
     $task = $asTask.Invoke($null, @($rc.RecognizeAsync($container, [Windows.UI.Input.Inking.InkRecognitionTarget]::All)))
     $null = $task.Wait(-1)
+    $script:results += @($task.Result).Count
     foreach ($res in $task.Result) {
       $b = $res.BoundingRect
       $words.Add(@{ alts = @($res.GetTextCandidates()); x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height })
@@ -62,7 +68,9 @@ try {
     foreach ($g in $req.groups) { $results.Add(@{ words = @(Read-Strokes $g) }) }
     Out-Json @{ ok = $true; results = @($results) }
   } else {
-    Out-Json @{ ok = $true; recognizers = $names; words = @(Read-Strokes $req.strokes) }
+    $w = @(Read-Strokes $req.strokes)
+    $used = try { $rc.GetRecognizers() | Where-Object { $_.Name -eq $req.recognizer } | Select-Object -First 1 | ForEach-Object { $_.Name } } catch { '' }
+    Out-Json @{ ok = $true; recognizers = $names; words = $w; info = @{ strokes = $script:added; results = $script:results; recognizer = $(if ($used) { $used } else { 'default' }) } }
   }
 } catch {
   Out-Json @{ ok = $false; error = $_.Exception.Message }

@@ -47,6 +47,11 @@ const { launch, root } = require('./harness/app');
   await win.mouse.move(g.x + 3, g.y + 200); await win.mouse.down(); await win.mouse.move(g.x - 150, g.y + 200, { steps: 5 }); await win.mouse.up();
   const w1 = await win.locator('.ai-panel').evaluate((el) => el.offsetWidth);
   check('the chat panel is wider after dragging its edge, and remembers it', w1 > w0 + 100 && await ed(() => window.__app.settings.aiPanelWidth) === w1, JSON.stringify({ w0, w1 }));
+  // the header fits when the panel is at its narrowest
+  const g2 = await win.locator('.ai-resize').boundingBox();
+  await win.mouse.move(g2.x + 3, g2.y + 200); await win.mouse.down(); await win.mouse.move(g2.x + 600, g2.y + 200, { steps: 4 }); await win.mouse.up();
+  const fit = await win.evaluate(() => { const x = document.querySelector('.ai-head button[title^="Close"]').getBoundingClientRect(); const p = document.querySelector('.ai-panel').getBoundingClientRect(); return { right: x.right, pr: p.right, w: window.innerWidth, pw: p.width }; });
+  check('narrowest panel: the close button stays inside the panel and the window', fit.right <= fit.pr - 2 && fit.pr <= fit.w && fit.pw <= 290, JSON.stringify(fit));
   await win.locator('.chat-input').fill('What notebooks do I have? Write something on this page.');
   await win.locator('.chat-input').press('Enter');
   await win.locator('.chat-msg.assistant .chat-text').first().waitFor({ timeout: 20000 });
@@ -65,7 +70,7 @@ const { launch, root } = require('./harness/app');
   check('the next message resumes the same conversation', /resumed sess-1/.test(await win.locator('.chat-msg.assistant').last().textContent()));
 
   // ---- not signed in ----
-  await win.locator('.ai-head button', { hasText: 'New chat' }).click();
+  await win.getByRole('button', { name: 'New chat', exact: true }).click();
   await win.locator('.chat-input').fill('not signed in test');
   await win.locator('.chat-input').press('Enter');
   await win.locator('.chat-msg.assistant .ai-error').waitFor({ timeout: 20000 });
@@ -84,7 +89,7 @@ const { launch, root } = require('./harness/app');
   })();
   fs.writeFileSync(path.join(tmp, 'circuit.png'), png);
   fs.writeFileSync(path.join(tmp, 'notes.txt'), 'hello from a file');
-  await win.locator('.ai-head button', { hasText: 'New chat' }).click();
+  await win.getByRole('button', { name: 'New chat', exact: true }).click();
   await win.locator('.ai-panel input[type=file]').setInputFiles([path.join(tmp, 'circuit.png'), pdf, path.join(tmp, 'notes.txt')]);
   await win.waitForFunction(() => document.querySelectorAll('.chat-files .chat-file').length === 3);
   check('attached files show as chips', (await win.locator('.chat-files .chat-file').allTextContents()).join('|').includes('circuit.png'));
@@ -135,7 +140,7 @@ const { launch, root } = require('./harness/app');
   })();
   fs.writeFileSync(path.join(tmp, 'lecture.wav'), wav);
   await win.getByRole('button', { name: 'Chat settings' }).click(); // back to the chat
-  await win.locator('.ai-head button', { hasText: 'New chat' }).click();
+  await win.getByRole('button', { name: 'New chat', exact: true }).click();
   await win.locator('.ai-panel input[type=file]').setInputFiles(path.join(tmp, 'lecture.wav'));
   await win.locator('.toast', { hasText: 'Speech to text' }).waitFor();
   check('a recording without the add-on: says where to switch it on', (await win.locator('.chat-files .chat-file').count()) === 0);
