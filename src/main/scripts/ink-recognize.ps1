@@ -43,7 +43,7 @@ try {
     foreach ($o in $strokes) {
       # strokes come as { p: [x,y,...] }: a bare [[...]] with one stroke would be unrolled by ConvertFrom-Json
       $s = if ($o.p) { $o.p } else { $o }
-      $n = $s.Count
+      $n = @($s).Length
       if ($n -lt 2) { continue }
       $pts = New-Object 'System.Collections.Generic.List[Windows.Foundation.Point]' ($n / 2 + 1)
       for ($i = 0; $i + 1 -lt $n; $i += 2) { $pts.Add((New-Pt $s[$i] $s[$i + 1])) }
@@ -51,11 +51,13 @@ try {
       $container.AddStroke($builder.CreateStroke($pts))
     }
     $words = New-Object 'System.Collections.Generic.List[object]'
-    $script:added += $container.GetStrokes().Count
-    if ($container.GetStrokes().Count -eq 0) { return ,$words }
+    # (WinRT lists: count with @(...).Length – .Count can enumerate the items)
+    $nStrokes = @($container.GetStrokes()).Length
+    $script:added = [int]$script:added + $nStrokes
+    if ($nStrokes -eq 0) { return ,$words }
     $task = $asTask.Invoke($null, @($rc.RecognizeAsync($container, [Windows.UI.Input.Inking.InkRecognitionTarget]::All)))
     $null = $task.Wait(-1)
-    $script:results += @($task.Result).Count
+    $script:results = [int]$script:results + @($task.Result).Length
     foreach ($res in $task.Result) {
       $b = $res.BoundingRect
       $words.Add(@{ alts = @($res.GetTextCandidates()); x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height })

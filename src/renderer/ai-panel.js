@@ -11,6 +11,7 @@ import { uid } from './tools.js';
 import { escHtml } from '../shared/util.js';
 import { notesStyleEditor } from './notes-style.js';
 import { speechSettings, transcribe } from './speech.js';
+import { micButton } from './dictation.js';
 
 const newChat = () => ({ id: 'ch' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), title: '', sessionId: null, messages: [] });
 
@@ -210,6 +211,11 @@ export class AiPanel {
     body.append(this.msgs, this.fileChips,
       h('div', { class: 'chat-compose' }, picker,
         h('button', { class: 'icon-btn chat-attach', title: 'Attach files', 'aria-label': 'Attach files', html: icon('attach', 18), onclick: () => picker.click() }),
+        micButton(this.editor.app, { className: 'icon-btn chat-mic', target: () => ({ insert: (text) => {
+          const v = this.input.value;
+          this.input.value = v + (v && !/\s$/.test(v) ? ' ' : '') + text;
+          this.input.scrollTop = this.input.scrollHeight;
+        } }) }),
         this.input, this.sendBtn));
     this.drawFiles();
     this.msgs.scrollTop = this.msgs.scrollHeight;

@@ -22,6 +22,8 @@ import { makeTextEditable } from './scan-edit.js';
 import { fitToolbar } from '../shared/toolbar-fit.js';
 import { extensions } from './extensions.js';
 import { AiPanel } from './ai-panel.js';
+import { micButton } from './dictation.js';
+import { pageRows, contentBottom } from '../shared/notes-layout.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
 const UNDO_LIMIT = 300;
@@ -549,7 +551,8 @@ export class Editor {
     this.aiPanel = new AiPanel(this);
     this.undoBtn = iconButton('undo', 'Undo (Ctrl+Z)', () => this.undo(), 'bar-btn');
     this.redoBtn = iconButton('redo', 'Redo (Ctrl+Y)', () => this.redo(), 'bar-btn');
-    const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, ...this.toolButtons.slice(7));
+    this.micBtn = micButton(this.app, { className: 'tool-btn', size: 24, target: () => this.dictationTarget() });
+    const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, this.micBtn, ...this.toolButtons.slice(7));
 
     // Buttons on the right that move into "More" when the window is narrow
     // (fitToolbar): lowest rank first. menu: the same action as a menu entry.
@@ -775,6 +778,43 @@ export class Editor {
   makePageEditable(index, area = null) {
     this.tools.clearSelection();
     return makeTextEditable(this, index, area);
+  }
+
+  // Where dictated text goes: the text box being edited, or a new one on the
+  // next free line of the current page.
+  dictationTarget() {
+    let ref = null;
+    const box = document.activeElement && document.activeElement.closest && document.activeElement.closest('.textbox[contenteditable="true"]');
+    if (box && this.textEdit) ref = { pageId: this.textEdit.pageId, id: this.textEdit.id };
+    else {
+      const index = this.viewer.currentIndex;
+      const page = this.pages[index];
+      const ts = this.toolState.text;
+      const fs = ts.size || 14;
+      const g = pageRows(page, fs);
+      const bottom = contentBottom(this.pageData(page.id));
+      const rowY = g.rows.find((y) => y - fs * 1.1 > bottom + 2);
+      const at = rowY ? { x: g.left, y: rowY - fs * 0.9 } : this.tools.basePastePoint();
+      const t = { id: uid(), x: round2(at.x), y: round2(at.y), w: round2(fs), aw: true, fs, c: this.toolState.pen.color, text: '', ff: ts.ff || 'carlito', b: false, i: false, u: false };
+      this.addText(page.id, t);
+      ref = { pageId: page.id, id: t.id };
+    }
+    return {
+      insert: (text) => {
+        const find = () => { const v = this.viewer.viewById(ref.pageId); return v && v.el.querySelector(`.textbox[data-id="${ref.id}"]`); };
+        let el = find();
+        if (!el) return;
+        if (el.getAttribute('contenteditable') !== 'true' || document.activeElement !== el) {
+          if (!this.textEdit || this.textEdit.id !== ref.id) this.editText(ref.pageId, ref.id);
+          el = find();
+          el.focus();
+          const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        }
+        const before = el.textContent || '';
+        document.execCommand('insertText', false, (before && !/\s$/.test(before) ? ' ' : '') + text);
+      },
+    };
   }
 
   // Handwriting of the selection → text (copy, or replace by a text box).

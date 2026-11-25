@@ -939,3 +939,10 @@ pre.notices { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size
 .chat-file-busy { display: inline-flex; align-items: center; gap: 4px; color: var(--muted, #888); }
 .ns-presets { gap: 6px; }
 .ai-panel { box-sizing: border-box; max-width: 100%; }
+
+/* dictation */
+.mic-btn.on { color: #fff !important; background: #e0332f !important; box-shadow: 0 0 0 calc(2px + var(--level, 0) * 6px) rgba(224, 51, 47, .35); transition: box-shadow .12s; }
+.mic-btn.on.busy { background: #c2410c !important; }
+.chat-mic { align-self: flex-end; }
+.mic-pop { position: fixed; z-index: 1000; display: flex; flex-direction: column; gap: 8px; min-width: 260px; max-width: 320px; padding: 12px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.25); }
+.mic-pop .tk-label { min-width: 70px; }
