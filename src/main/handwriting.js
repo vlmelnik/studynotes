@@ -160,7 +160,8 @@ function startServer(recognizer) {
       const r = await new Promise((res) => { waiting.set(my, res); ps.stdin.write(JSON.stringify({ id: my, strokes: strokes.map((p) => ({ p })) }) + '\n'); });
       if (!r.ok) throw new Error(r.error || 'Handwriting recognition failed');
       this.last = r;
-      return r.words || [];
+      // (PowerShell may wrap the list once more: [[…]])
+      return (r.words || []).flat();
     },
     stop() { try { ps.stdin.end(); ps.kill(); } catch { /* gone */ } },
   };
