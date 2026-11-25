@@ -20,5 +20,6 @@ test('Windows recognizer: lists recognizers and reads one stroke and several str
   const two = await hw.recognize([L, O]);
   assert.strictEqual(two.info.strokes, 2, JSON.stringify(two.info));
   assert.strictEqual(two.info.installed, names.length);
+  if (names.some((n) => /English/.test(n))) assert.ok(/^l[o0]$/i.test(two.text), `an English recognizer reads "Lo": ${JSON.stringify(two)}`);
   console.log('recognizers:', names.join(', ') || '(none)', '| result:', JSON.stringify(two.text), JSON.stringify(two.info));
 });
