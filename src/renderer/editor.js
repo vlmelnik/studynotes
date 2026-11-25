@@ -25,6 +25,8 @@ import { AiPanel } from './ai-panel.js';
 import { micButton } from './dictation.js';
 import { stickerPanel } from './stickers.js';
 import { LiveInk } from './live-ink.js';
+import { readerMenuItems } from './reader-dock.js';
+import { startStudy } from './study.js';
 import { pageRows, contentBottom } from '../shared/notes-layout.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
@@ -400,9 +402,12 @@ export class Editor {
       if (idx >= 0 && (idx < first || idx > last)) this.viewer.scrollToPage(idx);
     } else if (e.kind === 'plan') {
       // page data first when pages come in, the page list first when they go
-      if (which === 'after') { for (const it of e.items) this.doc.pages[it.pageId] = it.after; this.applyPages(e.after); }
-      else { this.applyPages(e.before); for (const it of e.items) this.doc.pages[it.pageId] = it.before; }
-      for (const it of e.items) { this.markDirty(it.pageId); this.viewer.invalidateInk(it.pageId); const v = this.viewer.viewById(it.pageId); if (v) this.renderObjects(v); this.sidebar.invalidate(it.pageId); }
+      // a page the plan added has no "before": it is gone again, not empty data
+      const set = (it, d) => { if (d) this.doc.pages[it.pageId] = d; else delete this.doc.pages[it.pageId]; };
+      if (which === 'after') { for (const it of e.items) set(it, it.after); this.applyPages(e.after); }
+      else { this.applyPages(e.before); for (const it of e.items) set(it, it.before); }
+      this.markDirty(null);
+      for (const it of e.items) { if (!this.doc.pages[it.pageId]) continue; this.markDirty(it.pageId); this.viewer.invalidateInk(it.pageId); const v = this.viewer.viewById(it.pageId); if (v) this.renderObjects(v); this.sidebar.invalidate(it.pageId); }
     } else if (e.kind === 'pages') {
       if (e.sources) this.doc.nb.sources = e.sources[which];
       if (e.data) { this.doc.pages[e.data.pageId] = e.data[which]; this.dirtyPages.add(e.data.pageId); }
@@ -1249,6 +1254,9 @@ export class Editor {
       ...(this.isBoard ? [] : [{ label: s.liveInk ? 'Handwriting becomes text: on' : 'Handwriting becomes text: off', icon: 'pen', checked: !!s.liveInk, onClick: () => this.liveInk.toggle(), shortcut: 'Ctrl+Shift+H' }]),
       { label: document.documentElement.dataset.theme === 'dark' ? 'Dark mode: on' : 'Dark mode: off', icon: 'moon', checked: document.documentElement.dataset.theme === 'dark', onClick: () => this.app.toggleDark() },
       ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex }), this),
+      'sep',
+      ...(this.isBoard ? [] : readerMenuItems(this)),
+      ...(this.isBoard ? [] : [{ label: 'Study session…', icon: 'ai', onClick: () => startStudy(this) }]),
       'sep',
       { label: 'Keyboard shortcuts', icon: 'more', onClick: () => this.app.showShortcuts() },
       { label: 'Settings', icon: 'settings', onClick: () => this.app.showSettings() },

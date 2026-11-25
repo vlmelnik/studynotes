@@ -32,7 +32,14 @@ process.stdin.on('end', async () => {
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
   const text = (r) => (r.result ? r.result.content.map((c) => c.text).join('\n') : r.error.message);
   const flags = `flags: strict=${args.includes('--strict-mcp-config')} blocked=${(opt('--disallowedTools') || '').includes('Bash')} allowed=${(opt('--allowedTools') || '').split(',').length} prompt-file=${fs.existsSync(opt('--append-system-prompt-file') || '')}`;
-  if (/transcript test/.test(prompt)) {
+  if (/Study session "/.test(prompt)) {
+    const lines = (prompt.split('Material (')[1] || '').split('\n').filter((l) => /^\[/.test(l));
+    const ref = (/^\[(a\d+)\] \((?:region|page|window)/m.exec(prompt) || [])[1];
+    const path = (/path: ([^)]+)\)/.exec(prompt) || [])[1];
+    const page = Number((/at page (\d+)/.exec(prompt) || [])[1]);
+    const r = text(await rpc('tools/call', { name: 'write_notes', arguments: { notebook: path, page, place: 'next_page', blocks: [{ type: 'heading', level: 1, text: 'Study notes' }, { type: 'image', ref, caption: 'from the session' }] } }));
+    out({ type: 'assistant', message: { content: [{ type: 'text', text: `study: images=${content.filter((b) => b.type === 'image').length} lines=${lines.length} wishes=${/The user's wishes: focus on formulas/.test(prompt)} ${r}` }] } });
+  } else if (/transcript test/.test(prompt)) {
     out({ type: 'assistant', message: { content: [{ type: 'text', text: 'got: ' + ((/fake transcript: [^\n]+/.exec(prompt) || ['nothing'])[0]) }] } });
   } else if (/picture test/.test(prompt)) {
     const seen = `seen: images=${content.filter((b) => b.type === 'image').length} documents=${content.filter((b) => b.type === 'document').length} text-file=${/--- notes\.txt ---\nhello from a file/.test(prompt)}`;

@@ -179,6 +179,29 @@ Each method registers a listener and returns nothing. They are plain
 | `stickerPack` | link or name | `{ name, title, stickers: [{ file, emoji, kind, w, h }] }` | A Telegram sticker pack through the StudyNotes worker; kept in userData/stickers. | needed |
 | `stickerPicture` | file id | `{ bytes, mime }` | One sticker picture (kept after the first download). | needed |
 | `stickerRemove` | name | – | Forgets a kept pack. | needed |
+| `readerOpen` | `{ rel, file, title, page, zoom }` | `true` | Opens the floating reference reader (always on top). | desktop-only |
+| `readerDock` | state, ratio, side | `true` | Glides the floating reader into the main window; the main window gets `reader:docked`. | desktop-only |
+| `readerUndock` | state, `{ x, y, width, height }` | `true` | From the docked pane out into its own window, gliding to its last place. | desktop-only |
+| `readerClose` | – | – | Closes the floating reader. | desktop-only |
+| `onReaderState` | `(state)` | – | The floating reader gets what to show. | desktop-only |
+| `onReaderDocked` | `(state)` | – | The main window shows the docked reader. | desktop-only |
+| `onReaderUndocked` | `()` | – | The docked reader left the main window. | desktop-only |
+| `studyStart` | `{ topic, prompt, rel }` | state | Starts a study session: bar on top, clipboard collected, Ctrl+Shift+1/2/3. | desktop-only |
+| `studyState` | – | state or `null` | The running session. | desktop-only |
+| `studyCapture` | kind: region, page or window | – | Captures from the screen. | desktop-only |
+| `studyWindows` | – | `[{ id, name, thumb }]` | Open windows to capture. | desktop-only |
+| `studyTakeWindow` | id | – | Captures one window. | desktop-only |
+| `studyNote` | text | – | Adds an own note. | desktop-only |
+| `studyRemove` | id | – | Removes an item. | desktop-only |
+| `studyFinish` | `cancel` | state | Ends the session; the main window gets `study:done`. | desktop-only |
+| `studyImage` | hash | PNG bytes | A captured picture. | desktop-only |
+| `studyBarHeight` | px | – | Resizes the session bar. | desktop-only |
+| `snipDone` | rect or `null` | – | The region drawn on the screenshot. | desktop-only |
+| `onStudyState` | `(state)` | – | The bar gets the session. | desktop-only |
+| `onStudyPickWindow` | `()` | – | The window shortcut was pressed. | desktop-only |
+| `onStudyError` | `(message)` | – | A capture failed. | desktop-only |
+| `onStudyDone` | `(state)` | – | The session came back to the main window. | desktop-only |
+| `onSnipImage` | `(dataUrl)` | – | The screenshot to draw a region on. | desktop-only |
 | `chatList` | – | `[{ id, title, notebook, updated, sessionId }]` | All saved chats, newest first (userData/chats.json, up to 300). | needed |
 | `chatGet` | `id` | chat or `null` | One saved chat with its messages. | needed |
 | `chatSave` | `chat` | – | Saves a chat (`id`, `title`, `notebook`, `sessionId`, `messages`). | needed |

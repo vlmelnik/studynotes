@@ -11,6 +11,9 @@ import { extensions } from './extensions.js';
 import { McpTools } from './mcp.js';
 import { notesStyleEditor } from './notes-style.js';
 import { speechSettings, withProgress } from './speech.js';
+import { bootSub } from './subwindow.js';
+import { ReaderDock } from './reader-dock.js';
+import { reviewStudy } from './study.js';
 
 class App {
   async init() {
@@ -34,6 +37,8 @@ class App {
     extensions.init(this); // after settings and saveSettings exist
     // Claude (MCP): the pipe opens only when the user switched it on
     this.mcp = new McpTools(this);
+    this.reader = new ReaderDock(this);
+    window.api.onStudyDone((st) => reviewStudy(this, st));
     if (this.settings.mcp) this.mcp.setEnabled(true).catch((err) => { this.settings.mcp = false; toast(String(err.message || err), { error: true }); });
     this.opening = new Set(); // rels being loaded right now
     this.active = null; // null = library
@@ -177,6 +182,7 @@ class App {
     this.active = editor;
     this.main.replaceChildren(editor.el);
     editor.activate();
+    this.reader.attach();
     this.updateTabs();
   }
 
@@ -1029,7 +1035,8 @@ class App {
   }
 }
 
-new App().init().catch((err) => {
+const sub = /^#sub=(\w+)/.exec(location.hash);
+(sub ? bootSub(sub[1]) : new App().init()).catch((err) => {
   console.error(err);
   document.body.textContent = 'StudyNotes failed to start: ' + err.message;
 });
