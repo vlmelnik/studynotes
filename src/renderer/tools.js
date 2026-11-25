@@ -1503,12 +1503,12 @@ export class Tools {
     strokes = strokes.map(regroup); texts = texts.map(regroup); items = items.map(regroup);
     const page = this.viewer.pages[index];
     const before = this.editor.pageData(page.id);
-    // What was pasted / inserted last lies on top of everything (front layer).
-    // Text goes on top of everything; pictures / tables on top of the other
-    // pictures but still below the ink (so you can write on them).
+    // What was pasted / inserted last lies on top of everything – pictures,
+    // stickers and text alike (front layer, above the ink; "Send backward"
+    // puts a picture under the ink to write on it).
     const topOf = (layer) => stacked(before, layer).reduce((m, e) => Math.max(m, e.key), 0);
-    let zf = Math.max(0, Math.ceil(topOf('f'))) + 1, zb = Math.max(0, Math.ceil(topOf('b'))) + 1;
-    items = items.map((o) => ({ ...o, lay: 'b', z: zb++ }));
+    let zf = Math.max(0, Math.ceil(topOf('f'))) + 1;
+    items = items.map((o) => ({ ...o, lay: 'f', z: zf++ }));
     texts = texts.map((o) => ({ ...o, lay: 'f', z: zf++ }));
     const after = { ...before, strokes: before.strokes.concat(strokes), texts: before.texts.concat(texts), items: before.items.concat(items) };
     this.clearSelection(true);

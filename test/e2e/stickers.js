@@ -39,34 +39,42 @@ function png(w, hh, rgb) {
   await ed(async () => { const r = await window.api.createNotebook('', { title: 'Stickers', paper: 'lined', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForFunction(() => window.__app.active?.viewer?.views.size > 0);
 
-  const openPicker = async () => {
-    await win.locator('.editor').getByRole('button', { name: /Insert picture, table/ }).click();
-    await win.getByRole('menuitem', { name: 'Telegram stickers…' }).click();
-    await win.locator('.stk-body').waitFor();
-  };
-  await openPicker();
-  await win.getByLabel('Sticker pack link').fill('t.me/addstickers/Nope');
-  await win.getByRole('button', { name: 'Add pack' }).click();
-  await win.waitForFunction(() => /No sticker pack/.test(document.querySelector('.stk-body .hint').textContent));
+  const panel = win.locator('.stk-panel');
+  await win.locator('.tb-right [aria-label="Stickers"]').click();
+  await panel.waitFor();
+  check('the sticker button on the bar opens the panel (empty: says how to add)', /Add a Telegram sticker pack/.test(await panel.textContent()));
+  await panel.getByRole('button', { name: 'Add a sticker pack' }).click();
+  await panel.getByLabel('Sticker pack link').fill('t.me/addstickers/Nope');
+  await panel.getByRole('button', { name: 'Add pack' }).click();
+  await win.waitForFunction(() => /No sticker pack/.test(document.querySelector('.stk-add .hint').textContent));
   check('an unknown pack is explained', true);
-  await win.getByLabel('Sticker pack link').fill('https://t.me/addstickers/Study_Cats');
-  await win.getByLabel('Sticker pack link').press('Enter');
-  await win.waitForFunction(() => document.querySelectorAll('.stk img[src^="blob:"]').length === 3);
-  check('the pack is added: title, three stickers, a tab', /Study cats · 3/.test(await win.locator('.stk-body .hint').first().textContent()) && await win.locator('.stk-tab', { hasText: 'Study_Cats' }).count() === 1);
-  await win.locator('.stk').first().click();
-  await win.locator('.stk-body').waitFor({ state: 'detached' });
-  const items = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).items.map((it) => ({ type: it.type, w: it.w, h: it.h, src: it.src })); });
-  check('a sticker on the page at sticker size, stored in the notebook', items.length === 1 && items[0].type === 'img' && Math.abs(items[0].w - 110) < 0.5 && /\.png$/.test(items[0].src), JSON.stringify(items));
+  await panel.getByLabel('Sticker pack link').fill('https://t.me/addstickers/Study_Cats');
+  await panel.getByLabel('Sticker pack link').press('Enter');
+  await win.waitForFunction(() => document.querySelectorAll('.stk-grid .stk img[src^="blob:"]').length === 3 && document.querySelector('.stk-tab img[src^="blob:"]'));
+  check('the pack: its section with three stickers, its first sticker as the icon in the strip', await panel.locator('.stk-sec-title', { hasText: 'Study cats' }).count() === 1 && await panel.locator('.stk-tab[data-key="Study_Cats"] img').count() === 1);
+  // a picture already on the page, then the sticker: the sticker lies on top
+  await ed(() => { const e = window.__app.active; const d = e.pageData(e.pages[0].id); e.commit(e.pages[0].id, d, { ...d, texts: [{ id: 'old', x: 200, y: 300, w: 200, fs: 14, text: 'older text', z: 5, lay: 'f' }] }); });
+  await panel.locator('.stk').first().click();
+  await panel.waitFor({ state: 'detached' });
+  const items = await ed(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).items.map((it) => ({ type: it.type, w: it.w, h: it.h, src: it.src, lay: it.lay, z: it.z })); });
+  check('a sticker on the page at sticker size, on top of what was there', items.length === 1 && items[0].type === 'img' && Math.abs(items[0].w - 110) < 0.5 && /\.png$/.test(items[0].src) && items[0].lay === 'f' && items[0].z > 5, JSON.stringify(items));
   check('the bot token is never in the requests', !seen.some((u) => /bot\d+:/.test(u)));
 
-  // kept on this computer: works without the service
+  // kept on this computer: works without the service; recently used first
   server.close();
-  await openPicker();
-  await win.waitForFunction(() => document.querySelectorAll('.stk img[src^="blob:"]').length === 3, null, { timeout: 10000 });
-  check('the pack is remembered and works offline', await ed(() => window.__app.settings.stickerPacks.join()) === 'Study_Cats');
-  await win.getByRole('button', { name: 'Remove pack Study_Cats' }).click();
-  check('a pack can be removed', await ed(() => window.__app.settings.stickerPacks.length === 0));
-  await win.getByRole('button', { name: 'Close', exact: true }).click();
+  await win.locator('.tb-right [aria-label="Stickers"]').click();
+  await win.waitForFunction(() => document.querySelectorAll('.stk-grid .stk img[src^="blob:"]').length === 4, null, { timeout: 10000 });
+  check('"Recently used" comes first, the pack works offline', (await panel.locator('.stk-sec-title').first().textContent()) === 'Recently used' && await panel.locator('.stk-tab[data-key="recent"]').count() === 1);
+  const sl0 = await panel.locator('.stk-strip').evaluate((el) => el.scrollLeft);
+  await panel.locator('.stk-strip').evaluate((el) => { el.style.width = '60px'; });
+  await panel.locator('.stk-strip').hover();
+  await win.mouse.wheel(0, 200);
+  check('the wheel scrolls the strip sideways', (await panel.locator('.stk-strip').evaluate((el) => el.scrollLeft)) > sl0);
+  await panel.locator('.stk-tab[data-key="Study_Cats"]').click({ button: 'right' });
+  await win.locator('.modal').getByRole('button', { name: 'Remove' }).click();
+  await win.waitForFunction(() => !document.querySelector('.stk-tab[data-key="Study_Cats"]'));
+  check('right-click removes a pack (and its recent stickers)', await ed(() => window.__app.settings.stickerPacks.length === 0 && window.__app.settings.stickerRecent.length === 0));
+  await win.keyboard.press('Escape');
 
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });

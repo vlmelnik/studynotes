@@ -481,6 +481,7 @@ const patterns = [
   [/^New e-mail opened in (.+) with the PDF attached$/, 'Открыто новое письмо в $1 с вложенным PDF'],
   [/^Alignment: (.+)$/, 'Выравнивание: $1'],
   [/^Downloading… (\d+)%$/, 'Скачивание… $1%'],
+  [/^Remove the sticker pack "(.+)"\?$/, 'Удалить набор стикеров «$1»?'],
   [/^No handwriting recognised – Windows has no handwriting recognizer: (.+)$/, 'Рукописный текст не распознан – в Windows нет распознавателя рукописного ввода: Параметры → Время и язык → Язык → (язык) → Параметры → Рукописный ввод.'],
   [/^No handwriting recognised \(Windows: (\d+) strokes read, (\d+) words, recognizer (.+)\)\. Try "Read with Google" (.+)$/, 'Рукописный текст не распознан (Windows: прочитано штрихов $1, слов $2, распознаватель $3). Попробуйте «Google» в Настройки → Дополнения → Рукопись в текст.'],
   [/^(\d+) MB in the StudyNotes data folder\.$/, '$1 МБ в папке данных StudyNotes.'],

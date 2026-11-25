@@ -250,8 +250,8 @@ function layoutNotes(blocks, start, ctx) {
   const nextPage = () => {
     // the next page if it is empty enough, else a new page after this one
     const nxt = pages[index + 1];
-    if (nxt && nxt.kind !== 'board' && nxt.kind !== 'pdf' && contentBottom(dataOf(nxt)) < nxt.h * 0.6) { enter(index + 1); const r0 = blocked.indexOf(false); if (r0 >= 0 && avail(r0) > 2) return; }
-    const np = ctx.newPage(page);
+    if (nxt && nxt.kind !== 'board' && nxt.kind !== 'pdf' && nxt.paper !== 'cover' && contentBottom(dataOf(nxt)) < nxt.h * 0.6) { enter(index + 1); const r0 = blocked.indexOf(false); if (r0 >= 0 && avail(r0) > 2) return; }
+    const np = ctx.newPage(page.paper === 'cover' ? { ...page, paper: 'lined' } : page);
     pages.splice(index + 1, 0, np);
     after.set(np.id, { strokes: [], texts: [], items: [] });
     before.set(np.id, null);
@@ -259,8 +259,8 @@ function layoutNotes(blocks, start, ctx) {
     enter(index + 1);
   };
   enter(start, ctx.place === 'free' ? 'free' : 'below');
-  // never over a PDF page or onto a board: the notes go on a new page after it
-  if (ctx.place === 'next' || ctx.fresh || page.kind === 'pdf' || page.kind === 'board') nextPage();
+  // never over a PDF page, onto a board or onto the title page (cover): the notes go on a page after it
+  if (ctx.place === 'next' || ctx.fresh || page.kind === 'pdf' || page.kind === 'board' || page.paper === 'cover') nextPage();
 
   const placed = [];
   const problems = [];
@@ -374,6 +374,7 @@ function pageSummary(page, data) {
   const parts = [];
   if (page.kind === 'pdf') parts.push('PDF page');
   else if (page.kind === 'board') parts.push('board');
+  else if (page.paper === 'cover') parts.push('title page (cover) – no notes here');
   else parts.push(`${page.paper || 'blank'} paper${page.pc === 'dark' ? ', dark' : ''}`);
   const strokes = (d.strokes || []).length, pics = (d.items || []).filter((it) => it.type === 'img').length;
   const shapes = (d.items || []).filter((it) => it.type !== 'img' && it.type !== 'table').length;
