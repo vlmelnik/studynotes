@@ -132,6 +132,7 @@ function createWindow() {
   if (config.maximized && !TEST_MODE) win.maximize();
   win.once('ready-to-show', () => win.show());
   win.loadURL('sn://app/index.html');
+  win.on('closed', () => { try { reader.close(); } catch { /* not created */ } });
 
   // Block navigation away from the app; open external links in the browser.
   win.webContents.on('will-navigate', (e, url) => {
@@ -817,6 +818,28 @@ const stickersInst = () => (stickerStore ||= new Stickers(path.join(app.getPath(
 handle('stickers:pack', (link) => stickersInst().pack(link));
 handle('stickers:picture', (id) => stickersInst().picture(id));
 handle('stickers:remove', (name) => stickersInst().remove(name));
+// The reference reader (src/main/reader-window.js): floating ⇄ docked
+const { ReaderWindow } = require('./reader-window');
+const reader = new ReaderWindow({ main: () => win, config: () => config, save: () => saveConfig(), test: TEST_MODE });
+handle('reader:open', (state) => reader.open(state));
+handle('reader:dock', (state, ratio, side) => reader.dock(state, ratio, side));
+handle('reader:undock', (state, rect) => reader.undock(state, rect));
+handle('reader:close', () => reader.close());
+// Study session (src/main/study.js): a bar over every app, captures, the material back at the end
+const { Study } = require('./study');
+const study = new Study({ main: () => win, dir: path.join(app.getPath('userData'), 'study'), test: TEST_MODE });
+handle('study:start', (opts) => study.start(opts));
+handle('study:state', () => study.state());
+handle('study:capture', (kind) => study.capture(kind));
+handle('study:windows', () => study.windows());
+handle('study:takeWindow', (id) => study.takeWindow(id));
+handle('study:note', (text) => study.note(text));
+handle('study:remove', (id) => study.remove(id));
+handle('study:finish', (cancel) => study.finish(!!cancel));
+handle('study:image', (hash) => study.image(hash));
+ipcMain.handle('study:barHeight', (e, h) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) { const b = w.getBounds(); w.setBounds({ ...b, height: Math.max(56, Math.min(420, Math.round(h))) }); } });
+handle('snip:done', (rect) => { if (study.snipDone) study.snipDone(rect); });
+app.on('will-quit', () => { if (study.active) study.finish(true); });
 const chatHistory = new ChatHistory(path.join(app.getPath('userData'), 'chats.json'));
 handle('chat:list', () => chatHistory.list());
 handle('chat:get', (id) => chatHistory.get(id));

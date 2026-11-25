@@ -8,6 +8,7 @@ import { imageRects } from '../shared/pdf-images.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = 'sn://app/pdf.worker.min.mjs';
 export const Util = pdfjs.Util;
+export const TextLayer = pdfjs.TextLayer;
 
 // ---------- render queue ----------
 const MAX_CONCURRENT = 2;

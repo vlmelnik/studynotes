@@ -23,8 +23,10 @@ import { fitToolbar } from '../shared/toolbar-fit.js';
 import { extensions } from './extensions.js';
 import { AiPanel } from './ai-panel.js';
 import { micButton } from './dictation.js';
-import { stickerPicker } from './stickers.js';
+import { stickerPanel } from './stickers.js';
 import { LiveInk } from './live-ink.js';
+import { readerMenuItems } from './reader-dock.js';
+import { startStudy } from './study.js';
 import { pageRows, contentBottom } from '../shared/notes-layout.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
@@ -400,9 +402,12 @@ export class Editor {
       if (idx >= 0 && (idx < first || idx > last)) this.viewer.scrollToPage(idx);
     } else if (e.kind === 'plan') {
       // page data first when pages come in, the page list first when they go
-      if (which === 'after') { for (const it of e.items) this.doc.pages[it.pageId] = it.after; this.applyPages(e.after); }
-      else { this.applyPages(e.before); for (const it of e.items) this.doc.pages[it.pageId] = it.before; }
-      for (const it of e.items) { this.markDirty(it.pageId); this.viewer.invalidateInk(it.pageId); const v = this.viewer.viewById(it.pageId); if (v) this.renderObjects(v); this.sidebar.invalidate(it.pageId); }
+      // a page the plan added has no "before": it is gone again, not empty data
+      const set = (it, d) => { if (d) this.doc.pages[it.pageId] = d; else delete this.doc.pages[it.pageId]; };
+      if (which === 'after') { for (const it of e.items) set(it, it.after); this.applyPages(e.after); }
+      else { this.applyPages(e.before); for (const it of e.items) set(it, it.before); }
+      this.markDirty(null);
+      for (const it of e.items) { if (!this.doc.pages[it.pageId]) continue; this.markDirty(it.pageId); this.viewer.invalidateInk(it.pageId); const v = this.viewer.viewById(it.pageId); if (v) this.renderObjects(v); this.sidebar.invalidate(it.pageId); }
     } else if (e.kind === 'pages') {
       if (e.sources) this.doc.nb.sources = e.sources[which];
       if (e.data) { this.doc.pages[e.data.pageId] = e.data[which]; this.dirtyPages.add(e.data.pageId); }
@@ -555,7 +560,8 @@ export class Editor {
     this.liveInk = new LiveInk(this);
     this.undoBtn = iconButton('undo', 'Undo (Ctrl+Z)', () => this.undo(), 'bar-btn');
     this.redoBtn = iconButton('redo', 'Redo (Ctrl+Y)', () => this.redo(), 'bar-btn');
-    this.micBtn = micButton(this.app, { className: 'bar-btn', size: 20, target: () => this.dictationTarget() });
+    this.micBtn = micButton(this.app, { className: 'icon-btn bar-btn', size: 20, target: () => this.dictationTarget() });
+    this.stickerBtn = iconButton('sticker', 'Stickers', () => stickerPanel(this, this.stickerBtn), 'bar-btn');
     const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, ...this.toolButtons.slice(7));
 
     // Buttons on the right that move into "More" when the window is narrow
@@ -570,6 +576,7 @@ export class Editor {
         iconButton('addPage', 'Add a page after this one (same style)', () => this.addPageSameStyle(), 'bar-btn'),
         h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })), 4, 'Add a page…', 'addPage', () => this.addPageMenu(this.moreBtn)),
       this.isBoard ? null : opt(this.micBtn, 1.5, 'Dictate', 'mic', () => this.micBtn.click()),
+      opt(this.stickerBtn, 1.4, 'Stickers', 'sticker', () => stickerPanel(this, this.moreBtn || this.stickerBtn)),
       this.isBoard ? null : opt(iconButton('ai', 'AI assistant (Ctrl+J)', () => this.aiPanel.toggle(), 'bar-btn ai-btn'), 7, 'AI assistant', 'ai', () => this.aiPanel.toggle()),
       this.isBoard ? null : opt(iconButton('scanText', 'Make the text of this page editable (scans, photos, PDFs)', () => this.makePageEditable(this.viewer.currentIndex), 'bar-btn scan-text'), 2, 'Make text editable', 'scanText', () => this.makePageEditable(this.viewer.currentIndex)),
       this.isBoard ? null : opt(iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'), 1, 'Delete this page', 'pageDelete', () => this.deletePage(this.viewer.currentIndex)),
@@ -1124,7 +1131,7 @@ export class Editor {
       { label: 'Picture…', icon: 'image', onClick: () => this.insertPictureDialog() },
       { label: 'Table…', icon: 'table', onClick: () => this.insertTableDialog() },
       { label: 'Signature…', icon: 'signature', onClick: () => signatureDialog(this) },
-      { label: 'Telegram stickers…', icon: 'telegram', onClick: () => stickerPicker(this) },
+      { label: 'Telegram stickers…', icon: 'sticker', onClick: () => stickerPanel(this, this.stickerBtn.isConnected && this.stickerBtn.offsetParent ? this.stickerBtn : anchor) },
       { label: 'Text box', icon: 'text', onClick: () => this.setTool('text') },
       { label: 'Pages from a PDF…', icon: 'importPdf', onClick: () => this.insertPdfDialog() },
       'sep',
@@ -1247,6 +1254,9 @@ export class Editor {
       ...(this.isBoard ? [] : [{ label: s.liveInk ? 'Handwriting becomes text: on' : 'Handwriting becomes text: off', icon: 'pen', checked: !!s.liveInk, onClick: () => this.liveInk.toggle(), shortcut: 'Ctrl+Shift+H' }]),
       { label: document.documentElement.dataset.theme === 'dark' ? 'Dark mode: on' : 'Dark mode: off', icon: 'moon', checked: document.documentElement.dataset.theme === 'dark', onClick: () => this.app.toggleDark() },
       ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex }), this),
+      'sep',
+      ...(this.isBoard ? [] : readerMenuItems(this)),
+      ...(this.isBoard ? [] : [{ label: 'Study session…', icon: 'ai', onClick: () => startStudy(this) }]),
       'sep',
       { label: 'Keyboard shortcuts', icon: 'more', onClick: () => this.app.showShortcuts() },
       { label: 'Settings', icon: 'settings', onClick: () => this.app.showSettings() },

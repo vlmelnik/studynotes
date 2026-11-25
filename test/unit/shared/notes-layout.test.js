@@ -202,3 +202,13 @@ test('presets: night pastel on dark paper; own changes on top of a preset', () =
   assert.strictEqual(s.dark.note, '#ffff00');
   assert.strictEqual(L.notesStyle({ preset: 'night' }, { preset: 'classic' }).ff, 'inter');
 });
+
+test('the title page (cover) is never written on: notes go to the page after it', () => {
+  const cover = { id: 'c', kind: 'paper', paper: 'cover', ...A4 };
+  const r = L.layoutNotes([{ type: 'paragraph', text: 'notes' }], 0, ctx([cover, lined('a')], {}, { place: 'free' }));
+  assert.ok(!r.changes.some((c) => c.pageId === 'c' && c.after.texts.length));
+  assert.strictEqual(r.placed[0].index, 1);
+  const alone = L.layoutNotes([{ type: 'paragraph', text: 'notes' }], 0, ctx([cover], {}, { place: 'below' }));
+  assert.strictEqual(alone.pages[1].paper, 'lined');
+  assert.ok(/title page/.test(L.pageSummary(cover, {})));
+});

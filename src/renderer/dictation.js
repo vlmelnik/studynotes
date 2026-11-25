@@ -112,7 +112,7 @@ async function setup(app, anchor, force = false) {
     const line = h('small', { class: 'hint wrap' }, st.downloaded ? '' : tr('The model is downloaded once, then dictation works offline.'));
     const model = h('select', { class: 'rec-select', 'aria-label': 'Speech model' }, ...Object.entries(info.models).map(([k, l]) => h('option', { value: k, selected: sp.model === k }, l)));
     const lang = h('select', { class: 'rec-select', 'aria-label': 'Language of the recordings' }, ...info.languages.map((l) => h('option', { value: l, selected: sp.language === l }, NAMES[l] || l)));
-    const go = h('button', { class: 'btn primary small' }, st.downloaded ? 'Start' : 'Download and start');
+    const go = h('button', { class: 'btn btn-primary small' }, st.downloaded ? 'Start' : 'Download and start');
     const close = (v) => { pop.remove(); document.removeEventListener('mousedown', outside, true); resolve(v); };
     const outside = (e) => { if (!pop.contains(e.target)) close(false); };
     go.onclick = async () => {

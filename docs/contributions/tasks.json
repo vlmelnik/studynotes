@@ -26,19 +26,6 @@
     "chain": "performance"
   },
   {
-    "id": "sn-reader-layout",
-    "title": "Reference reader: floating window bounds and split view layout",
-    "instructions": "StudyNotes gets a reference reader: a PDF opens in a small always-on-top window to move, resize, scroll and zoom while notes are taken elsewhere, or is docked into the main window as one side of a split view (swappable); more documents come by drag and drop or from a folder. Windows, drawing and files are wired in by the maintainer. (1) Add src/shared/overlay-bounds.js. (1) clampBounds(b, displays, opts): b = { x, y, width, height }, displays = [{ x, y, width, height }] (work areas of all monitors), opts = { minWidth: 240, minHeight: 180, keepVisible: 80 }. Enforce the minimum size, then move the window so at least keepVisible px of its title strip (the top 32 px) lie on some display; if none, put it on the display nearest its centre (used after a monitor is unplugged). (2) snapBounds(b, display, threshold = 16): edges within threshold of a display edge snap to it. (3) resizeKeepingAspect(b, edge, dx, dy, aspect | null): resize from an edge or corner ('n','s','e','w','ne','nw','se','sw'); with an aspect (page width / height) the size follows it, the opposite edge or corner stays fixed. (4) defaultBounds(display, aspect): a quarter-width window at the right edge, vertically centred, aspect kept. Tests in test/unit/shared/overlay-bounds.test.js: two monitors side by side, unplugged monitor, snapping, every resize edge with and without aspect, minimum size. (2) Add src/shared/split-layout.js. State: { mode: 'single'|'split', ratio: 0.5, notesSide: 'left'|'right' }. Functions: layout(state, width, { minPane: 280, divider: 6 }) -> { notes: { x, width }, reader: { x, width } | null, divider: { x, width } | null }: in split mode the reader takes (1 - ratio) of the width on the side opposite the notes; the ratio is clamped so both panes keep minPane; below 2 * minPane + divider the reader is hidden (reader null, notes full width, state unchanged). dragDivider(state, width, x) -> new state with the ratio for a divider dragged to x (clamped as above). swap(state) flips notesSide. paneAt(layoutResult, x) -> 'notes' | 'reader' | 'divider' (wheel scrolling and Ctrl+wheel zoom go to the pane under the pointer). Pure, no mutation. Tests in test/unit/shared/split-layout.test.js: both sides, clamping, narrow window, swap round trip, paneAt at the borders. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-READER.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/overlay-bounds.js",
-      "src/shared/split-layout.js",
-      "test/unit/shared/overlay-bounds.test.js",
-      "test/unit/shared/split-layout.test.js",
-      "docs/NOTES-READER.md"
-    ],
-    "chain": "reader"
-  },
-  {
     "id": "sn-blocks-ragged",
     "title": "Recognition: keep ragged columns apart in block detection",
     "instructions": "Goal: 'Make text editable' never joins two text columns into one line. docs/FINDING-blocks-more-tests.md shows findBlocks merging two columns with ragged inner edges (gaps of 39, 83 and 52 px between lines at the same height) into one block. First add that fixture as a failing test, then fix findBlocks: find column gaps as vertical white channels that run through several consecutive text lines (allow the channel to shift by a little per line), and cut blocks along them before the smear joins them; a single wide word gap inside one line must not split a paragraph. Keep every existing test in scan-blocks.test.js green, and add tests for: a justified two-column page, a table with borders, one paragraph with one wide gap, a heading over two columns, and a 3-column page. Keep findBlocks within 1.5x of its current time on a 1500 x 2000 page (add a timing test with a generous limit). The maintainer re-runs the OCR references afterwards. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-RECOGNITION.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
@@ -71,21 +58,6 @@
     "context": [
       "docs/EXTENSIONS.md",
       "src/extensions/rich-paste/index.js"
-    ]
-  },
-  {
-    "id": "sn-capture-session",
-    "title": "Study session: model of captured items, grouping and order",
-    "instructions": "Goal (ROADMAP-1.9 'Study session'): during a learning session the user captures regions, windows, whole pages, selected text and notes from any app; at the end the AI files them into the notebook. Read docs/ROADMAP-1.9.md (section named in the goal) first. Add src/shared/capture-session.js: (1) newSession({ id, topic, prompt, startedAt }) and addItem(session, item) -> new session; item { id, kind: region|window|page|text|note, at, app, title, url?, text?, image?: { hash, width, height } } with url taken from the title for known browsers ('… - Google Chrome', '… — Mozilla Firefox', '… - Microsoft Edge') only when it looks like an address, else null; duplicate images (same hash) or same text within 10 minutes are merged (count kept). (2) groups(session) -> items grouped by source (same app + same page title/url) in time order, with a short label. (3) forPrompt(session, { budget }) -> { text, refs }: text lists every item as '[c7] (window, Chrome: <title>) <text or 'picture WxH'>', refs maps ids for sn-ai-edit-plan's addImage. (4) summary(session) -> counts per kind, duration. Pure: images are only referenced by hash. Tests: each kind, merging, grouping across interleaved apps, budget cut, title parsing for the three browsers and a non-browser. Rules: CommonJS with 'use strict'. src/shared stays pure: only ./ requires, no window, document, navigator, process or Buffer (test/unit/shared/shared-guard.test.js). Do not mutate inputs. Comments say why. Neutral English examples only. Tests with node:test and node:assert: every rule above plus edge cases and one realistic end-to-end case of the whole module. Run node --test on your test file and npm test if you can, and say exactly which ran. Append a dated section to docs/NOTES-STUDY.md (create it with a '# Notes: ...' title if missing, keep earlier sections): what you did, decisions and why, open points, what the maintainer needs to wire it into the app. Report: what changed, tests actually run, open points, Next.",
-    "paths": [
-      "src/shared/capture-session.js",
-      "test/unit/shared/capture-session.test.js",
-      "docs/NOTES-STUDY.md"
-    ],
-    "chain": "study",
-    "context": [
-      "docs/ROADMAP-1.9.md",
-      "src/shared/hash.js"
     ]
   },
   {

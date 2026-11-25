@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+**Reference reader and study sessions**
+- Reference reader (⋯ menu → Reader): a PDF in a small window that stays on top of everything – scroll, zoom, select and copy text – or next to the notes in the main window. "Dock" glides the window into the main window, "Undock" glides it back out; drag the divider, swap the sides.
+- Study session (⋯ menu → Study session…): StudyNotes steps aside and a small bar stays on top of every app. Everything you copy with Ctrl+C (text or pictures) is collected, plus regions (Ctrl+Shift+1), windows (Ctrl+Shift+2), the whole screen (Ctrl+Shift+3) and your own notes. Finish: check what was collected, then Claude writes nicely laid-out notes from it (pictures included) – or StudyNotes lays it out without AI.
+
 **Dictation, stickers, handwriting**
 - Handwriting becomes text, live (⋯ menu or Ctrl+Shift+H, off by default): write anywhere and as big as you like; after a short pause the words move into the text line on the ruled paper, in the notes style. One Ctrl+Z brings the ink back.
 - A microphone in the toolbar and in the AI chat: talk, and the text appears phrase by phrase (Whisper on this computer, with punctuation). The first click asks for the language and the model.
-- Telegram stickers (Insert → Telegram stickers…): paste a pack link once, then pick stickers for the page; packs are kept on this computer.
+- Telegram stickers: a sticker button on the bar opens a panel like Telegram's – recently used stickers, every pack, and a strip of pack icons to jump between them (the wheel scrolls it sideways); "+" adds a pack by its link, right-click removes one. Packs are kept on this computer.
+- What you insert last (sticker, picture, text) lies on top of what was there.
+- Claude never writes notes on a title page (cover).
 - Handwriting to text with the Windows recognizer works again (the recognised words were lost on the way); if nothing is recognised, the message says why.
 - Settings is at the bottom of the ⋯ menu. Formulas and formatting on paste and Searchable scans are built in; Dark pages is in the ⋯ menu only.
 - The AI panel header fits at any width.

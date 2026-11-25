@@ -16,10 +16,10 @@ Wiring that needs the editor, the viewer or the main process stays with the main
 | Dark view for PDF pages | done: `sn-ext-dark-view` | page pass and ink filter in the host | e2e: page dark, ink readable, stored colours and export unchanged |
 | Several PDFs and their outlines in one notebook | `sn-outline-full` | panel tree, drag to move, PDF bookmarks in export | reopen and export: entries point to the right page |
 | Faster, smoother scrolling and zoom | `sn-zoom-motion`, `sn-render-scheduler` | wire into `viewer.js`; measure frame times first | 100-page PDF: frame times while scrolling, Ctrl+wheel and pinch; soak test |
-| Floating reference reader and split view | `sn-reader-layout`, `sn-reader-documents` | always-on-top window, split view, drop and pick files | move, resize, dock, swap; wheel goes to the pane under the pointer |
+| Floating reference reader and split view (built 2026-11-25: floating window, dock/undock, divider, swap) | `sn-reader-documents` | always-on-top window, split view, drop and pick files | move, resize, dock, swap; wheel goes to the pane under the pointer |
 | Text recognition keeps columns apart | `sn-blocks-ragged` | OCR reference run for three languages | references unchanged or better |
 | AI in the notebook (1.9): ask, edit, summarise with a checked edit plan | built by the maintainer (`src/shared/ai-plan.js`, `ai-context.js`, `src/main/ai.js`, AI panel) | host API v2 for extensions | `test/e2e/ai.js` with a fake provider |
-| Study session (1.9.x, extension): capture from the whole screen, AI files it into the notebook | `sn-capture-session`, `sn-scroll-stitch` | floating bar, global shortcuts, screen capture (`host.capture`) | e2e: capture a test window, apply the plan |
+| Study session (built 2026-11-25: bar, clipboard, region/window/screen, review, Claude or layout) | `sn-scroll-stitch` | floating bar, global shortcuts, screen capture (`host.capture`) | e2e: capture a test window, apply the plan |
 | Handwriting to text (1.9.x, extension, local model) | `sn-ink-lines` | model choice by measurement, `host.models`, `host.ink` | error rate per language on a fixed test set |
 
 Details for the three 1.9 rows: [ROADMAP-1.9.md](../ROADMAP-1.9.md).
