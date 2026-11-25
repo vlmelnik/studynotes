@@ -19,16 +19,11 @@ const SOURCE = String.raw`\frac{400}{230}\approx 1{,}73=\sqrt{3}`;
     app = session.app;
     const { win, ed } = session;
     win.setDefaultTimeout(12000);
-    const changeAddon = async (on, checkDefault = false) => {
-      await ed(() => window.__app.showSettings());
-      await win.getByRole('button', { name: 'Add-ons', exact: true }).click();
-      const toggle = win.getByRole('switch', { name: NAME });
-      if (checkDefault) check('the add-on is off by default', !(await toggle.isChecked()));
-      await toggle.press('Space');
-      check(`Settings turns the add-on ${on ? 'on' : 'off'}`, (await toggle.isChecked()) === on);
-      await win.getByRole('button', { name: 'Done', exact: true }).click();
-    };
-    await changeAddon(true, true);
+    // built in: always on, no switch
+    await ed(() => window.__app.showSettings('addons'));
+    const card = win.locator('.addon', { has: win.locator('.addon-title b', { hasText: NAME }) });
+    check('Add-ons: built in and always on, no switch', await card.locator('.addon-always').count() === 1 && await card.getByRole('switch').count() === 0);
+    await win.getByRole('button', { name: 'Done', exact: true }).click();
     const rel = await ed(async (f) => (await window.api.importFiles('', [f]))[0], pdf);
     await ed((r) => window.__app.openNotebook(r), rel);
     await win.waitForFunction(() => window.__app.active?.viewer?.views.size > 0);
@@ -103,9 +98,6 @@ const SOURCE = String.raw`\frac{400}{230}\approx 1{,}73=\sqrt{3}`;
     await math(raw).locator('.katex-html').waitFor();
     check('the text-box menu converts an existing box', await math(raw).getAttribute('data-v') === 'y^2');
 
-    await changeAddon(false);
-    await formula.locator('.katex').waitFor({ state: 'detached' });
-    check('switching off restores the stored dollar-delimited text', await formula.textContent() === `$$${SOURCE}$$`);
   } finally {
     if (app) await app.close();
     fs.rmSync(tmp, { recursive: true, force: true });

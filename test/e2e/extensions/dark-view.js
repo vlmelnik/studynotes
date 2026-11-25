@@ -57,13 +57,11 @@ async function fixture(ed, name, scan = false) {
       await ed((r) => window.__app.openNotebook(r), rel);
       await win.waitForFunction((r) => window.__app.active?.rel === r && window.__app.active.viewer.view(0)?.bgScale > 0, rel);
     }
+    // part of the app now: not listed under Add-ons, always there in the ⋯ menu
     async function setting(on) {
-      await ed(() => window.__app.showSettings());
-      await win.getByRole('button', { name: 'Add-ons', exact: true }).click();
-      const toggle = win.getByRole('switch', { name: 'Dark pages', exact: true });
-      check(`the add-on starts ${on ? 'off by default' : 'enabled'}`, (await toggle.isChecked()) !== on);
-      await toggle.press('Space');
-      check(`Settings turns the add-on ${on ? 'on' : 'off'}`, (await toggle.isChecked()) === on);
+      if (!on) return;
+      await ed(() => window.__app.showSettings('addons'));
+      check('Dark pages is not listed under Add-ons', await win.locator('.addon-title b', { hasText: /^Dark pages$/ }).count() === 0);
       await win.getByRole('button', { name: 'Done', exact: true }).click();
     }
     // "Dark pages" is one switch in the More menu (on = full). "Background only"
@@ -280,10 +278,6 @@ async function fixture(ed, name, scan = false) {
     await win.keyboard.press('Escape');
     await open(a);
 
-    await setting(false);
-    await win.waitForFunction(() => window.__app.active.viewer.view(0)?.bgScale > 0);
-    check('switching the add-on off restores light pixels without erasing the set mode',
-      await mode() === 'full' && (await pixels('page', [22,22]))?.[0] === 255 && await blend() === 'multiply');
   } finally {
     if (app) await app.close();
     fs.rmSync(tmp, { recursive: true, force: true });

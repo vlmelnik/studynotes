@@ -52,6 +52,10 @@ export default {
 };
 ```
 
+`core: true` (maintainer's decision only) makes an extension part of the app:
+always on, shown as "Built in" without a switch. `hidden: true` keeps it out
+of the Add-ons list (its menu items still show), e.g. Dark pages.
+
 Everything registered through `host` is removed automatically when the user
 switches the extension off. `activate` must not throw. If it does, the host
 disables the extension and shows a short message.

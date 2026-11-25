@@ -14,6 +14,7 @@ export default {
   icon: 'text',
   apiVersion: 1,
   defaultEnabled: false,
+  core: true,
   activate(host) {
     const t = host.ui.t;
     const auto = () => host.settings.get(AUTO, true);

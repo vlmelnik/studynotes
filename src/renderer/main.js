@@ -751,7 +751,7 @@ class App {
       card({
         name: 'Searchable scans', icon: 'search',
         about: 'Scanned PDFs become searchable by themselves when they are opened: search, select, copy and highlight their text like in any PDF – the pages stay as they are. Offline.',
-        state: ocrState, on: s.autoOcr !== false, setOn: (v) => { s.autoOcr = v; this.saveSettings(); },
+        state: ocrState,
         settings: [h('small', { class: 'hint' }, 'By hand: Search → "Recognize text (OCR)".')],
       }),
       card({
@@ -769,10 +769,10 @@ class App {
         settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
       }),
       // extensions (src/extensions, docs/EXTENSIONS.md): off until switched on
-      ...extensions.list().map((x) => card({
+      ...extensions.list().filter((x) => !x.hidden).map((x) => card({
         name: x.name, about: x.description, icon: x.icon || 'star',
-        state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, 'Extension'),
-        on: x.enabled, setOn: (v) => extensions.setEnabled(x.id, v),
+        state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, x.core ? 'Built in' : 'Extension'),
+        on: x.enabled, setOn: x.core ? undefined : (v) => extensions.setEnabled(x.id, v),
       })));
     root.append(list);
     return root;
@@ -1014,7 +1014,7 @@ class App {
   showShortcuts() {
     const rows = [
       ['V', 'Select & move'], ['P / H / E', 'Pen / Highlighter / Eraser'], ['L / S / T', 'Lasso / Shapes / Text'], ['Space + drag', 'Pan (any tool)'], ['Shift + wheel', 'Scroll fast'], ['Shift + drag (highlighter)', 'Straight line'],
-      ['Middle mouse drag', 'Pan'], ['Ctrl + wheel', 'Zoom'], ['Ctrl + 0', 'Fit width'], ['Ctrl + Z / Ctrl + Y', 'Undo / Redo'],
+      ['Middle mouse drag', 'Pan'], ['Ctrl + wheel', 'Zoom'], ['Ctrl + 0', 'Fit width'], ['Ctrl + Shift + H', 'Handwriting becomes text (live)'], ['Ctrl + Z / Ctrl + Y', 'Undo / Redo'],
       ['Ctrl + C / X / D', 'Copy / Cut / Duplicate selection'], ['Ctrl + V', 'Paste pictures, text, tables, files'], ['Ctrl + A', 'Select everything on the page'],
       ['Del', 'Delete selection'], ['Ctrl + B / I / U', 'Bold / italic / underline'], ['Ctrl + F', 'Search in notebook'],
       ['Ctrl + Shift + B', 'Show / hide pages'], ['PgUp / PgDn', 'Previous / next page'], ['Ctrl + W', 'Close tab'], ['Ctrl + Tab', 'Next tab'],

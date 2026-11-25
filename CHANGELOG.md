@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**Dictation, stickers, handwriting**
+- Handwriting becomes text, live (⋯ menu or Ctrl+Shift+H, off by default): write anywhere and as big as you like; after a short pause the words move into the text line on the ruled paper, in the notes style. One Ctrl+Z brings the ink back.
+- A microphone in the toolbar and in the AI chat: talk, and the text appears phrase by phrase (Whisper on this computer, with punctuation). The first click asks for the language and the model.
+- Telegram stickers (Insert → Telegram stickers…): paste a pack link once, then pick stickers for the page; packs are kept on this computer.
+- Handwriting to text with the Windows recognizer works again (the recognised words were lost on the way); if nothing is recognised, the message says why.
+- Settings is at the bottom of the ⋯ menu. Formulas and formatting on paste and Searchable scans are built in; Dark pages is in the ⋯ menu only.
+- The AI panel header fits at any width.
+
 **Settings, add-ons and dark pages**
 - Settings in sections on the left (General, Pen & input, Library & backups, Google Drive, AI assistant, Add-ons, About).
 - Add-ons as tiles with an icon and one line; a click opens the add-on's page with its settings.

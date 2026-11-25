@@ -3,6 +3,8 @@
 #   { "mode": "list" }
 #   { "mode": "recognize", "recognizer": "<name or empty>", "strokes": [[x,y,x,y,...], ...] }
 #   { "mode": "batch", "recognizer": "...", "groups": [ <strokes>, <strokes>, ... ] }
+#   { "mode": "serve", "recognizer": "..." } then one request per line ({ "id": 1, "strokes": [...] }),
+#     one answer per line – starting PowerShell takes a second, writing live must not wait for it
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
@@ -15,7 +17,10 @@ try {
   # Windows.Foundation.Point comes with System.Runtime.WindowsRuntime (loaded above);
   # loading it as a WinRT type fails on many PCs ("Unable to find type")
   try { $null = [Windows.Foundation.Point] } catch { $null = [Windows.Foundation.Point, Windows.Foundation, ContentType = WindowsRuntime] }
-  $req = [Console]::In.ReadToEnd() | ConvertFrom-Json
+  $req = [Console]::In.ReadLine() | ConvertFrom-Json
+  $script:added = 0
+  $script:results = 0
+  $script:sample = ''
   $rc = New-Object Windows.UI.Input.Inking.InkRecognizerContainer
   $names = @($rc.GetRecognizers() | ForEach-Object { $_.Name })
   if ($req.mode -eq 'list') { Out-Json @{ ok = $true; recognizers = $names }; exit 0 }
@@ -38,8 +43,10 @@ try {
 
   function Read-Strokes($strokes) {
     $container = New-Object Windows.UI.Input.Inking.InkStrokeContainer
-    foreach ($s in $strokes) {
-      $n = $s.Count
+    foreach ($o in $strokes) {
+      # strokes come as { p: [x,y,...] }: a bare [[...]] with one stroke would be unrolled by ConvertFrom-Json
+      $s = if ($o.p) { $o.p } else { $o }
+      $n = @($s).Length
       if ($n -lt 2) { continue }
       $pts = New-Object 'System.Collections.Generic.List[Windows.Foundation.Point]' ($n / 2 + 1)
       for ($i = 0; $i + 1 -lt $n; $i += 2) { $pts.Add((New-Pt $s[$i] $s[$i + 1])) }
@@ -47,22 +54,49 @@ try {
       $container.AddStroke($builder.CreateStroke($pts))
     }
     $words = New-Object 'System.Collections.Generic.List[object]'
-    if ($container.GetStrokes().Count -eq 0) { return ,$words }
+    # (WinRT lists: count with @(...).Length – .Count can enumerate the items)
+    $nStrokes = @($container.GetStrokes()).Length
+    $script:added = [int]$script:added + $nStrokes
+    if ($nStrokes -eq 0) { return ,$words }
     $task = $asTask.Invoke($null, @($rc.RecognizeAsync($container, [Windows.UI.Input.Inking.InkRecognitionTarget]::All)))
     $null = $task.Wait(-1)
+    $script:results = [int]$script:results + @($task.Result).Length
     foreach ($res in $task.Result) {
       $b = $res.BoundingRect
-      $words.Add(@{ alts = @($res.GetTextCandidates()); x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height })
+      # candidates copied into plain strings: the WinRT list itself does not survive ConvertTo-Json
+      $alts = New-Object 'System.Collections.Generic.List[string]'
+      foreach ($c in $res.GetTextCandidates()) { $alts.Add([string]$c) }
+      if ($alts.Count -eq 0) { try { $alts.Add([string]$res.GetTextCandidates()[0]) } catch { } }
+      $script:sample = ($alts -join '|')
+      $words.Add(@{ alts = $alts.ToArray(); x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height })
     }
     return ,$words
   }
 
+  if ($req.mode -eq 'serve') {
+    [Console]::Out.Write("{""ok"":true,""ready"":true}`n"); [Console]::Out.Flush()
+    while ($null -ne ($line = [Console]::In.ReadLine())) {
+      if (-not $line.Trim()) { continue }
+      try {
+        $q = $line | ConvertFrom-Json
+        $script:added = 0; $script:results = 0
+        $w = @(Read-Strokes $q.strokes)
+        [Console]::Out.Write((@{ ok = $true; id = $q.id; words = $w; info = @{ strokes = $script:added; results = $script:results } } | ConvertTo-Json -Depth 6 -Compress) + "`n")
+      } catch {
+        [Console]::Out.Write((@{ ok = $false; id = $(if ($q) { $q.id } else { 0 }); error = $_.Exception.Message } | ConvertTo-Json -Compress) + "`n")
+      }
+      [Console]::Out.Flush()
+    }
+    exit 0
+  }
   if ($req.mode -eq 'batch') {
     $results = New-Object 'System.Collections.Generic.List[object]'
     foreach ($g in $req.groups) { $results.Add(@{ words = @(Read-Strokes $g) }) }
     Out-Json @{ ok = $true; results = @($results) }
   } else {
-    Out-Json @{ ok = $true; recognizers = $names; words = @(Read-Strokes $req.strokes) }
+    $w = @(Read-Strokes $req.strokes)
+    $used = try { $rc.GetRecognizers() | Where-Object { $_.Name -eq $req.recognizer } | Select-Object -First 1 | ForEach-Object { $_.Name } } catch { '' }
+    Out-Json @{ ok = $true; recognizers = $names; words = $w; info = @{ strokes = $script:added; results = $script:results; sample = $script:sample; recognizer = $(if ($used) { $used } else { 'default' }) } }
   }
 } catch {
   Out-Json @{ ok = $false; error = $_.Exception.Message }

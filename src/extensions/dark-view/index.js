@@ -16,6 +16,8 @@ export default {
   icon: 'moon',
   apiVersion: 1,
   defaultEnabled: false,
+  core: true,
+  hidden: true,
   activate(host) {
     // One switch, like "Dark mode": on = full dark pages (older notebooks may
     // still say "background", which keeps working)

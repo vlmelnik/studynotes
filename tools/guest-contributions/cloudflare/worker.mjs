@@ -6,6 +6,7 @@ import { githubApp } from '../github.mjs';
 import { createQueue } from '../queue-core.mjs';
 import { mcp } from '../mcp.mjs';
 import { publish } from './publish.mjs';
+import { stickers } from './stickers.mjs';
 
 const tasks = readTasks(tasksJson);
 const json = (status, value) => Response.json(value, { status, headers: { 'cache-control': 'no-store' } });
@@ -23,6 +24,11 @@ async function message(request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/stickers/') && request.method === 'GET') {
+      const quota = await env.LIMIT.limit({ key: 'st:' + (request.headers.get('cf-connecting-ip') || 'unknown') });
+      if (!quota.success) return new Response(null, { status: 429, headers: { 'retry-after': '60' } });
+      return stickers(url, env);
+    }
     if (url.pathname !== '/mcp' || url.search) return new Response(null, { status: 404 });
     if (request.headers.has('Origin')) return new Response(null, { status: 403 });
     if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });

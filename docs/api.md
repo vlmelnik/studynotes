@@ -102,6 +102,7 @@ Two handlers exist only when the app runs with `STUDYNOTES_TEST` set
 | `writeOcr` | `rel`, `data`, `src` | nothing | Stores the text recognition result of one source. | later |
 | `ocrSpell` | `lines` | corrected lines | Checks and corrects recognized lines in a separate process that ends after 2 idle minutes. | later |
 | `inkRecognize` | `strokes`, `recognizer` | `{ words, text }` | Recognizes handwriting with the Windows recognizer through PowerShell. | desktop-only |
+| `inkRecognizeLive` | `strokes`, `recognizer` | `{ words, text }` | Like `inkRecognize` through one PowerShell that stays open (live handwriting to text). | desktop-only |
 | `inkRecognizers` | none | list of recognizer names | Lists the installed Windows handwriting recognizers. | desktop-only |
 
 ## Backup
@@ -175,6 +176,9 @@ Each method registers a listener and returns nothing. They are plain
 | `speechRemove` | `model` | – | Deletes a downloaded model. | desktop-only |
 | `speechTranscribe` | `Float32Array` (16 kHz mono), `{ model, language }`, `progressId` | text | Transcribes on this computer (Whisper). | needed |
 | `onSpeechProgress` | `(id, fraction, file)` | – | Download progress. | desktop-only |
+| `stickerPack` | link or name | `{ name, title, stickers: [{ file, emoji, kind, w, h }] }` | A Telegram sticker pack through the StudyNotes worker; kept in userData/stickers. | needed |
+| `stickerPicture` | file id | `{ bytes, mime }` | One sticker picture (kept after the first download). | needed |
+| `stickerRemove` | name | – | Forgets a kept pack. | needed |
 | `chatList` | – | `[{ id, title, notebook, updated, sessionId }]` | All saved chats, newest first (userData/chats.json, up to 300). | needed |
 | `chatGet` | `id` | chat or `null` | One saved chat with its messages. | needed |
 | `chatSave` | `chat` | – | Saves a chat (`id`, `title`, `notebook`, `sessionId`, `messages`). | needed |
