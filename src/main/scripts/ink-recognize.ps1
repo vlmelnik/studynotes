@@ -18,6 +18,7 @@ try {
   $req = [Console]::In.ReadToEnd() | ConvertFrom-Json
   $script:added = 0
   $script:results = 0
+  $script:sample = ''
   $rc = New-Object Windows.UI.Input.Inking.InkRecognizerContainer
   $names = @($rc.GetRecognizers() | ForEach-Object { $_.Name })
   if ($req.mode -eq 'list') { Out-Json @{ ok = $true; recognizers = $names }; exit 0 }
@@ -60,7 +61,12 @@ try {
     $script:results = [int]$script:results + @($task.Result).Length
     foreach ($res in $task.Result) {
       $b = $res.BoundingRect
-      $words.Add(@{ alts = @($res.GetTextCandidates()); x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height })
+      # candidates copied into plain strings: the WinRT list itself does not survive ConvertTo-Json
+      $alts = New-Object 'System.Collections.Generic.List[string]'
+      foreach ($c in $res.GetTextCandidates()) { $alts.Add([string]$c) }
+      if ($alts.Count -eq 0) { try { $alts.Add([string]$res.GetTextCandidates()[0]) } catch { } }
+      $script:sample = ($alts -join '|')
+      $words.Add(@{ alts = $alts.ToArray(); x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height })
     }
     return ,$words
   }
@@ -72,7 +78,7 @@ try {
   } else {
     $w = @(Read-Strokes $req.strokes)
     $used = try { $rc.GetRecognizers() | Where-Object { $_.Name -eq $req.recognizer } | Select-Object -First 1 | ForEach-Object { $_.Name } } catch { '' }
-    Out-Json @{ ok = $true; recognizers = $names; words = $w; info = @{ strokes = $script:added; results = $script:results; recognizer = $(if ($used) { $used } else { 'default' }) } }
+    Out-Json @{ ok = $true; recognizers = $names; words = $w; info = @{ strokes = $script:added; results = $script:results; sample = $script:sample; recognizer = $(if ($used) { $used } else { 'default' }) } }
   }
 } catch {
   Out-Json @{ ok = $false; error = $_.Exception.Message }
