@@ -25,3 +25,19 @@ test('Windows recognizer: lists recognizers and reads one stroke and several str
   if (names.length) assert.ok(two.text.length > 0, JSON.stringify(two.info));
   console.log('recognizers:', names.join(', ') || '(none)', '| result:', JSON.stringify(two.text), JSON.stringify(two.info));
 });
+
+test('Windows recognizer, live: one PowerShell answers several requests quickly', { skip: !win && 'needs Windows', timeout: 120000 }, async () => {
+  const L = [100, 100, 100, 160, 140, 160];
+  const O = [];
+  for (let a = 0; a <= Math.PI * 2; a += 0.2) O.push(200 + 25 * Math.cos(a), 130 + 30 * Math.sin(a));
+  const a = await hw.recognizeLive([L, O]);
+  const t0 = Date.now();
+  const b = await hw.recognizeLive([O]);
+  const c = await hw.recognizeLive([L]);
+  const ms = Date.now() - t0;
+  hw.stopLive();
+  console.log('live:', JSON.stringify([a.text, b.text, c.text]), ms, 'ms for two');
+  const names = await hw.recognizers();
+  if (names.length) assert.ok(a.text.length > 0 && b.text.length > 0);
+  assert.ok(ms < 4000, `${ms} ms`);
+});

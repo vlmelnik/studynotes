@@ -30,13 +30,13 @@ function wav(file) {
   await win.waitForFunction(() => window.__app.active?.viewer?.views.size > 0);
 
   // ---- first time: the popover asks for language and model ----
-  const mic = win.locator('.tb-center .mic-btn');
+  const mic = win.locator('.tb-right .mic-btn');
   await mic.click();
   await win.locator('.mic-pop').waitFor();
   check('first click: the dictation popover with language and model', await win.locator('.mic-pop').getByLabel('Language of the recordings').isVisible() && await win.locator('.mic-pop').getByLabel('Speech model').isVisible());
   await win.locator('.mic-pop').getByLabel('Language of the recordings').selectOption('russian');
   await win.locator('.mic-pop').getByRole('button', { name: /Start/ }).click();
-  await win.waitForFunction(() => document.querySelector('.tb-center .mic-btn.on'), null, { timeout: 10000 });
+  await win.waitForFunction(() => document.querySelector('.tb-right .mic-btn.on'), null, { timeout: 10000 });
   check('settings remembered: speech to text on, Russian', await ed(() => window.__app.settings.speech.enabled && window.__app.settings.speech.language === 'russian'));
 
   // ---- phrases arrive in a new text box on the next free line ----

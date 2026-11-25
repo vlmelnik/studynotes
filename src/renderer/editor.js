@@ -23,6 +23,8 @@ import { fitToolbar } from '../shared/toolbar-fit.js';
 import { extensions } from './extensions.js';
 import { AiPanel } from './ai-panel.js';
 import { micButton } from './dictation.js';
+import { stickerPicker } from './stickers.js';
+import { LiveInk } from './live-ink.js';
 import { pageRows, contentBottom } from '../shared/notes-layout.js';
 
 const EMPTY = Object.freeze({ strokes: Object.freeze([]), texts: Object.freeze([]), items: Object.freeze([]) });
@@ -349,6 +351,7 @@ export class Editor {
     const v = this.viewer.viewById(pageId);
     if (v) v.addStroke(st);
     this.sidebar.invalidate(pageId);
+    if (this.liveInk) this.liveInk.stroke(pageId, st);
   }
 
   addStrokes(pageId, strokes) {
@@ -549,10 +552,11 @@ export class Editor {
     ];
     const imageBtn = h('button', { class: 'tool-btn', title: 'Insert picture', 'aria-label': 'Insert picture', html: icon('image', 24), onclick: () => this.insertPictureDialog() });
     this.aiPanel = new AiPanel(this);
+    this.liveInk = new LiveInk(this);
     this.undoBtn = iconButton('undo', 'Undo (Ctrl+Z)', () => this.undo(), 'bar-btn');
     this.redoBtn = iconButton('redo', 'Redo (Ctrl+Y)', () => this.redo(), 'bar-btn');
-    this.micBtn = micButton(this.app, { className: 'tool-btn', size: 24, target: () => this.dictationTarget() });
-    const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, this.micBtn, ...this.toolButtons.slice(7));
+    this.micBtn = micButton(this.app, { className: 'bar-btn', size: 20, target: () => this.dictationTarget() });
+    const center = h('div', { class: 'tb-center' }, ...this.toolButtons.slice(0, 7), imageBtn, ...this.toolButtons.slice(7));
 
     // Buttons on the right that move into "More" when the window is narrow
     // (fitToolbar): lowest rank first. menu: the same action as a menu entry.
@@ -565,6 +569,7 @@ export class Editor {
       this.isBoard ? null : opt(h('div', { class: 'split-btn' },
         iconButton('addPage', 'Add a page after this one (same style)', () => this.addPageSameStyle(), 'bar-btn'),
         h('button', { class: 'bar-btn split-arrow', title: 'Choose page style / position', html: icon('chevronDown', 14), onclick: (e) => this.addPageMenu(e.currentTarget) })), 4, 'Add a page…', 'addPage', () => this.addPageMenu(this.moreBtn)),
+      this.isBoard ? null : opt(this.micBtn, 1.5, 'Dictate', 'mic', () => this.micBtn.click()),
       this.isBoard ? null : opt(iconButton('ai', 'AI assistant (Ctrl+J)', () => this.aiPanel.toggle(), 'bar-btn ai-btn'), 7, 'AI assistant', 'ai', () => this.aiPanel.toggle()),
       this.isBoard ? null : opt(iconButton('scanText', 'Make the text of this page editable (scans, photos, PDFs)', () => this.makePageEditable(this.viewer.currentIndex), 'bar-btn scan-text'), 2, 'Make text editable', 'scanText', () => this.makePageEditable(this.viewer.currentIndex)),
       this.isBoard ? null : opt(iconButton('pageDelete', 'Delete this page (Ctrl+Z brings it back)', () => this.deletePage(this.viewer.currentIndex), 'bar-btn page-del'), 1, 'Delete this page', 'pageDelete', () => this.deletePage(this.viewer.currentIndex)),
@@ -1119,6 +1124,7 @@ export class Editor {
       { label: 'Picture…', icon: 'image', onClick: () => this.insertPictureDialog() },
       { label: 'Table…', icon: 'table', onClick: () => this.insertTableDialog() },
       { label: 'Signature…', icon: 'signature', onClick: () => signatureDialog(this) },
+      { label: 'Telegram stickers…', icon: 'telegram', onClick: () => stickerPicker(this) },
       { label: 'Text box', icon: 'text', onClick: () => this.setTool('text') },
       { label: 'Pages from a PDF…', icon: 'importPdf', onClick: () => this.insertPdfDialog() },
       'sep',
@@ -1238,6 +1244,7 @@ export class Editor {
       })()),
       { label: s.mouseDraws ? 'Mouse draws: on' : 'Mouse draws: off', icon: 'pen', checked: s.mouseDraws, onClick: () => { s.mouseDraws = !s.mouseDraws; this.app.saveSettings(); toast(s.mouseDraws ? 'Mouse can draw' : 'Mouse scrolls, only the pen draws'); } },
       { label: s.pasteFormatting ? 'Paste keeps formatting: on' : 'Paste keeps formatting: off', icon: 'text', checked: s.pasteFormatting, onClick: () => { s.pasteFormatting = !s.pasteFormatting; this.app.saveSettings(); toast(s.pasteFormatting ? 'Pasted text keeps bold / italic / lists' : 'Text is pasted as plain text'); } },
+      ...(this.isBoard ? [] : [{ label: s.liveInk ? 'Handwriting becomes text: on' : 'Handwriting becomes text: off', icon: 'pen', checked: !!s.liveInk, onClick: () => this.liveInk.toggle(), shortcut: 'Ctrl+Shift+H' }]),
       { label: document.documentElement.dataset.theme === 'dark' ? 'Dark mode: on' : 'Dark mode: off', icon: 'moon', checked: document.documentElement.dataset.theme === 'dark', onClick: () => this.app.toggleDark() },
       ...extensions.menuItems('view', Object.freeze({ notebook: this.rel, pageIndex: this.viewer.currentIndex }), this),
       'sep',
@@ -1451,6 +1458,7 @@ export class Editor {
     if (ctrl && k === 'd') return this.tools.duplicate(), true;
     if (ctrl && k === 'g') { if (this.tools.sel) this.tools.group(!e.shiftKey); return true; }
     if (ctrl && k === 'j' && !this.isBoard) { this.aiPanel.toggle(); return true; }
+    if (ctrl && e.shiftKey && k === 'h' && !this.isBoard) { this.liveInk.toggle(); return true; }
     if (ctrl && k === 'a') return this.selectAll(), true;
     if (ctrl && (k === '=' || k === '+')) return this.viewer.zoomTo(this.viewer.zoomTarget() * 1.25), true;
     if (ctrl && k === '-') return this.viewer.zoomTo(this.viewer.zoomTarget() / 1.25), true;

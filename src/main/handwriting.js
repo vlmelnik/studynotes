@@ -128,4 +128,60 @@ function wordsToText(words) {
   return lines.map((l) => l.words.sort((a, b) => a.x - b.x).map((w) => w.text).join(' ')).join('\n');
 }
 
-module.exports = { recognize, recognizeMany, recognizers, wordsToText };
+// ---------- live: one PowerShell kept running, a request per word group ----------
+let server = null;
+function startServer(recognizer) {
+  const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodedScript()], { windowsHide: true });
+  const waiting = new Map();
+  let buf = '', id = 0, ready;
+  const readyP = new Promise((r) => { ready = r; });
+  ps.stdout.setEncoding('utf8');
+  ps.stdout.on('data', (d) => {
+    buf += d;
+    for (let i; (i = buf.indexOf('\n')) >= 0;) {
+      const line = buf.slice(0, i).trim().replace(/^\uFEFF/, ''); buf = buf.slice(i + 1);
+      if (!line) continue;
+      let m; try { m = JSON.parse(line); } catch { continue; }
+      if (m.ready) { ready(true); continue; }
+      const w = waiting.get(m.id);
+      if (w) { waiting.delete(m.id); w(m); }
+    }
+  });
+  const fail = (why) => { for (const w of waiting.values()) w({ ok: false, error: why }); waiting.clear(); ready(false); if (server && server.ps === ps) server = null; };
+  ps.on('error', (e) => fail(e.message));
+  ps.on('close', () => fail('Handwriting recognition stopped'));
+  ps.stdin.on('error', () => {});
+  ps.stdin.write(JSON.stringify({ mode: 'serve', recognizer }) + '\n');
+  return {
+    ps, recognizer,
+    async ask(strokes) {
+      if (!(await readyP)) throw new Error('Handwriting recognition could not start');
+      const my = ++id;
+      const r = await new Promise((res) => { waiting.set(my, res); ps.stdin.write(JSON.stringify({ id: my, strokes: strokes.map((p) => ({ p })) }) + '\n'); });
+      if (!r.ok) throw new Error(r.error || 'Handwriting recognition failed');
+      return r.words || [];
+    },
+    stop() { try { ps.stdin.end(); ps.kill(); } catch { /* gone */ } },
+  };
+}
+
+/** Like recognize(), but through a PowerShell that stays open (live writing). */
+async function recognizeLive(strokes, recognizer = '') {
+  const scaled = strokes.map(thin);
+  let raw;
+  if (fake()) raw = fakeRecognize(scaled);
+  else {
+    if (process.platform !== 'win32') throw new Error('Handwriting recognition uses the recognizer built into Windows');
+    if (!server || server.recognizer !== recognizer) { if (server) server.stop(); server = startServer(recognizer); }
+    raw = await server.ask(scaled);
+  }
+  const words = raw.map((w) => {
+    const alts = Array.isArray(w.alts) ? w.alts : [w.alts];
+    return { text: String(alts[0] || ''), alts, x: w.x / SCALE, y: w.y / SCALE, w: w.w / SCALE, h: w.h / SCALE };
+  }).filter((w) => w.text);
+  return { words, text: wordsToText(words) };
+}
+
+function stopLive() { if (server) { server.stop(); server = null; } }
+
+module.exports = { recognize, recognizeMany, recognizeLive, stopLive, recognizers, wordsToText };

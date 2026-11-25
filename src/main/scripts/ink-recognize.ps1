@@ -3,6 +3,8 @@
 #   { "mode": "list" }
 #   { "mode": "recognize", "recognizer": "<name or empty>", "strokes": [[x,y,x,y,...], ...] }
 #   { "mode": "batch", "recognizer": "...", "groups": [ <strokes>, <strokes>, ... ] }
+#   { "mode": "serve", "recognizer": "..." } then one request per line ({ "id": 1, "strokes": [...] }),
+#     one answer per line – starting PowerShell takes a second, writing live must not wait for it
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
@@ -15,7 +17,7 @@ try {
   # Windows.Foundation.Point comes with System.Runtime.WindowsRuntime (loaded above);
   # loading it as a WinRT type fails on many PCs ("Unable to find type")
   try { $null = [Windows.Foundation.Point] } catch { $null = [Windows.Foundation.Point, Windows.Foundation, ContentType = WindowsRuntime] }
-  $req = [Console]::In.ReadToEnd() | ConvertFrom-Json
+  $req = [Console]::In.ReadLine() | ConvertFrom-Json
   $script:added = 0
   $script:results = 0
   $script:sample = ''
@@ -71,6 +73,22 @@ try {
     return ,$words
   }
 
+  if ($req.mode -eq 'serve') {
+    [Console]::Out.Write("{""ok"":true,""ready"":true}`n"); [Console]::Out.Flush()
+    while ($null -ne ($line = [Console]::In.ReadLine())) {
+      if (-not $line.Trim()) { continue }
+      try {
+        $q = $line | ConvertFrom-Json
+        $script:added = 0; $script:results = 0
+        $w = @(Read-Strokes $q.strokes)
+        [Console]::Out.Write((@{ ok = $true; id = $q.id; words = $w; info = @{ strokes = $script:added; results = $script:results } } | ConvertTo-Json -Depth 6 -Compress) + "`n")
+      } catch {
+        [Console]::Out.Write((@{ ok = $false; id = $(if ($q) { $q.id } else { 0 }); error = $_.Exception.Message } | ConvertTo-Json -Compress) + "`n")
+      }
+      [Console]::Out.Flush()
+    }
+    exit 0
+  }
   if ($req.mode -eq 'batch') {
     $results = New-Object 'System.Collections.Generic.List[object]'
     foreach ($g in $req.groups) { $results.Add(@{ words = @(Read-Strokes $g) }) }

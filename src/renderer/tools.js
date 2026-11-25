@@ -493,6 +493,7 @@ export class Tools {
 
   // ---------- pen / highlighter ----------
   startStroke(e, hit, view, tool) {
+    if (this.editor.liveInk) this.editor.liveInk.writing();
     const opts = tool === 'hl' ? this.state.hl : this.state.pen;
     const st = { id: uid(), t: tool === 'hl' ? 'hl' : 'pen', c: opts.color, s: opts.size, p: [], pf: 1 };
     if (tool === 'pen' && opts.style && opts.style !== 'ball') st.ps = opts.style;

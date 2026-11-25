@@ -618,6 +618,8 @@ handle('screen:pixel', async (x, y) => {
 // ---------- handwriting → text (Windows' recognizer) ----------
 handle('ink:recognize', (strokes, recognizer) => handwriting.recognize(strokes, recognizer));
 handle('ink:recognizers', () => handwriting.recognizers());
+handle('ink:recognizeLive', (strokes, recognizer) => handwriting.recognizeLive(strokes, recognizer));
+app.on('will-quit', () => handwriting.stopLive());
 
 // ---------- text recognition add-on ----------
 let ocr = null;
@@ -808,6 +810,13 @@ handle('speech:status', (key) => speechInst().status(key));
 handle('speech:download', (key, id) => speechInst().download(key, speechProgress(id)));
 handle('speech:remove', (key) => speechInst().remove(key));
 handle('speech:transcribe', (samples, opts, id) => speechInst().transcribe(samples, opts, speechProgress(id)));
+// Telegram sticker packs (src/main/stickers.js)
+const { Stickers } = require('./stickers');
+let stickerStore = null;
+const stickersInst = () => (stickerStore ||= new Stickers(path.join(app.getPath('userData'), 'stickers')));
+handle('stickers:pack', (link) => stickersInst().pack(link));
+handle('stickers:picture', (id) => stickersInst().picture(id));
+handle('stickers:remove', (name) => stickersInst().remove(name));
 const chatHistory = new ChatHistory(path.join(app.getPath('userData'), 'chats.json'));
 handle('chat:list', () => chatHistory.list());
 handle('chat:get', (id) => chatHistory.get(id));
