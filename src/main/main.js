@@ -829,6 +829,9 @@ handle('reader:open', (state) => reader.open(state));
 handle('reader:dock', (state, ratio, side) => reader.dock(state, ratio, side));
 handle('reader:undock', (state, rect) => reader.undock(state, rect));
 handle('reader:close', () => reader.close());
+handle('reader:report', (state) => reader.report(state));
+handle('reader:yield', (on) => reader.yieldTo(!!on));
+handle('clip:text', (text) => clipboard.writeText(String(text || '')));
 handle('reader:pick', async () => {
   const r = await dialog.showOpenDialog(win, { title: tr('Open a PDF to read'), filters: [{ name: 'PDF', extensions: ['pdf'] }], properties: ['openFile'] });
   if (r.canceled || !r.filePaths[0]) return null;

@@ -183,6 +183,10 @@ Each method registers a listener and returns nothing. They are plain
 | `readerDock` | state, ratio, side | `true` | Glides the floating reader into the main window; the main window gets `reader:docked`. | desktop-only |
 | `readerUndock` | state, `{ x, y, width, height }` | `true` | From the docked pane out into its own window, gliding to its last place. | desktop-only |
 | `readerPick` | – | state or `null` | Picks a PDF only to read (served by a token, not added to the library). | desktop-only |
+| `readerReport` | state | – | The floating reader tells where it is (page, zoom). | desktop-only |
+| `readerYield` | `on` | – | The reader steps behind a dialog of the main window (and back). | desktop-only |
+| `copyText` | text | – | Puts text on the clipboard (the reader copies a selection at once). | needed |
+| `onReaderZone` | `(side)` | – | The floating reader is dragged to the left or right edge: show where it docks. | desktop-only |
 | `readerClose` | – | – | Closes the floating reader. | desktop-only |
 | `onReaderState` | `(state)` | – | The floating reader gets what to show. | desktop-only |
 | `onReaderDocked` | `(state)` | – | The main window shows the docked reader. | desktop-only |

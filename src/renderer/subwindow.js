@@ -27,7 +27,7 @@ function readerWindow() {
     const dock = h('button', { class: 'icon-btn rd-dock', title: 'Put the reader into the main window', 'aria-label': 'Dock', html: icon('sidebar', 16),
       onclick: () => window.api.readerDock(view.state) });
     const close = h('button', { class: 'icon-btn', title: 'Close the reader', 'aria-label': 'Close the reader', html: icon('close', 16), onclick: () => window.close() });
-    view = new ReaderView({ ...state, buttons: [dock, close] });
+    view = new ReaderView({ ...state, buttons: [dock, close], onState: (st) => window.api.readerReport(st).catch(() => {}) });
     window.__reader = view;
     root.replaceChildren(view.el);
     await view.open();
@@ -87,7 +87,7 @@ function studyBar() {
   window.api.onStudyPickWindow(pickWindow);
   window.api.onStudyError(say);
   window.api.studyState().then((x) => { st = x; draw(); });
-  say('Ctrl+C collects text and pictures · Ctrl+Shift+1/2/3: region, window, screen');
+  say('Select text or copy a picture to collect it · Ctrl + drag: a region');
 }
 
 // ---------- region snip (full screen over the screenshot) ----------

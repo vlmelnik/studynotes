@@ -4,7 +4,11 @@
 
 **Reference reader and study sessions**
 - Reference reader (⋯ menu → Reader): a PDF in a small window that stays on top of everything – scroll, zoom, select and copy text – or next to the notes in the main window. "Dock" glides the window into the main window, "Undock" glides it back out; drag the divider, swap the sides.
-- Study session (⋯ menu → Study session…): StudyNotes steps aside and a small bar stays on top of every app. Everything you copy with Ctrl+C (text or pictures) is collected, plus regions (Ctrl+Shift+1), windows (Ctrl+Shift+2), the whole screen (Ctrl+Shift+3) and your own notes. Finish: check what was collected, then Claude writes nicely laid-out notes from it (pictures included) – or StudyNotes lays it out without AI.
+- Insert → PDF window… (Ctrl+D): any PDF, only to read – it is not added to the library. Duplicate is now Ctrl+Shift+D.
+- Reader: selecting text copies it at once (Ctrl+C works too). Drag the window by its header to the left or right edge of the main window – a blue strip shows – and it pours in on that side; drag the docked header out to get the window back. Resizing the window no longer makes it grow by itself. Dialogs of StudyNotes are no longer hidden behind it.
+- Order by time: a picture added after ink or text covers it; ink written later goes over the picture.
+- Study session (Ctrl+E, or ⋯ menu → Study session…): it asks once and files into the open notebook; wishes can be dictated. Selected text is collected without Ctrl+C, Ctrl + drag takes a region (the screen darkens), "Copy image" in the browser collects the picture – also while you use ChatGPT or Claude. Claude turns text in screenshots into text and puts figures in with a caption (background removed). The start error "clip.readImage is not a function" is fixed.
+- Study session details: StudyNotes steps aside and a small bar stays on top of every app. Everything you copy with Ctrl+C (text or pictures) is collected, plus regions (Ctrl+Shift+1), windows (Ctrl+Shift+2), the whole screen (Ctrl+Shift+3) and your own notes. Finish: check what was collected, then Claude writes nicely laid-out notes from it (pictures included) – or StudyNotes lays it out without AI.
 
 **Dictation, stickers, handwriting**
 - Handwriting becomes text, live (⋯ menu or Ctrl+Shift+H, off by default): write anywhere and as big as you like; after a short pause the words move into the text line on the ruled paper, in the notes style. One Ctrl+Z brings the ink back.

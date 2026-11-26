@@ -990,8 +990,14 @@ body.sub-reader .rd-bar button { -webkit-app-region: no-drag; }
 .rd-divider:hover { background: var(--accent); }
 .editor-body.rd-left .rd-pane { order: -2; border-left: 0; border-right: 1px solid var(--line); }
 .editor-body.rd-left .rd-divider { order: -1; }
-.rd-pane.rd-in { animation: rd-in .26s cubic-bezier(.3,.7,.3,1); }
-@keyframes rd-in { from { opacity: .4; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+.rd-pane.rd-in { animation: rd-in .4s cubic-bezier(.2,.9,.25,1.05); transform-origin: right center; }
+.rd-pane.rd-in-left { transform-origin: left center; }
+/* pours in from the edge: starts as a thin sliver at the side and fills the pane */
+@keyframes rd-in { 0% { opacity: .3; transform: scaleX(.12); filter: blur(3px); } 60% { opacity: 1; filter: none; } 100% { opacity: 1; transform: none; } }
+.rd-zone { position: fixed; width: 14px; z-index: 50; pointer-events: none; border-radius: 7px; background: rgba(10,132,255,.55); box-shadow: 0 0 18px 4px rgba(10,132,255,.45); animation: rd-zone .18s ease-out; }
+@keyframes rd-zone { from { opacity: 0; transform: scaleY(.85); } to { opacity: 1; transform: none; } }
+.rd-pane .rd-bar { cursor: grab; }
+.rd-pane .rd-bar button { cursor: pointer; }
 
 /* study session bar and region snip */
 body.sub-study { margin: 0; overflow: hidden; background: #1f2023; color: #eee; --text: #eee; }
@@ -1031,3 +1037,5 @@ body.sub-sniplive { margin: 0; overflow: hidden; background: transparent; }
 body.sub-sniplive .snip-veil { position: fixed; inset: 0; background: rgba(0,0,0,.35); transition: opacity .12s; }
 body.sub-sniplive.drawing .snip-veil { opacity: 0; }
 .snip-box.live { box-shadow: 0 0 0 9999px rgba(0,0,0,.35); }
+.rd-copied { font-size: 12px; color: #2f7d4f; font-weight: 600; padding: 0 4px; }
+.study-wish { display: flex; gap: 6px; align-items: flex-start; } .study-wish textarea { flex: 1; }

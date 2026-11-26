@@ -14,7 +14,21 @@ export class ReaderDock {
     this.divider = h('div', { class: 'rd-divider', role: 'separator', 'aria-orientation': 'vertical', 'aria-label': 'Resize the reader' });
     this.divider.addEventListener('pointerdown', (e) => this.drag(e));
     this.ro = new ResizeObserver(() => this.fit());
-    window.api.onReaderDocked((st) => this.open(st, { glide: true }));
+    window.api.onReaderDocked((st) => {
+      // dropped on the left edge: the reader goes left, the notes right
+      if (st.side) { this.app.settings.readerSplit = { ...this.split, mode: 'split', notesSide: st.side === 'left' ? 'right' : 'left' }; this.app.saveSettings(); }
+      this.open(st, { glide: true });
+    });
+    // a blue strip at the edge where the dragged reader window would dock
+    this.strip = h('div', { class: 'rd-zone', hidden: true });
+    document.body.append(this.strip);
+    window.api.onReaderZone((side) => {
+      const ed = this.app.active;
+      this.strip.hidden = !side || !ed;
+      if (this.strip.hidden) return;
+      const r = ed.body.getBoundingClientRect();
+      Object.assign(this.strip.style, { top: r.top + 'px', height: r.height + 'px', left: side === 'left' ? r.left + 'px' : '', right: side === 'right' ? (window.innerWidth - r.right) + 'px' : '' });
+    });
     window.api.onReaderUndocked(() => this.remove());
   }
 
@@ -33,9 +47,12 @@ export class ReaderDock {
     const swapBtn = h('button', { class: 'icon-btn', title: 'Swap sides', 'aria-label': 'Swap sides', html: icon('combine', 16), onclick: () => { this.app.settings.readerSplit = swap(this.split); this.app.saveSettings(); this.fit(); } });
     const close = h('button', { class: 'icon-btn', title: 'Close the reader', 'aria-label': 'Close the reader', html: icon('close', 16), onclick: () => this.remove() });
     this.view = new ReaderView({ ...state, buttons: [swapBtn, undock, close] });
+    this.view.el.querySelector('.rd-bar').title = 'Drag out to take the reader into its own window';
     this.pane.replaceChildren(this.view.el);
     this.attach();
-    if (glide) { this.pane.classList.add('rd-in'); setTimeout(() => this.pane.classList.remove('rd-in'), 300); }
+    const bar = this.view.el.querySelector('.rd-bar');
+    bar.addEventListener('pointerdown', (e) => this.dragOut(e));
+    if (glide) { const c = this.split.notesSide === 'right' ? 'rd-in-left' : 'rd-in-right'; this.pane.classList.add('rd-in', c); setTimeout(() => this.pane.classList.remove('rd-in', c), 420); }
     try { await this.view.open(); } catch (err) { toast(String(err.message || err), { error: true }); this.remove(); }
   }
 
@@ -72,6 +89,20 @@ export class ReaderDock {
     const up = () => { this.divider.removeEventListener('pointermove', move); this.divider.removeEventListener('pointerup', up); this.app.saveSettings(); };
     this.divider.addEventListener('pointermove', move);
     this.divider.addEventListener('pointerup', up);
+  }
+
+  // pull the docked pane out by its header, like a Chrome tab: past 40 px it becomes its own window
+  dragOut(e) {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    const move = (ev) => {
+      const dx = ev.clientX - x0, dy = ev.clientY - y0;
+      this.pane.style.transform = `translate(${dx * 0.25}px, ${dy * 0.25}px)`;
+      if (Math.hypot(dx, dy) > 40) { done(); this.undock(); }
+    };
+    const done = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', done); this.pane.style.transform = ''; };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', done);
   }
 
   async undock() {

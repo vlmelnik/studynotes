@@ -180,7 +180,10 @@ export class McpTools {
         for (const b of blocks) {
           const f = b.type === 'image' && !images[b.ref] && this.app.chatFiles && this.app.chatFiles.get(b.ref);
           if (f && f.mime.startsWith('image/')) {
-            const it = await ed.insertImageBytes(f.bytes, f.mime, { index: Math.min(index, ed.pages.length - 1), x: 0, y: 0 });
+            let bytes = f.bytes, mime = f.mime;
+            // a figure on a plain page: cut it out (keeps the original if that fails)
+            if (b.remove_background && /png|jpe?g/.test(mime)) { try { bytes = new Uint8Array(await window.api.removeBackground(f.bytes)); mime = 'image/png'; } catch (err) { console.warn('remove_background', err); } }
+            const it = await ed.insertImageBytes(bytes, mime, { index: Math.min(index, ed.pages.length - 1), x: 0, y: 0 });
             images[b.ref] = { src: it.src, w: it.w, h: it.h };
           }
         }
