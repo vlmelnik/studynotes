@@ -1027,3 +1027,7 @@ body.sub-snip { margin: 0; overflow: hidden; cursor: crosshair; user-select: non
 .study-item.txt { padding: 6px 22px 6px 8px; max-width: 320px; font-size: 12px; line-height: 1.35; }
 .study-item.note { border-style: dashed; }
 .study-rm { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; background: var(--panel); border-radius: 50%; }
+body.sub-sniplive { margin: 0; overflow: hidden; background: transparent; }
+body.sub-sniplive .snip-veil { position: fixed; inset: 0; background: rgba(0,0,0,.35); transition: opacity .12s; }
+body.sub-sniplive.drawing .snip-veil { opacity: 0; }
+.snip-box.live { box-shadow: 0 0 0 9999px rgba(0,0,0,.35); }

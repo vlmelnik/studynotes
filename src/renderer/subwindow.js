@@ -16,6 +16,7 @@ export async function bootSub(kind) {
   if (kind === 'reader') return readerWindow();
   if (kind === 'study') return studyBar();
   if (kind === 'snip') return snipWindow();
+  if (kind === 'sniplive') return snipLive();
 }
 
 function readerWindow() {
@@ -110,4 +111,15 @@ function snipWindow() {
     window.api.snipDone(r.width > 4 && r.height > 4 ? r : null);
   });
   addEventListener('keydown', (e) => { if (e.key === 'Escape') window.api.snipDone(null); });
+}
+
+// Ctrl + drag anywhere: a dark veil over the screen with the rectangle being drawn (the mouse goes through)
+function snipLive() {
+  const box = h('div', { class: 'snip-box live', hidden: true });
+  document.getElementById('app').replaceChildren(h('div', { class: 'snip-veil' }), box);
+  window.api.onSnipRect((r) => {
+    box.hidden = false;
+    Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.width + 'px', height: r.height + 'px' });
+    document.body.classList.add('drawing');
+  });
 }

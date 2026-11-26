@@ -101,9 +101,12 @@ export function readerMenuItems(editor) {
     items.push({ label: 'Reader: this PDF in its own window', icon: 'pageLandscape', onClick: () => app.reader.show(st, 'float') });
     items.push({ label: 'Reader: this PDF next to the notes', icon: 'sidebar', onClick: () => app.reader.show(st, 'dock') });
   }
-  items.push({ label: 'Reader: another PDF…', icon: 'importPdf', onClick: async () => {
-    const rels = await window.api.importDialog(app.library.folder || '');
-    if (rels && rels[0]) app.reader.show({ rel: rels[0], file: 'source.pdf', title: rels[0].split('/').pop(), page: 1 }, 'float');
-  } });
+  items.push({ label: 'Reader: another PDF…', icon: 'importPdf', shortcut: 'Ctrl+D', onClick: () => openPdfWindow(editor) });
   return items;
+}
+
+/** Ctrl+D / Insert → PDF window: any PDF, only to read – it is not added to the library. */
+export async function openPdfWindow(editor) {
+  const st = await window.api.readerPick();
+  if (st) editor.app.reader.show(st, 'float');
 }

@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, ClipboardItem, nativeTheme, safeStorage, net, utilityProcess } = require('electron');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = fs.promises;
 const { Readable } = require('stream');
@@ -76,8 +77,11 @@ function resolveRequest(url) {
   if (u.host === 'lib' && library) {
     try { return library.abs(rel); } catch { return null; }
   }
+  // a PDF opened only to read (reference reader): served by a token, never copied into the library
+  if (u.host === 'view') return viewFiles.get(rel.replace(/\.pdf$/, '')) || null;
   return null;
 }
+const viewFiles = new Map(); // token -> absolute path
 
 async function serveFile(request) {
   const file = resolveRequest(request.url);
@@ -825,6 +829,13 @@ handle('reader:open', (state) => reader.open(state));
 handle('reader:dock', (state, ratio, side) => reader.dock(state, ratio, side));
 handle('reader:undock', (state, rect) => reader.undock(state, rect));
 handle('reader:close', () => reader.close());
+handle('reader:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: tr('Open a PDF to read'), filters: [{ name: 'PDF', extensions: ['pdf'] }], properties: ['openFile'] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const token = crypto.randomBytes(12).toString('hex');
+  viewFiles.set(token, r.filePaths[0]);
+  return { rel: `sn://view/${token}.pdf`, file: '', title: path.basename(r.filePaths[0], '.pdf'), page: 1 };
+});
 // Study session (src/main/study.js): a bar over every app, captures, the material back at the end
 const { Study } = require('./study');
 const study = new Study({ main: () => win, dir: path.join(app.getPath('userData'), 'study'), test: TEST_MODE });

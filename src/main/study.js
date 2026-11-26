@@ -33,6 +33,21 @@ const clip = fakeClip ? {
   },
 };
 
+// ---------- gestures all over Windows (scripts/study-hook.ps1) ----------
+const { spawn } = require('child_process');
+const HOOK = path.join(__dirname, 'scripts', 'study-hook.ps1');
+function startHook(onLine, env = {}) {
+  if (process.platform !== 'win32') return null;
+  const b64 = Buffer.from(fs.readFileSync(HOOK, 'utf8'), 'utf16le').toString('base64');
+  const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64], { windowsHide: true, env: { ...process.env, ...env } });
+  let buf = '';
+  ps.stdout.setEncoding('utf8');
+  ps.stdout.on('data', (d) => { buf += d; for (let i; (i = buf.indexOf('\n')) >= 0;) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line) onLine(line); } });
+  ps.stderr.on('data', () => {});
+  ps.on('error', () => {});
+  return ps;
+}
+
 const KEYS = { region: 'CommandOrControl+Shift+1', window: 'CommandOrControl+Shift+2', page: 'CommandOrControl+Shift+3' };
 
 class Study {
@@ -55,6 +70,8 @@ class Study {
     this.watch = setInterval(() => this.checkClipboard().catch(() => {}), 700);
     // (not in tests: on a virtual X display registering can block)
     if (!this.o.test) for (const [kind, key] of Object.entries(KEYS)) { try { globalShortcut.register(key, () => this.capture(kind)); } catch { /* taken by another app */ } }
+    // drag to select / double-click: collected; Ctrl + drag: a region
+    this.hook = this.o.test ? null : startHook((line) => this.gesture(line));
     const d = screen.getPrimaryDisplay().workArea;
     const w = 560, h = 56;
     this.bar = new BrowserWindow({ x: Math.round(d.x + (d.width - w) / 2), y: d.y + 10, width: w, height: h, frame: false, resizable: false, alwaysOnTop: true, skipTaskbar: false, show: false, transparent: false, backgroundColor: '#1f2023', title: 'StudyNotes – study session', webPreferences: this.webPrefs() });
@@ -105,8 +122,8 @@ class Study {
   }
 
   // the screen under the mouse as a picture (test: a fixed picture)
-  async screenShot() {
-    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  async screenShot(at) {
+    const d = screen.getDisplayNearestPoint(at || screen.getCursorScreenPoint());
     if (process.env.STUDYNOTES_STUDY_FAKE_SCREEN) return { img: nativeImage.createFromPath(process.env.STUDYNOTES_STUDY_FAKE_SCREEN), d };
     const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
@@ -126,10 +143,7 @@ class Study {
       if (kind === 'page') { await this.add({ kind: 'page', image: await this.keepImage(img) }); return; }
       // region: the screenshot full-screen, the user draws a rectangle
       const rect = await this.snip(img, d);
-      if (!rect) return;
-      const k = img.getSize().width / d.bounds.width;
-      const crop = img.crop({ x: Math.round(rect.x * k), y: Math.round(rect.y * k), width: Math.max(1, Math.round(rect.width * k)), height: Math.max(1, Math.round(rect.height * k)) });
-      await this.add({ kind: 'region', image: await this.keepImage(crop) });
+      if (rect) await this.addRegion(img, d, rect);
     } catch (err) {
       if (this.bar && !this.bar.isDestroyed()) { this.bar.showInactive(); this.bar.webContents.send('study:error', String(err.message || err)); }
     }
@@ -148,6 +162,59 @@ class Study {
       w.once('ready-to-show', () => { w.show(); w.focus(); });
       this.snipWin = w;
     });
+  }
+
+  // a line from the hook: snip-start / snip-move / snip-end x y (physical pixels)
+  gesture(line) {
+    const [what, xs, ys] = line.split(' ');
+    if (!/^snip-/.test(what)) return;
+    let pt = { x: Number(xs), y: Number(ys) };
+    try { if (screen.screenToDipPoint) pt = screen.screenToDipPoint(pt); } catch { /* not Windows */ }
+    if (what === 'snip-start') this.liveStart(pt);
+    else if (what === 'snip-move') this.liveMove(pt);
+    else this.liveEnd(pt);
+  }
+
+  // Ctrl + drag: the screen is taken at once, a dark veil shows the rectangle while dragging
+  liveStart(pt) {
+    if (!this.s || this.live) return;
+    const d = screen.getDisplayNearestPoint(pt);
+    const live = this.live = { d, a: pt, b: pt, shot: this.screenShot(pt).catch(() => null) };
+    const w = new BrowserWindow({ ...d.bounds, frame: false, transparent: true, focusable: false, skipTaskbar: true, resizable: false, movable: false, hasShadow: false, show: false, alwaysOnTop: true, webPreferences: this.webPrefs() });
+    w.setAlwaysOnTop(true, 'screen-saver');
+    w.setIgnoreMouseEvents(true);
+    w.loadURL('sn://app/index.html#sub=sniplive');
+    w.once('ready-to-show', () => { if (this.live === live) w.showInactive(); });
+    live.win = w;
+  }
+
+  liveMove(pt) {
+    const live = this.live;
+    if (!live) return;
+    live.b = pt;
+    const b = live.d.bounds;
+    const r = { x: Math.min(live.a.x, pt.x) - b.x, y: Math.min(live.a.y, pt.y) - b.y, width: Math.abs(pt.x - live.a.x), height: Math.abs(pt.y - live.a.y) };
+    if (live.win && !live.win.isDestroyed()) live.win.webContents.send('snip:rect', r);
+  }
+
+  async liveEnd(pt) {
+    const live = this.live;
+    if (!live) return;
+    this.live = null;
+    this.liveMove(pt);
+    if (live.win && !live.win.isDestroyed()) live.win.close();
+    const b = live.d.bounds;
+    const rect = { x: Math.min(live.a.x, pt.x) - b.x, y: Math.min(live.a.y, pt.y) - b.y, width: Math.abs(pt.x - live.a.x), height: Math.abs(pt.y - live.a.y) };
+    if (rect.width < 6 || rect.height < 6) return;
+    const shot = await live.shot;
+    if (!shot) return;
+    await this.addRegion(shot.img, shot.d, rect);
+  }
+
+  async addRegion(img, d, rect) {
+    const k = img.getSize().width / d.bounds.width;
+    const crop = img.crop({ x: Math.round(rect.x * k), y: Math.round(rect.y * k), width: Math.max(1, Math.round(rect.width * k)), height: Math.max(1, Math.round(rect.height * k)) });
+    await this.add({ kind: 'region', image: await this.keepImage(crop) });
   }
 
   async windows() {
@@ -176,6 +243,9 @@ class Study {
   finish(cancel = false) {
     if (!this.s) return null;
     clearInterval(this.watch);
+    if (this.hook) { try { this.hook.kill(); } catch { /* gone */ } this.hook = null; }
+    if (this.live && this.live.win && !this.live.win.isDestroyed()) this.live.win.close();
+    this.live = null;
     if (!this.o.test) for (const key of Object.values(KEYS)) { try { globalShortcut.unregister(key); } catch { /* not ours */ } }
     const st = this.state();
     st.rel = this.s.rel;
@@ -188,4 +258,4 @@ class Study {
   }
 }
 
-module.exports = { Study, KEYS };
+module.exports = { Study, KEYS, startHook };

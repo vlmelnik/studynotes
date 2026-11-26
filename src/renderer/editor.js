@@ -26,7 +26,7 @@ import { micButton } from './dictation.js';
 import { stickerPanel } from './stickers.js';
 import { LiveInk } from './live-ink.js';
 import { sinkUnder } from '../shared/stacking.js';
-import { readerMenuItems } from './reader-dock.js';
+import { readerMenuItems, openPdfWindow } from './reader-dock.js';
 import { startStudy } from './study.js';
 import { pageRows, contentBottom } from '../shared/notes-layout.js';
 
@@ -1138,7 +1138,7 @@ export class Editor {
       { label: 'Table…', icon: 'table', onClick: () => this.insertTableDialog() },
       { label: 'Signature…', icon: 'signature', onClick: () => signatureDialog(this) },
       { label: 'Telegram stickers…', icon: 'sticker', onClick: () => stickerPanel(this, this.stickerBtn.isConnected && this.stickerBtn.offsetParent ? this.stickerBtn : anchor) },
-      { label: 'Text box', icon: 'text', onClick: () => this.setTool('text') },
+      { label: 'PDF window…', icon: 'pageLandscape', shortcut: 'Ctrl+D', onClick: () => openPdfWindow(this) },
       { label: 'Pages from a PDF…', icon: 'importPdf', onClick: () => this.insertPdfDialog() },
       'sep',
       { label: 'Paste (Ctrl+V)', icon: 'copy', onClick: () => this.pasteFromSystem() },
@@ -1471,7 +1471,9 @@ export class Editor {
     }
     if (ctrl && k === 'c') { this.tools.copyAndDeselect(); return true; }
     if (ctrl && k === 'x') { this.tools.cut(); return true; }
-    if (ctrl && k === 'd') return this.tools.duplicate(), true;
+    if (ctrl && e.shiftKey && k === 'd') return this.tools.duplicate(), true;
+    if (ctrl && k === 'd' && !this.isBoard) return openPdfWindow(this), true;
+    if (ctrl && k === 'e' && !this.isBoard) return startStudy(this), true;
     if (ctrl && k === 'g') { if (this.tools.sel) this.tools.group(!e.shiftKey); return true; }
     if (ctrl && k === 'j' && !this.isBoard) { this.aiPanel.toggle(); return true; }
     if (ctrl && e.shiftKey && k === 'h' && !this.isBoard) { this.liveInk.toggle(); return true; }
