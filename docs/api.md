@@ -182,6 +182,7 @@ Each method registers a listener and returns nothing. They are plain
 | `readerOpen` | `{ rel, file, title, page, zoom }` | `true` | Opens the floating reference reader (always on top). | desktop-only |
 | `readerDock` | state, ratio, side | `true` | Glides the floating reader into the main window; the main window gets `reader:docked`. | desktop-only |
 | `readerUndock` | state, `{ x, y, width, height }` | `true` | From the docked pane out into its own window, gliding to its last place. | desktop-only |
+| `readerPick` | – | state or `null` | Picks a PDF only to read (served by a token, not added to the library). | desktop-only |
 | `readerClose` | – | – | Closes the floating reader. | desktop-only |
 | `onReaderState` | `(state)` | – | The floating reader gets what to show. | desktop-only |
 | `onReaderDocked` | `(state)` | – | The main window shows the docked reader. | desktop-only |
@@ -201,6 +202,7 @@ Each method registers a listener and returns nothing. They are plain
 | `onStudyPickWindow` | `()` | – | The window shortcut was pressed. | desktop-only |
 | `onStudyError` | `(message)` | – | A capture failed. | desktop-only |
 | `onStudyDone` | `(state)` | – | The session came back to the main window. | desktop-only |
+| `onSnipRect` | `(rect)` | – | The rectangle of a Ctrl + drag region while drawing. | desktop-only |
 | `onSnipImage` | `(dataUrl)` | – | The screenshot to draw a region on. | desktop-only |
 | `chatList` | – | `[{ id, title, notebook, updated, sessionId }]` | All saved chats, newest first (userData/chats.json, up to 300). | needed |
 | `chatGet` | `id` | chat or `null` | One saved chat with its messages. | needed |
