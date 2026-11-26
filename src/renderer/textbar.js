@@ -80,6 +80,12 @@ export class TextBar {
 
   mount(host) { host.append(this.el); }
 
+  /** While a box is dragged the bar fades out, and fades in again where the box lands. */
+  hold(on) {
+    this.el.classList.toggle('held', on);
+    if (!on) { this.update(); }
+  }
+
   // Which text box(es) the bar is for right now, or null.
   currentTarget() {
     const ed = this.editor;
@@ -186,7 +192,7 @@ export class TextBar {
     const hr = host.getBoundingClientRect();
     const bw = this.el.offsetWidth, bh = this.el.offsetHeight;
     let x = (r.left + r.right) / 2 - hr.left - bw / 2;
-    let y = r.bottom - hr.top + 14;
+    let y = r.bottom - hr.top + 42; // room for the rotate spot at the bottom-right corner
     if (y + bh > hr.height - 8) y = r.top - hr.top - bh - 14;
     x = Math.max(8, Math.min(x, hr.width - bw - 8));
     y = Math.max(8, Math.min(y, hr.height - bh - 8));

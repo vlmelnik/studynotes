@@ -8,6 +8,31 @@ import { richToPlain } from '../shared/richtext.js';
 import { LINE_H, escHtml } from '../shared/util.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
 import { stacked } from '../shared/stacking.js';
+import { PAPER_COLORS, isDark } from '../shared/paper.js';
+
+// SVG code in copied text (alone, maybe in a ``` block or after an XML line)
+export function svgSource(text) {
+  const m = /^\s*(?:```[a-z]*\s*)?(?:<\?xml[^>]*>\s*)?(<svg[\s>][\s\S]*<\/svg>)\s*(?:```)?\s*$/i.exec(String(text || ''));
+  return m ? m[1] : null;
+}
+
+async function svgToPng(svg) {
+  if (!/xmlns=/.test(svg)) svg = svg.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    await new Promise((ok, bad) => { img.onload = ok; img.onerror = () => bad(new Error('The SVG could not be read')); img.src = url; });
+    let w = img.naturalWidth || 600, h = img.naturalHeight || 400;
+    const k = Math.min(4, 2400 / Math.max(w, h), Math.max(2, 1200 / Math.max(w, h)));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png' };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+const darkPaper = (page) => !!page && page.kind !== 'pdf' && !!PAPER_COLORS[page.pc] && isDark(PAPER_COLORS[page.pc].bg);
 import { clipPlan } from '../shared/clip-plan.js';
 import { boxWarp, cssMatrix3d, validStops } from '../shared/warp.js';
 import { boxStyle, docLook, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } from '../shared/textbox.js';
@@ -280,9 +305,10 @@ export const objectsMixin = {
     const data = this.pageData(view.page.id);
     view.itemsLayer.replaceChildren();
     view.textLayer.replaceChildren();
+    const dark = darkPaper(view.page);
     for (const [layer, host] of [['b', view.itemsLayer], ['f', view.textLayer]]) {
       for (const { kind, obj } of stacked(data, layer)) {
-        const el = kind === 'text' ? this.textboxElement(view, obj) : this.itemElement(obj);
+        const el = kind === 'text' ? this.textboxElement(view, obj) : this.itemElement(obj, dark);
         if (el) host.append(el);
       }
     }
@@ -488,6 +514,7 @@ export const objectsMixin = {
       const t0 = find();
       const before = this.pageData(pageId);
       const sx = e.clientX, sy = e.clientY, z = this.viewer.zoom;
+      this.textBar.hold(true);
       const move = (ev) => {
         const dx = (ev.clientX - sx) / z, dy = (ev.clientY - sy) / z;
         if (mode === 'move') { wrap.style.left = t0.x + dx + 'px'; wrap.style.top = t0.y + dy + 'px'; }
@@ -499,6 +526,7 @@ export const objectsMixin = {
       const up = (ev) => {
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', up);
+        setTimeout(() => this.textBar.hold(false), 0); // after the box landed: the bar comes back there
         const dx = (ev.clientX - sx) / z, dy = (ev.clientY - sy) / z;
         if (Math.abs(dx) + Math.abs(dy) < 0.5) return;
         // A width set by hand stays fixed (the box no longer grows by itself).
@@ -840,29 +868,31 @@ export const objectsMixin = {
     return img.complete && img.naturalWidth ? img : null;
   },
 
-  itemElement(it) {
+  itemElement(it, dark = false) {
     if (it.type === 'img') {
       // Rotation and transparency are on the <img>, so moving/scaling the
       // selection (a transform on the outer box) combines with them.
       return h('div', { class: 'item img-item', dataset: { id: it.id }, style: { left: it.x + 'px', top: it.y + 'px', width: it.w + 'px', height: it.h + 'px' } },
         h('img', { src: this.assetUrl(it.src), draggable: 'false', alt: '', style: { transform: it.r ? `rotate(${it.r}deg)` : '', opacity: it.o != null && it.o < 1 ? String(it.o) : '' } }));
     }
-    if (it.type === 'table') return this.tableElement(it);
+    if (it.type === 'table') return this.tableElement(it, dark);
     return null; // unknown types (from newer versions) are kept in the data, not shown
   },
 
-  tableElement(it) {
+  // on dark paper the table is dark too (black text turns light; own colours stay)
+  tableElement(it, dark = false) {
     const rows = it.cells || [];
-    const table = h('table', { style: { fontFamily: fontCss(it.ff), fontSize: (it.fs || 12) + 'px', color: it.c || '#1c1c1e', width: it.cw.reduce((a, b) => a + b, 0) + 'px' } },
+    const ink = dark && (!it.c || isDark(it.c)) ? '#e6e7ea' : it.c || '#1c1c1e';
+    const table = h('table', { class: dark ? 'dark' : '', style: { fontFamily: fontCss(it.ff), fontSize: (it.fs || 12) + 'px', color: ink, width: it.cw.reduce((a, b) => a + b, 0) + 'px' } },
       h('colgroup', {}, ...it.cw.map((w) => h('col', { style: { width: w + 'px' } }))),
       ...rows.map((row, r) => h('tr', {}, ...it.cw.map((_, c) => {
         const cell = row[c] || {};
         const td = h('td', {
           dataset: { r, c },
           style: {
-            background: cell.bg || (it.hdr && r === 0 ? '#eef2f7' : ''),
+            background: cell.bg || (it.hdr && r === 0 ? (dark ? '#343842' : '#eef2f7') : ''),
             fontWeight: cell.b || (it.hdr && r === 0) ? '700' : '', fontStyle: cell.i ? 'italic' : '', textDecoration: cell.u ? 'underline' : '',
-            color: cell.c || '',
+            color: cell.c && !(dark && isDark(cell.c)) ? cell.c : '',
           },
         });
         if (cell.h) { td.innerHTML = safeHtml(cell.h); if (cell.h.includes('data-x')) extensions.renderInline(td); } else td.textContent = cell.t || '';
@@ -1153,10 +1183,14 @@ export const objectsMixin = {
     // 2. Tables (Excel, Word, web pages).
     const rows = (html && /<table/i.test(html) && tableFromHtml(html)) || null;
     if (rows) return this.tools.placeObjects(point.index, { items: [this.clampToPage(point.index, this.makeTable(rows, point))] });
-    // 3. Pictures (screenshots, copied images).
+    // 3. Pictures (screenshots, copied images); SVG (also as code, e.g. from ChatGPT) becomes a sharp PNG
     const images = files.filter((f) => f.type.startsWith('image/'));
     if (images.length) {
-      return this.placeImages(await Promise.all(images.map(async (f) => ({ bytes: new Uint8Array(await f.arrayBuffer()), mime: f.type }))), point);
+      return this.placeImages(await Promise.all(images.map(async (f) => (f.type === 'image/svg+xml' ? svgToPng(await f.text()) : { bytes: new Uint8Array(await f.arrayBuffer()), mime: f.type }))), point);
+    }
+    const svg = svgSource(text);
+    if (svg) {
+      try { return this.placeImages([await svgToPng(svg)], point); } catch (err) { console.warn('svg paste', err); }
     }
     // 4. Files copied in Explorer (pictures / PDFs). Chromium puts them into
     // the paste event's file list; the main-process lookup is the fallback.

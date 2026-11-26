@@ -2,7 +2,7 @@
 // shapes, panning – plus the selection (move / resize / restyle) shared by
 // the select tool, the lasso and paste.
 import { combineBoxes } from '../shared/scan-layout.js';
-import { h, showMenu } from './ui.js';
+import { h, showMenu, fitBar } from './ui.js';
 import { icon } from './icons.js';
 import { docLook } from '../shared/textbox.js';
 import { drawLive, drawStrokes } from './inkrender.js';
@@ -862,8 +862,8 @@ export class Tools {
 
     const box = h('div', { class: 'sel-box' },
       ...['nw', 'ne', 'sw', 'se'].map((corner) => h('div', { class: `sel-handle ${corner}`, dataset: { corner } })));
-    // Anything except tables can be turned with the round handle under it.
-    if (!items.some((it) => it.type === 'table')) box.append(h('div', { class: 'sel-rotate', title: 'Drag to rotate (snaps to 0°, 90°, 180°, 270°; Shift = 15° steps)' }));
+    // Anything except tables turns from just outside the bottom-right corner (the square itself resizes)
+    if (!items.some((it) => it.type === 'table')) box.append(h('div', { class: 'sel-rotate', title: 'Rotate (snaps to 0°, 90°, 180°, 270°; Shift = 15° steps)', 'aria-label': 'Rotate' }));
     const domEls = [
       ...texts.map((t) => view.el.querySelector(`.textbox-wrap[data-id="${t.id}"]`)),
       ...items.map((it) => view.el.querySelector(`.item[data-id="${it.id}"]`)),
@@ -897,7 +897,7 @@ export class Tools {
     const parts = [
       btn('cut', 'Cut (Ctrl+X)', () => this.cut()),
       btn('copy', 'Copy (Ctrl+C)', () => this.copyAndDeselect()),
-      btn('duplicate', 'Duplicate (Ctrl+D)', () => this.duplicate()),
+      btn('duplicate', 'Duplicate (Ctrl+Shift+D)', () => this.duplicate()),
       btn('trash', 'Delete (Del)', () => this.deleteSelection(), 'danger'),
     ];
     if (strokes.length || texts.length || tables.length) {
@@ -988,6 +988,19 @@ export class Tools {
     return h('div', { class: 'sel-toolbar' }, ...parts);
   }
 
+  // the bar stays inside the visible area: what does not fit goes behind "⋯", the rest shifts left
+  fitSelBar() {
+    const sel = this.sel, host = this.editor.viewerHost;
+    if (!sel || !sel.bar || !host || !sel.bar.isConnected) return;
+    const hr = host.getBoundingClientRect();
+    const max = Math.round(hr.width - 24);
+    if (sel.barMax !== max) { sel.barMax = max; fitBar(sel.bar, max); }
+    const br = sel.bar.getBoundingClientRect();
+    const over = br.right - (hr.right - 12);
+    const under = hr.left + 12 - (br.left - over);
+    if (over > 0) sel.bar.style.left = (parseFloat(sel.bar.style.left) - over + Math.max(0, under)) + 'px';
+  }
+
   fontMenu(anchor) {
     showMenu(Object.entries(FONTS).map(([id, f]) => ({ label: f.label, onClick: () => this.restyle({ ff: id }) })), 0, 0, anchor);
   }
@@ -1005,6 +1018,7 @@ export class Tools {
       width: (nx1 - nx0) * z + pad * 2 + 'px', height: (ny1 - ny0) * z + pad * 2 + 'px',
     });
     Object.assign(sel.bar.style, { left: Math.max(0, (nx0 - ox) * z) + 'px', top: Math.max(-44, (ny0 - oy) * z - pad - 46) + 'px' });
+    this.fitSelBar();
     // p' = a + (p - a)·s + t. For an element whose top-left is at E:
     // translate((a - E)(1 - s) + t) scale(s), origin at the element's top-left.
     const R = sel.canvasRect;
@@ -1068,7 +1082,8 @@ export class Tools {
       this.cur.a0 = Math.atan2(e.clientY - this.cur.center[1], e.clientX - this.cur.center[0]);
       this.cur.delta = 0;
     }
-    sel.bar.style.visibility = 'hidden';
+    sel.bar.classList.add('held');
+    if (this.editor.textBar) this.editor.textBar.hold(true);
     // what is being dragged stays above the neighbouring pages
     sel.view.el.classList.add('drag-front');
     this.cur.frontEl = sel.view.el;
@@ -1140,7 +1155,8 @@ export class Tools {
     if (c.frontEl) c.frontEl.classList.remove('drag-front');
     const sel = this.sel;
     if (!sel) return;
-    sel.bar.style.visibility = '';
+    if (this.sel && this.sel.bar) this.sel.bar.classList.remove('held');
+    if (this.editor.textBar) setTimeout(() => this.editor.textBar.hold(false), 0);
     if (c.mode === 'rotate') {
       if (cancelled || !c.delta) { this.previewRotation(0, c.pc); this.positionSelection(); return; }
       return this.rotateSelection(c.delta, c.pc);
@@ -1461,7 +1477,11 @@ export class Tools {
       items: before.items.filter((it) => !sel.itemIds.has(it.id)),
     };
     if (sel === this.sel) this.clearSelection();
+    // a cut or deleted text box takes its editing frame and text bar with it
+    const te = this.editor.textEdit;
+    if (te && te.pageId === sel.pageId && sel.textIds.has(te.id)) this.editor.finishTextEdit();
     this.editor.commit(sel.pageId, before, after);
+    if (this.editor.textBar) this.editor.textBar.update();
   }
 
   duplicate() {

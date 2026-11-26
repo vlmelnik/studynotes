@@ -253,3 +253,26 @@ export function describeKey(k) {
   const name = k.key && k.key.length === 1 ? k.key.toUpperCase() : (k.key || k.code);
   return [k.ctrl && 'Ctrl', k.alt && 'Alt', k.shift && 'Shift', name].filter(Boolean).join('+');
 }
+
+/**
+ * A bar wider than `max` px: its last parts move into a "⋯" pop-up under it
+ * (the parts keep their handlers). Called again after a resize it starts over.
+ */
+export function fitBar(bar, max) {
+  const old = bar.querySelector(':scope > .bar-more');
+  if (old) { for (const c of [...old._pop.children]) bar.insertBefore(c, old); old._pop.remove(); old.remove(); }
+  if (!max || bar.scrollWidth <= max + 1) return;
+  const pop = h('div', { class: 'bar-more-pop' });
+  const more = h('button', { class: 'icon-btn sm bar-more', title: 'More', 'aria-label': 'More tools', 'aria-expanded': 'false', html: icon('more', 18) });
+  more._pop = pop;
+  more.addEventListener('pointerdown', (e) => e.stopPropagation());
+  more.addEventListener('click', (e) => { e.stopPropagation(); const on = !pop.classList.contains('open'); pop.classList.toggle('open', on); more.setAttribute('aria-expanded', String(on)); });
+  pop.addEventListener('pointerdown', (e) => e.stopPropagation());
+  bar.append(more);
+  const kids = () => [...bar.children].filter((c) => c !== more && c !== pop);
+  while (bar.scrollWidth > max + 1 && kids().length > 1) pop.prepend(kids().pop());
+  // no separator at the end of the bar or at the start of the pop-up
+  while (kids().length && /(^|\s)(sep|opt-sep|mini-sep)(\s|$)/.test(kids().pop().className)) pop.prepend(kids().pop());
+  while (pop.firstChild && /(^|\s)(sep|opt-sep|mini-sep)(\s|$)/.test(pop.firstChild.className)) pop.firstChild.remove();
+  bar.append(pop);
+}

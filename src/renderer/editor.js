@@ -1,7 +1,7 @@
 // Notebook editor: toolbar, options bar, page sidebar, viewer, tools,
 // undo/redo, autosave. Text boxes, pictures, tables, paste and insert live in
 // editor-objects.js; thumbnails and search in editor-panels.js.
-import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, errorText, debounce, parseRange, shortcutKey, sameKey } from './ui.js';
+import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, errorText, debounce, parseRange, shortcutKey, sameKey, fitBar } from './ui.js';
 import { icon } from './icons.js';
 import { Viewer, MIN_ZOOM, MAX_ZOOM } from './viewer.js';
 import { Tools, uid, textBBox, itemBBox } from './tools.js';
@@ -590,7 +590,7 @@ export class Editor {
       opt(iconButton('export', 'Export PDF', (e) => this.exportMenu(e.currentTarget), 'bar-btn'), 6, 'Export…', 'export', () => this.exportMenu(this.moreBtn)),
       this.moreBtn);
     tb.append(left, center, right);
-    this.toolbarRO = new ResizeObserver(() => this.fitToolbarButtons());
+    this.toolbarRO = new ResizeObserver(() => { this.fitToolbarButtons(); this.fitOptions(); if (this.tools && this.tools.sel) this.tools.fitSelBar(); });
     this.toolbarRO.observe(tb);
 
     this.optionsBar = h('div', { class: 'tool-options' });
@@ -633,6 +633,13 @@ export class Editor {
   }
 
   // ---------- tool options (dark strip under the toolbar) ----------
+  // narrow window (split screen): what does not fit in the strip goes behind "⋯"
+  fitOptions() {
+    const host = this.viewerHost;
+    if (!host || !this.optionsBar.isConnected) return;
+    fitBar(this.optionsBar, host.clientWidth - 24);
+  }
+
   renderOptions() {
     const ts = this.toolState;
     const bar = this.optionsBar;
@@ -743,6 +750,7 @@ export class Editor {
       default: break; // select, hand: no options → strip hidden
     }
     bar.classList.toggle('empty', !bar.childElementCount);
+    this.fitOptions();
   }
 
   // Any pen size: slider and a number field.
@@ -1469,7 +1477,7 @@ export class Editor {
       });
       return true;
     }
-    if (ctrl && k === 'c') { this.tools.copyAndDeselect(); return true; }
+    if (ctrl && k === 'c') { if (!this.tools.textSel.copy()) this.tools.copyAndDeselect(); return true; }
     if (ctrl && k === 'x') { this.tools.cut(); return true; }
     if (ctrl && e.shiftKey && k === 'd') return this.tools.duplicate(), true;
     if (ctrl && k === 'd' && !this.isBoard) return openPdfWindow(this), true;
