@@ -25,6 +25,7 @@ import { AiPanel } from './ai-panel.js';
 import { micButton } from './dictation.js';
 import { stickerPanel } from './stickers.js';
 import { LiveInk } from './live-ink.js';
+import { sinkUnder } from '../shared/stacking.js';
 import { readerMenuItems } from './reader-dock.js';
 import { startStudy } from './study.js';
 import { pageRows, contentBottom } from '../shared/notes-layout.js';
@@ -347,11 +348,16 @@ export class Editor {
     this.finishEditing();
     const before = this.pageData(pageId);
     const after = { ...before, strokes: before.strokes.concat([st]) };
+    // ink over a picture that was added after it: the newest is on top, the picture goes under the ink
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i + 1 < st.p.length; i += 3) { x0 = Math.min(x0, st.p[i]); x1 = Math.max(x1, st.p[i]); y0 = Math.min(y0, st.p[i + 1]); y1 = Math.max(y1, st.p[i + 1]); }
+    const sunk = st.t === 'eraser' ? null : sinkUnder(before, { x0, y0, x1, y1 });
+    if (sunk) after.items = sunk;
     this.pushUndo(pageId, before, after);
     this.doc.pages[pageId] = after;
     this.markDirty(pageId);
     const v = this.viewer.viewById(pageId);
-    if (v) v.addStroke(st);
+    if (v) { v.addStroke(st); if (sunk) this.renderObjects(v); }
     this.sidebar.invalidate(pageId);
     if (this.liveInk) this.liveInk.stroke(pageId, st);
   }

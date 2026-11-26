@@ -27,11 +27,16 @@ function png(w, hh) {
   const clipPng = path.join(tmp, 'clip.png');
   fs.writeFileSync(clipPng, png(300, 200));
   const pipe = path.join(tmp, 'mcp.sock');
-  const clipFile = path.join(tmp, 'clipboard.json');
-  const setClip = (v) => fs.writeFileSync(clipFile, JSON.stringify(v));
-  setClip({ text: 'this was on the clipboard before' });
-  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_STUDY_FAKE_SCREEN: screenPng, STUDYNOTES_STUDY_FAKE_CLIPBOARD: clipFile, STUDYNOTES_MCP_PIPE: pipe, STUDYNOTES_CLAUDE_BIN: path.join(root, 'test', 'e2e', 'fixtures', 'fake-claude.js') } });
+  // the real clipboard (Electron's async ClipboardItem API)
+  let setClip;
+  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_STUDY_FAKE_SCREEN: screenPng, STUDYNOTES_MCP_PIPE: pipe, STUDYNOTES_CLAUDE_BIN: path.join(root, 'test', 'e2e', 'fixtures', 'fake-claude.js') } });
   await win.waitForFunction(() => window.__app && document.querySelector('.library'));
+  setClip = (v) => app.evaluate(async ({ clipboard, ClipboardItem }, [text, b64]) => {
+    const items = { 'text/plain': text };
+    if (b64) items['image/png'] = new Blob([Buffer.from(b64, 'base64')], { type: 'image/png' });
+    await clipboard.write([new ClipboardItem(items)]);
+  }, [v.text || '', v.image ? fs.readFileSync(v.image).toString('base64') : '']);
+  await setClip({ text: 'this was on the clipboard before' });
   if (process.env.DEBUG) { win.on('console', (m) => console.log('CONSOLE', m.type(), m.text().slice(0, 3000))); win.on('pageerror', (e) => console.log('STACK', e.stack)); }
   await ed(async () => { const r = await window.api.createNotebook('', { title: 'Semiconductors', paper: 'lined', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForFunction(() => window.__app.active?.viewer?.views.size > 0);
@@ -52,9 +57,9 @@ function png(w, hh) {
   const bar = await start('Doping');
   check('the bar: on top, with the topic, nothing collected yet (old clipboard ignored)', (await bar.locator('.sb-topic').textContent()) === 'Doping' && await count(bar) === 0
     && await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => /#sub=study/.test(w.webContents.getURL())).isAlwaysOnTop()));
-  setClip({ text: 'Donors add free electrons to the crystal.' });
+  await setClip({ text: 'Donors add free electrons to the crystal.' });
   await waitCount(bar, 1);
-  setClip({ text: 'Donors add free electrons to the crystal.', image: clipPng });
+  await setClip({ text: 'Donors add free electrons to the crystal.', image: clipPng });
   await waitCount(bar, 2);
   check('copied text and a copied picture are collected', true);
   await bar.getByRole('button', { name: 'Screen' }).click();
@@ -68,7 +73,7 @@ function png(w, hh) {
   await bar.getByLabel('Your note').fill('ask about the p-n junction');
   await bar.getByLabel('Your note').press('Enter');
   await waitCount(bar, 5);
-  setClip({ text: '  Donors add free electrons to the  crystal. ' });
+  await setClip({ text: '  Donors add free electrons to the  crystal. ' });
   await bar.waitForTimeout(1200);
   check('the same text again within minutes is not added twice', await count(bar) === 5);
   if (process.env.SHOT) { fs.mkdirSync(process.env.SHOT, { recursive: true }); await bar.screenshot({ path: path.join(process.env.SHOT, 'study-bar.png') }); }
@@ -92,7 +97,7 @@ function png(w, hh) {
   // ---- session 2: Claude files it ----
   await ed(() => { window.__app.settings.ai = { enabled: true, via: 'claudecode' }; });
   const bar2 = await start('Doping 2', 'focus on formulas');
-  setClip({ text: 'n-type: more electrons than holes.' });
+  await setClip({ text: 'n-type: more electrons than holes.' });
   await waitCount(bar2, 1);
   await bar2.getByRole('button', { name: 'Screen' }).click();
   await waitCount(bar2, 2);

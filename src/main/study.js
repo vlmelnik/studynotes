@@ -4,20 +4,34 @@
 // (Ctrl+Shift+1), a window (Ctrl+Shift+2), the whole screen (Ctrl+Shift+3),
 // everything copied with Ctrl+C (text or pictures) and own notes. At the end
 // the main window gets the session back to file it into the notebook.
-const { BrowserWindow, globalShortcut, clipboard, desktopCapturer, screen, nativeImage } = require('electron');
+const electron = require('electron');
+const { BrowserWindow, globalShortcut, desktopCapturer, screen, nativeImage } = electron;
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 const crypto = require('crypto');
 const { newSession, addItem, removeItem, summary } = require('../shared/capture-session');
 
-// the clipboard (tests: a JSON file { text, image } – reading the X clipboard of a virtual display can block)
+// the clipboard (tests: a JSON file { text, image } – reading the X clipboard of a
+// virtual display can block). Electron 44+ only has the async ClipboardItem API.
 const fakeClip = process.env.STUDYNOTES_STUDY_FAKE_CLIPBOARD;
 const clip = fakeClip ? {
   read() { try { return JSON.parse(fs.readFileSync(fakeClip, 'utf8')); } catch { return {}; } },
-  readText() { return this.read().text || ''; },
-  readImage() { const f = this.read().image; return f ? nativeImage.createFromPath(f) : nativeImage.createEmpty(); },
-} : clipboard;
+  async readText() { return this.read().text || ''; },
+  async readImage() { const f = this.read().image; return f ? nativeImage.createFromPath(f) : nativeImage.createEmpty(); },
+} : {
+  // never fatal: a session must go on even when the clipboard cannot be read
+  async readText() { try { return String(await electron.clipboard.readText() || ''); } catch { return ''; } },
+  async readImage() {
+    try {
+      for (const item of await electron.clipboard.read()) {
+        const type = item.types.find((t) => /^image\/(png|jpeg|bmp|webp|gif)$/.test(t));
+        if (type) return nativeImage.createFromBuffer(Buffer.from(await (await item.getType(type)).arrayBuffer()));
+      }
+    } catch { /* nothing readable */ }
+    return nativeImage.createEmpty();
+  },
+};
 
 const KEYS = { region: 'CommandOrControl+Shift+1', window: 'CommandOrControl+Shift+2', page: 'CommandOrControl+Shift+3' };
 
@@ -36,8 +50,8 @@ class Study {
     this.folder = path.join(this.o.dir, id);
     await fsp.mkdir(this.folder, { recursive: true });
     // what is on the clipboard now is not part of the session
-    this.lastText = clip.readText();
-    this.lastImage = this.imageKey(clip.readImage());
+    this.lastText = await clip.readText();
+    this.lastImage = this.imageKey(await clip.readImage());
     this.watch = setInterval(() => this.checkClipboard().catch(() => {}), 700);
     // (not in tests: on a virtual X display registering can block)
     if (!this.o.test) for (const [kind, key] of Object.entries(KEYS)) { try { globalShortcut.register(key, () => this.capture(kind)); } catch { /* taken by another app */ } }
@@ -77,10 +91,15 @@ class Study {
   }
 
   async checkClipboard() {
-    if (!this.s) return;
-    const text = clip.readText();
+    if (!this.s || this.checking) return;
+    this.checking = true;
+    try { await this.readClipboard(); } finally { this.checking = false; }
+  }
+
+  async readClipboard() {
+    const text = await clip.readText();
     if (text && text !== this.lastText) { this.lastText = text; await this.add({ kind: 'text', text: text.slice(0, 20000) }); return; }
-    const img = clip.readImage();
+    const img = await clip.readImage();
     const key = this.imageKey(img);
     if (key && key !== this.lastImage) { this.lastImage = key; await this.add({ kind: 'region', image: await this.keepImage(img) }); }
   }
