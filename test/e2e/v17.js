@@ -293,8 +293,9 @@ const launch = () => launchApp({ tmp, env: { STUDYNOTES_FAKE_INK: '1', STUDYNOTE
     await win.locator('.chip', { hasText: 'To text' }).first().click();
     await win.waitForTimeout(600);
     const d = await pageData();
+    // (Google is the default engine: it reads the strokes of a line together – fake: "gwordN")
     check('E: handwriting → "Copy as text" and "To text" (text box in the ink colour, ink removed, one undo)',
-      clip === 'word1 word2' && d.strokes.length === 0 && d.texts.length === 1 && d.texts[0].text === 'word1 word2' && d.texts[0].c === '#1a4fd6',
+      clip === 'gword1 gword2' && d.strokes.length === 0 && d.texts.length === 1 && d.texts[0].text === 'gword1 gword2' && d.texts[0].c === '#1a4fd6',
       JSON.stringify({ clip, s: d.strokes.length, t: d.texts.map((q) => [q.text, q.c, q.fs]) }));
     await ed(() => window.__app.active.undo());
     const u = await pageData();

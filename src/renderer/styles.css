@@ -307,7 +307,9 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--kbd); bord
 .toast-host { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { display: flex; gap: 12px; align-items: center; padding: 10px 16px; background: #2b2a28; color: #fff; border-radius: 10px; box-shadow: var(--shadow-lg); pointer-events: auto; animation: rise .18s; max-width: 70vw; transition: opacity .3s, transform .3s; }
 .toast.error { background: #8e2b22; }
-.toast.out { opacity: 0; transform: translateY(6px); }
+.toast.out { opacity: 0; transform: translateY(6px); pointer-events: none; }
+/* a message without a button never blocks writing under it */
+.toast:not(:has(.toast-action)) { pointer-events: none; }
 .toast-action { border: 0; background: transparent; color: #9cc2ff; font-weight: 600; cursor: pointer; padding: 0; }
 .loading-overlay { position: fixed; inset: 40px 0 0; z-index: 1200; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; background: var(--overlay); }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
@@ -1048,3 +1050,4 @@ body.sub-sniplive.drawing .snip-veil { opacity: 0; }
 .bar-more-pop { display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; flex-wrap: wrap; align-items: center; gap: 4px; max-width: min(420px, 90vw); padding: 6px 8px; border-radius: 12px; background: inherit; color: inherit; box-shadow: var(--shadow-lg); }
 .bar-more-pop.open { display: flex; }
 .bar-more-pop .sep, .bar-more-pop .opt-sep { display: none; }
+.live-type { position: fixed; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 3px; }

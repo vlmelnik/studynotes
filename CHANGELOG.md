@@ -4,6 +4,11 @@
 
 **Reference reader and study sessions**
 - Reference reader (⋯ menu → Reader): a PDF in a small window that stays on top of everything – scroll, zoom, select and copy text – or next to the notes in the main window. "Dock" glides the window into the main window, "Undock" glides it back out; drag the divider, swap the sides.
+- Study session, round 3: Ctrl+E works in every app – starts at once (no dialog), pauses (what was collected waits in the notebook's chat) and goes on with the same session; only Finish opens the review. The bar is small and half see-through: time, count, a mic for spoken notes, Finish. Ctrl + drag: a region (the screen darkens at once now), Alt + click: a window, Alt+S: the whole screen. Copy image in the browser is read in more forms; formats that still are not are written to a log.
+- Chat: "Chat with" Claude Code or ChatGPT (Codex) – Codex uses your ChatGPT plan (also Free and Plus).
+- Handwriting becomes text: read by Google from the strokes themselves – much faster and better than before, the words before go along as context; while the pen hovers it waits, so a word with a pause stays one word; the words come out of a blur as if typed. The Windows recognizer stays as a choice.
+- Tables on dark paper are dark; bars that do not fit (table, pen colours on a half screen) put the rest behind "⋯"; text boxes turn from just outside the bottom-right corner; Ctrl+X takes the text bar along; Ctrl+C copies selected PDF text; the bars fade out while a box is moved; SVG code (e.g. from ChatGPT) pastes as a picture; messages at the bottom no longer block writing under them.
+- Settings: "Built in" (always on: searchable scans, handwriting to text, formulas on paste) and "Add-ons" (what can be switched on or downloaded).
 - Insert → PDF window… (Ctrl+D): any PDF, only to read – it is not added to the library. Duplicate is now Ctrl+Shift+D.
 - Reader: selecting text copies it at once (Ctrl+C works too). Drag the window by its header to the left or right edge of the main window – a blue strip shows – and it pours in on that side; drag the docked header out to get the window back. Resizing the window no longer makes it grow by itself. Dialogs of StudyNotes are no longer hidden behind it.
 - Order by time: a picture added after ink or text covers it; ink written later goes over the picture.

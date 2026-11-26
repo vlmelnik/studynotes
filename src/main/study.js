@@ -133,7 +133,7 @@ class Study {
         setTimeout(() => { if (!this.hookReady && this.active && !this.watch) this.watch = setInterval(() => this.checkClipboard().catch(() => {}), 500); }, 8000);
       } else this.hook.say('on');
     }
-    this.veil();
+    if (this.hook) this.veil(); // ready for the first Ctrl + drag (only with the gesture hook)
     const bar = this.bar;
     if (bar && !bar.isDestroyed()) { if (bar.webContents.isLoading()) bar.once('ready-to-show', () => { if (!this.paused) bar.showInactive(); }); else bar.showInactive(); }
     this.push();

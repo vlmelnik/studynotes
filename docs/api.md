@@ -103,6 +103,7 @@ Two handlers exist only when the app runs with `STUDYNOTES_TEST` set
 | `ocrSpell` | `lines` | corrected lines | Checks and corrects recognized lines in a separate process that ends after 2 idle minutes. | later |
 | `inkRecognize` | `strokes`, `recognizer` | `{ words, text }` | Recognizes handwriting with the Windows recognizer through PowerShell. | desktop-only |
 | `inkRecognizeLive` | `strokes`, `recognizer` | `{ words, text }` | Like `inkRecognize` through one PowerShell that stays open (live handwriting to text). | desktop-only |
+| `inkGoogle` | strokes `[[x, y, …]]`, `{ lang, pre }` | `{ text }` | Live handwriting read by Google from the strokes (online, fast). | desktop-only |
 | `inkRecognizers` | none | list of recognizer names | Lists the installed Windows handwriting recognizers. | desktop-only |
 
 ## Backup

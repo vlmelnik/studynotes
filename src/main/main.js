@@ -624,6 +624,9 @@ handle('screen:pixel', async (x, y) => {
 handle('ink:recognize', (strokes, recognizer) => handwriting.recognize(strokes, recognizer));
 handle('ink:recognizers', () => handwriting.recognizers());
 handle('ink:recognizeLive', (strokes, recognizer) => handwriting.recognizeLive(strokes, recognizer));
+// live handwriting read by Google from the strokes (src/main/ink-google.js); tests: one "gword" per stroke
+const { recognizeGoogle } = require('./ink-google');
+handle('ink:google', (strokes, opts) => (process.env.STUDYNOTES_FAKE_INK ? { text: strokes.map((_, i) => `gword${i + 1}`).join(' ') } : recognizeGoogle(strokes, opts || {}, net.fetch)));
 app.on('will-quit', () => handwriting.stopLive());
 
 // ---------- text recognition add-on ----------

@@ -489,7 +489,8 @@ class App {
       ]],
       ['sync', 'Google Drive', 'cloud', () => [this.driveSettings()]],
       ['ai', 'AI assistant', 'ai', () => [this.aiSettings()]],
-      ['addons', 'Add-ons', 'star', () => [this.addonSettings()]],
+      ['builtin', 'Built in', 'check', () => [h('small', { class: 'hint wrap' }, 'Part of StudyNotes, always on, nothing to download.'), this.addonSettings(true)]],
+      ['addons', 'Add-ons', 'star', () => [this.addonSettings(false)]],
       ['about', 'About', 'more', () => [
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => showWhatsNew(this.info.version) }, "What's new"),
           h('button', { class: 'btn', onclick: () => this.showAbout() }, 'About StudyNotes')),
@@ -677,7 +678,8 @@ class App {
   // ---------- add-ons ----------
   // A list of add-ons: each with a switch and, when it has any, its settings
   // (opened with "Settings"). New add-ons go into ADDONS below.
-  addonSettings() {
+  // builtIn: the parts of the app that are always on (their settings); otherwise what can be switched on or downloaded
+  addonSettings(builtIn = false) {
     const s = this.settings;
     const sw = (on, onChange, label) => {
       const input = h('input', { type: 'checkbox', role: 'switch', checked: on, 'aria-label': label, onchange: (e) => onChange(e.target.checked) });
@@ -700,7 +702,7 @@ class App {
           h('p', { class: 'addon-about' }, about),
           settings ? h('div', { class: 'addon-settings' }, ...settings) : null));
       };
-      const tile = h('div', { class: 'addon', tabindex: 0, onclick: (e) => { if (!e.target.closest('.switch')) detail(); }, onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) detail(); } },
+      const tile = h('div', { class: 'addon', tabindex: 0, dataset: { builtin: setOn ? '0' : '1' }, onclick: (e) => { if (!e.target.closest('.switch')) detail(); }, onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) detail(); } },
         h('div', { class: 'addon-head' }, h('span', { class: 'addon-ic', html: icon(ic, 20) }),
           h('div', { class: 'addon-title' }, h('b', {}, name), state || null),
           setOn ? sw(on, set, name) : h('span', { class: 'addon-always' }, 'Always on')),
@@ -716,7 +718,7 @@ class App {
     }, () => {});
 
     // handwriting to text: Windows (offline) or Google (online)
-    const engine = s.inkEngine === 'google' ? 'google' : 'windows';
+    const engine = s.inkEngine === 'windows' ? 'windows' : 'google';
     const recSel = h('select', { class: 'rec-select', onchange: () => { s.inkRecognizer = recSel.value; this.saveSettings(); } }, h('option', { value: '' }, 'Windows default'));
     const recState = h('small', { class: 'hint' }, '');
     window.api.inkRecognizers().then((list) => {
@@ -727,12 +729,18 @@ class App {
     const winRow = h('div', { class: 'addon-sub', hidden: engine !== 'windows' },
       h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Recognizer'), recSel), recState);
     const exportRow = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!s.exportInkText, onchange: (e) => { s.exportInkText = e.target.checked; this.saveSettings(); } }), h('span', {}, 'Export handwriting as text', h('small', {}, 'The exported PDF can be searched and copied (read by Windows, offline)')));
-    const engineRow = h('div', { class: 'row' }, ...[['windows', 'Windows (offline)'], ['google', 'Google (online)']].map(([v, label]) => h('button', {
+    const langRow = h('div', { class: 'addon-sub', hidden: engine !== 'google' },
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Language'),
+        h('select', { class: 'rec-select', 'aria-label': 'Handwriting language', onchange: (e) => { s.inkLang = e.target.value; this.saveSettings(); } },
+          ...[['de', 'German'], ['en', 'English'], ['ru', 'Russian'], ['fr', 'French'], ['es', 'Spanish'], ['uk', 'Ukrainian']].map(([v, l]) => h('option', { value: v, selected: (s.inkLang || 'de') === v }, l)))),
+      h('small', { class: 'hint wrap' }, 'Google reads the pen strokes themselves – fast, also untidy writing; the words before go along so a sentence is read as one. Online, no account needed.'));
+    const engineRow = h('div', { class: 'row' }, ...[['windows', 'Windows (offline)'], ['google', 'Google (online, fast)']].map(([v, label]) => h('button', {
       class: `chip${engine === v ? ' active' : ''}`,
       onclick: (e) => {
         s.inkEngine = v; this.saveSettings();
         engineRow.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === e.currentTarget));
         winRow.hidden = v !== 'windows';
+        langRow.hidden = v !== 'google';
       },
     }, label)));
 
@@ -796,7 +804,7 @@ class App {
       card({
         name: 'Handwriting to text', icon: 'pen',
         about: 'Your pen writing → text: select it → "Copy as text" or "To text". Windows reads it on this PC; Google reads it online with your Google account (better for untidy writing).',
-        settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, exportRow],
+        settings: [h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Read with'), engineRow), winRow, langRow, exportRow],
       }),
       // extensions (src/extensions, docs/EXTENSIONS.md): off until switched on
       ...extensions.list().filter((x) => !x.hidden).map((x) => card({
@@ -804,6 +812,7 @@ class App {
         state: x.error ? h('small', { class: 'addon-state' }, 'Could not start: ' + x.error) : h('small', { class: 'addon-state' }, x.core ? 'Built in' : 'Extension'),
         on: x.enabled, setOn: x.core ? undefined : (v) => extensions.setEnabled(x.id, v),
       })));
+    for (const t of [...list.children]) if ((t.dataset.builtin === '1') !== builtIn) t.remove();
     root.append(list);
     return root;
   }
@@ -1045,7 +1054,7 @@ class App {
     const rows = [
       ['V', 'Select & move'], ['P / H / E', 'Pen / Highlighter / Eraser'], ['L / S / T', 'Lasso / Shapes / Text'], ['Space + drag', 'Pan (any tool)'], ['Shift + wheel', 'Scroll fast'], ['Shift + drag (highlighter)', 'Straight line'],
       ['Middle mouse drag', 'Pan'], ['Ctrl + wheel', 'Zoom'], ['Ctrl + 0', 'Fit width'], ['Ctrl + Shift + H', 'Handwriting becomes text (live)'], ['Ctrl + Z / Ctrl + Y', 'Undo / Redo'],
-      ['Ctrl + C / X', 'Copy / Cut selection'], ['Ctrl + Shift + D', 'Duplicate selection'], ['Ctrl + D', 'PDF window (read a PDF next to the notes)'], ['Ctrl + E', 'Study session'], ['Ctrl + V', 'Paste pictures, text, tables, files'], ['Ctrl + A', 'Select everything on the page'],
+      ['Ctrl + C / X', 'Copy / Cut selection'], ['Ctrl + Shift + D', 'Duplicate selection'], ['Ctrl + D', 'PDF window (read a PDF next to the notes)'], ['Ctrl + E', 'Study session: start, pause, go on (also in other apps)'], ['Ctrl + drag / Alt + click / Alt + S', 'In a study session: a region / a window / the screen'], ['Ctrl + V', 'Paste pictures, text, tables, files'], ['Ctrl + A', 'Select everything on the page'],
       ['Del', 'Delete selection'], ['Ctrl + B / I / U', 'Bold / italic / underline'], ['Ctrl + F', 'Search in notebook'],
       ['Ctrl + Shift + B', 'Show / hide pages'], ['PgUp / PgDn', 'Previous / next page'], ['Ctrl + W', 'Close tab'], ['Ctrl + Tab', 'Next tab'],
       ['Pen eraser end / barrel button', 'Erase'], ['Hold the pen button', 'Erase, then back to the pen'], ['Alt + wheel', 'Resize selection or tool size'],

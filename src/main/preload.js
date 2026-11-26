@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   inkRecognize: invoke('ink:recognize'),
   inkRecognizers: invoke('ink:recognizers'),
   inkRecognizeLive: invoke('ink:recognizeLive'),
+  inkGoogle: invoke('ink:google'),
   ocrStatus: invoke('ocr:status'),
   ocrRecognize: invoke('ocr:recognize'),
   ocrGoogle: invoke('ocr:google'),
