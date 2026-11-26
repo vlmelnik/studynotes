@@ -1000,24 +1000,23 @@ body.sub-reader .rd-bar button { -webkit-app-region: no-drag; }
 .rd-pane .rd-bar button { cursor: pointer; }
 
 /* study session bar and region snip */
-body.sub-study { margin: 0; overflow: hidden; background: #1f2023; color: #eee; --text: #eee; }
-body.sub-study .sb-bar { display: flex; align-items: center; gap: 6px; height: 56px; padding: 0 10px; -webkit-app-region: drag; }
-body.sub-study button, body.sub-study textarea, body.sub-study .sb-extra { -webkit-app-region: no-drag; }
-.sb-dot { width: 10px; height: 10px; border-radius: 50%; background: #e0332f; animation: sb-pulse 1.6s infinite; }
-@keyframes sb-pulse { 50% { opacity: .35; } }
-.sb-clock { font-variant-numeric: tabular-nums; font-size: 13px; opacity: .8; }
-.sb-topic { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.sb-count { min-width: 24px; height: 22px; padding: 0 6px; border-radius: 11px; background: #3a3b40; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+body.sub-study { margin: 0; overflow: hidden; background: transparent; color: #eee; --text: #eee; }
+/* half see-through until the mouse is on it */
+body.sub-study .sb-bar { display: flex; align-items: center; gap: 6px; height: 40px; margin: 2px; padding: 0 6px 0 12px; border-radius: 20px; background: rgba(31,32,35,.62); backdrop-filter: blur(8px); transition: background .2s; -webkit-app-region: drag; }
+body.sub-study .sb-bar:hover { background: rgba(31,32,35,.94); }
+body.sub-study button { -webkit-app-region: no-drag; }
+.sb-dot { width: 7px; height: 7px; border-radius: 50%; background: #b8473f; opacity: .55; animation: sb-pulse 2.4s infinite; }
+@keyframes sb-pulse { 50% { opacity: .25; } }
+.sb-clock { font-variant-numeric: tabular-nums; font-size: 12px; opacity: .7; }
+.sb-count { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px; background: rgba(255,255,255,.12); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .sb-count.bump { animation: sb-bump .4s; }
 @keyframes sb-bump { 40% { transform: scale(1.35); background: #2f7d4f; } }
-.sb-sep { width: 1px; height: 26px; background: #3a3b40; margin: 0 2px; }
+.sb-sep { flex: 1; }
 .sb-btn { color: #eee; }
-.sb-msg { padding: 0 12px 4px; font-size: 12px; color: #aaa; }
-.sb-extra { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
-.sb-wins { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 280px; overflow: auto; }
-.sb-win { display: flex; flex-direction: column; gap: 3px; padding: 4px; background: #2a2b2f; color: #ddd; border: 1px solid #3a3b40; border-radius: 6px; cursor: pointer; font-size: 11px; }
-.sb-win img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 4px; }
-.sb-win span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-mic.on { color: #fff; background: rgba(224,51,47,.55); box-shadow: 0 0 0 calc(var(--level, 0) * 6px) rgba(224,51,47,.35); }
+body.sub-study .sb-finish { padding: 3px 10px; border-radius: 14px; }
+.sb-msg { margin: 0 8px; padding: 2px 10px; font-size: 11px; color: #ddd; background: rgba(31,32,35,.8); border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-msg:empty { display: none; }
 body.sub-snip { margin: 0; overflow: hidden; cursor: crosshair; user-select: none; background: #000; }
 .snip-img { position: fixed; inset: 0; width: 100vw; height: 100vh; }
 .snip-shade { position: fixed; inset: 0; background: rgba(0,0,0,.35); }

@@ -1,9 +1,10 @@
 'use strict';
 // Study session: StudyNotes steps aside, a small bar stays on top of every
-// app, and the user collects material from the whole screen – a region
-// (Ctrl+Shift+1), a window (Ctrl+Shift+2), the whole screen (Ctrl+Shift+3),
-// everything copied with Ctrl+C (text or pictures) and own notes. At the end
-// the main window gets the session back to file it into the notebook.
+// app, and the user collects material from the whole screen – selected or
+// copied text and pictures, Ctrl + drag (a region), Alt + click (a window),
+// Alt+S (the whole screen) and spoken notes. Ctrl+E pauses it (what was
+// collected goes into the notebook's chat) and goes on with the same session;
+// Finish hands everything to the main window to file it into the notebook.
 const electron = require('electron');
 const { BrowserWindow, globalShortcut, desktopCapturer, screen, nativeImage } = electron;
 const path = require('path');
@@ -25,13 +26,34 @@ const clip = fakeClip ? {
   async readImage() {
     try {
       for (const item of await electron.clipboard.read()) {
-        const type = item.types.find((t) => /^image\/(png|jpeg|bmp|webp|gif)$/.test(t));
-        if (type) return nativeImage.createFromBuffer(Buffer.from(await (await item.getType(type)).arrayBuffer()));
+        for (const type of item.types.filter((t) => /^image\//.test(t))) {
+          const img = nativeImage.createFromBuffer(Buffer.from(await (await item.getType(type)).arrayBuffer()));
+          if (!img.isEmpty()) return img;
+        }
+        // "Copy image" in some browsers: only HTML with the picture's address
+        if (item.types.includes('text/html')) {
+          const m = /<img[^>]+src="([^"]+)"/i.exec(await (await item.getType('text/html')).text());
+          if (m) { const img = await fetchImage(m[1].replace(/&amp;/g, '&')); if (img && !img.isEmpty()) return img; }
+        }
       }
     } catch { /* nothing readable */ }
     return nativeImage.createEmpty();
   },
+  // what is on the clipboard (for the log when a picture is not collected)
+  async types() { try { return (await electron.clipboard.read()).flatMap((i) => i.types); } catch { return []; } },
 };
+
+const imgCache = new Map();
+async function fetchImage(src) {
+  if (imgCache.has(src)) return imgCache.get(src);
+  let img = null;
+  try {
+    if (/^data:image\//.test(src)) img = nativeImage.createFromDataURL(src);
+    else if (/^https?:/.test(src)) { const r = await electron.net.fetch(src); if (r.ok) img = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer())); }
+  } catch { img = null; }
+  imgCache.set(src, img);
+  return img;
+}
 
 // ---------- gestures all over Windows (scripts/study-hook.ps1) ----------
 const { spawn } = require('child_process');
@@ -45,48 +67,108 @@ function startHook(onLine, env = {}) {
   ps.stdout.on('data', (d) => { buf += d; for (let i; (i = buf.indexOf('\n')) >= 0;) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line) onLine(line); } });
   ps.stderr.on('data', () => {});
   ps.on('error', () => {});
+  ps.stdin.on('error', () => {});
+  ps.say = (l) => { try { ps.stdin.write(l + '\n'); } catch { /* gone */ } };
   return ps;
 }
 
-const KEYS = { region: 'CommandOrControl+Shift+1', window: 'CommandOrControl+Shift+2', page: 'CommandOrControl+Shift+3' };
+// only while a session runs (not paused); Ctrl+E is registered by main.js for the whole app
+const KEYS = { page: 'Alt+S' };
 
 class Study {
-  /** opts: { main: () => BrowserWindow, dir, test } */
-  constructor(opts) { this.o = opts; this.s = null; this.bar = null; this.n = 0; }
+  /** opts: { main: () => BrowserWindow, dir, settings: () => object, test } */
+  constructor(opts) { this.o = opts; this.s = null; this.bar = null; this.n = 0; this.paused = false; this.sent = 0; }
 
-  get active() { return !!this.s; }
+  get active() { return !!this.s && !this.paused; }
+
+  /** Ctrl+E: start (or go on with the paused session), or pause. */
+  async toggle(opts = {}) {
+    if (this.active) return this.pause();
+    if (this.s) return this.resume();
+    if (!opts.rel) return null;
+    return this.start(opts);
+  }
 
   webPrefs() { return { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }; }
 
   async start({ topic = '', prompt = '', rel = '' } = {}) {
-    if (this.s) return this.state();
+    if (this.s) return this.paused ? this.resume() : this.state();
     const id = 's' + Date.now().toString(36);
     this.s = { ...newSession({ id, topic, prompt, startedAt: Date.now() }), rel };
+    this.sent = 0;
     this.folder = path.join(this.o.dir, id);
     await fsp.mkdir(this.folder, { recursive: true });
-    // what is on the clipboard now is not part of the session
-    this.lastText = await clip.readText();
-    this.lastImage = this.imageKey(await clip.readImage());
-    this.watch = setInterval(() => this.checkClipboard().catch(() => {}), 700);
-    // (not in tests: on a virtual X display registering can block)
-    if (!this.o.test) for (const [kind, key] of Object.entries(KEYS)) { try { globalShortcut.register(key, () => this.capture(kind)); } catch { /* taken by another app */ } }
-    // drag to select / double-click: collected; Ctrl + drag: a region
-    this.hook = this.o.test ? null : startHook((line) => this.gesture(line));
     const d = screen.getPrimaryDisplay().workArea;
-    const w = 560, h = 56;
-    this.bar = new BrowserWindow({ x: Math.round(d.x + (d.width - w) / 2), y: d.y + 10, width: w, height: h, frame: false, resizable: false, alwaysOnTop: true, skipTaskbar: false, show: false, transparent: false, backgroundColor: '#1f2023', title: 'StudyNotes – study session', webPreferences: this.webPrefs() });
+    const w = 300, h = 44;
+    this.bar = new BrowserWindow({ x: Math.round(d.x + (d.width - w) / 2), y: d.y + 8, width: w, height: h, frame: false, resizable: false, alwaysOnTop: true, skipTaskbar: true, show: false, transparent: true, hasShadow: false, title: 'StudyNotes – study session', webPreferences: this.webPrefs() });
     this.bar.setAlwaysOnTop(true, 'screen-saver');
+    this.bar.setContentProtection(true); // never in its own screenshots
     this.bar.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     this.bar.webContents.on('will-navigate', (e) => e.preventDefault());
     this.bar.loadURL('sn://app/index.html#sub=study');
-    this.bar.once('ready-to-show', () => this.bar.showInactive());
     this.bar.on('closed', () => { this.bar = null; });
+    this.paused = true;
+    return this.resume();
+  }
+
+  /** Goes on: the bar comes back, collecting starts again (the same session). */
+  async resume() {
+    if (!this.s) return null;
+    this.paused = false;
+    // what is on the clipboard now is not part of the session
+    this.lastText = await clip.readText();
+    this.lastImage = this.imageKey(await clip.readImage());
+    clearInterval(this.watch);
+    this.watch = null;
+    // Windows: the hook says when the clipboard changes; elsewhere it is looked at twice a second
+    if (this.o.test || process.platform !== 'win32') this.watch = setInterval(() => this.checkClipboard().catch(() => {}), 500);
+    // (not in tests: on a virtual X display registering can block)
+    if (!this.o.test) for (const [kind, key] of Object.entries(KEYS)) { try { globalShortcut.register(key, () => this.capture(kind)); } catch { /* taken by another app */ } }
+    // drag to select / double-click: collected; Ctrl + drag: a region; Alt + click: a window
+    if (!this.o.test) {
+      if (!this.hook || this.hook.exitCode != null) {
+        this.hookReady = false;
+        this.hook = startHook((line) => this.gesture(line));
+        // no hook (PowerShell blocked): look at the clipboard twice a second instead
+        setTimeout(() => { if (!this.hookReady && this.active && !this.watch) this.watch = setInterval(() => this.checkClipboard().catch(() => {}), 500); }, 8000);
+      } else this.hook.say('on');
+    }
+    this.veil();
+    const bar = this.bar;
+    if (bar && !bar.isDestroyed()) { if (bar.webContents.isLoading()) bar.once('ready-to-show', () => { if (!this.paused) bar.showInactive(); }); else bar.showInactive(); }
+    this.push();
     const main = this.o.main();
-    if (main && !this.o.test) main.minimize();
+    if (main && !this.o.test && main.isFocused()) main.minimize();
     return this.state();
   }
 
-  state() { return this.s ? { id: this.s.id, topic: this.s.topic, prompt: this.s.prompt, items: this.s.items, summary: summary(this.s, Date.now()), keys: KEYS } : null; }
+  /** Ctrl+E while collecting: everything stops but the session stays; what is new goes into the chat. */
+  pause() {
+    if (!this.active) return this.state();
+    this.paused = true;
+    this.quiet();
+    if (this.bar && !this.bar.isDestroyed()) this.bar.hide();
+    const fresh = this.s.items.slice(this.sent);
+    this.sent = this.s.items.length;
+    const main = this.o.main();
+    if (main && !main.isDestroyed()) main.webContents.send('study:paused', { ...this.state(), rel: this.s.rel, fresh, folder: this.s.id });
+    return this.state();
+  }
+
+  // collecting stops (pause and finish)
+  quiet() {
+    clearInterval(this.watch);
+    this.watch = null;
+    if (this.hook) this.hook.say('off');
+    this.endLive();
+    if (!this.o.test) for (const key of Object.values(KEYS)) { try { globalShortcut.unregister(key); } catch { /* not ours */ } }
+  }
+
+  state() {
+    if (!this.s) return null;
+    const sp = ((this.o.settings && this.o.settings()) || {}).speech || {};
+    return { id: this.s.id, topic: this.s.topic, prompt: this.s.prompt, items: this.s.items, summary: summary(this.s, Date.now()), keys: KEYS, paused: this.paused, startedAt: this.s.startedAt, speech: sp };
+  }
 
   push() { if (this.bar && !this.bar.isDestroyed()) this.bar.webContents.send('study:state', this.state()); }
 
@@ -108,17 +190,24 @@ class Study {
   }
 
   async checkClipboard() {
-    if (!this.s || this.checking) return;
+    if (!this.active) return;
+    if (this.checking) { this.again = true; return; }
     this.checking = true;
-    try { await this.readClipboard(); } finally { this.checking = false; }
+    try { do { this.again = false; await this.readClipboard(); } while (this.again && this.active); } finally { this.checking = false; }
   }
 
   async readClipboard() {
+    let got = false;
     const text = await clip.readText();
-    if (text && text !== this.lastText) { this.lastText = text; await this.add({ kind: 'text', text: text.slice(0, 20000) }); return; }
+    if (text && text !== this.lastText) { this.lastText = text; got = true; await this.add({ kind: 'text', text: text.slice(0, 20000) }); }
     const img = await clip.readImage();
     const key = this.imageKey(img);
-    if (key && key !== this.lastImage) { this.lastImage = key; await this.add({ kind: 'region', image: await this.keepImage(img) }); }
+    if (key && key !== this.lastImage) { this.lastImage = key; got = true; await this.add({ kind: 'region', image: await this.keepImage(img) }); }
+    // nothing usable: what was there goes to a log (a picture a browser copies in a form we do not read yet)
+    if (!got && !text && !key && clip.types && this.folder) {
+      const types = (await clip.types()).join(',');
+      if (types && types !== this.lastTypes) { this.lastTypes = types; fsp.appendFile(path.join(this.o.dir, 'clipboard.log'), `${new Date().toISOString()} ${types}\n`).catch(() => {}); }
+    }
   }
 
   // the screen under the mouse as a picture (test: a fixed picture)
@@ -135,11 +224,11 @@ class Study {
   async capture(kind) {
     if (!this.s) return;
     try {
-      if (kind === 'window') { if (this.bar) { this.bar.webContents.send('study:pickWindow'); this.bar.focus(); } return; }
-      if (this.bar) this.bar.hide();
-      await new Promise((r) => setTimeout(r, 120)); // the bar is gone from the picture
+      // (the bar is not in screenshots: content protection; on systems without it, it steps aside)
+      const hide = this.bar && !this.bar.isDestroyed() && process.platform !== 'win32';
+      if (hide) { this.bar.hide(); await new Promise((r) => setTimeout(r, 120)); }
       const { img, d } = await this.screenShot();
-      if (this.bar && !this.bar.isDestroyed()) this.bar.showInactive();
+      if (hide && !this.paused) this.bar.showInactive();
       if (kind === 'page') { await this.add({ kind: 'page', image: await this.keepImage(img) }); return; }
       // region: the screenshot full-screen, the user draws a rectangle
       const rect = await this.snip(img, d);
@@ -164,9 +253,13 @@ class Study {
     });
   }
 
-  // a line from the hook: snip-start / snip-move / snip-end x y (physical pixels)
+  // a line from the hook: snip-start / snip-move / snip-end x y, window x y w h (physical pixels)
   gesture(line) {
-    const [what, xs, ys] = line.split(' ');
+    if (line === 'ready') { this.hookReady = true; return; }
+    if (!this.active) return;
+    const [what, xs, ys, ws, hs] = line.split(' ');
+    if (what === 'clip') { setTimeout(() => this.checkClipboard().catch(() => {}), 60); return; }
+    if (what === 'window') return this.takeRect({ x: Number(xs), y: Number(ys), width: Number(ws), height: Number(hs) }).catch((err) => this.error(err));
     if (!/^snip-/.test(what)) return;
     let pt = { x: Number(xs), y: Number(ys) };
     try { if (screen.screenToDipPoint) pt = screen.screenToDipPoint(pt); } catch { /* not Windows */ }
@@ -175,17 +268,28 @@ class Study {
     else this.liveEnd(pt);
   }
 
-  // Ctrl + drag: the screen is taken at once, a dark veil shows the rectangle while dragging
+  // the dark veil for Ctrl + drag: made once, ready before the first drag (shown at once, never in screenshots)
+  veil(d = screen.getPrimaryDisplay()) {
+    let w = this.veilWin;
+    if (!w || w.isDestroyed()) {
+      w = this.veilWin = new BrowserWindow({ ...d.bounds, frame: false, transparent: true, focusable: false, skipTaskbar: true, resizable: false, movable: false, hasShadow: false, show: false, alwaysOnTop: true, enableLargerThanScreen: true, webPreferences: this.webPrefs() });
+      w.setAlwaysOnTop(true, 'screen-saver');
+      w.setIgnoreMouseEvents(true);
+      w.setContentProtection(true);
+      w.loadURL('sn://app/index.html#sub=sniplive');
+    }
+    const b = w.getBounds();
+    if (b.x !== d.bounds.x || b.y !== d.bounds.y || b.width !== d.bounds.width || b.height !== d.bounds.height) w.setBounds(d.bounds);
+    return w;
+  }
+
   liveStart(pt) {
-    if (!this.s || this.live) return;
+    if (!this.active || this.live) return;
     const d = screen.getDisplayNearestPoint(pt);
-    const live = this.live = { d, a: pt, b: pt, shot: this.screenShot(pt).catch(() => null) };
-    const w = new BrowserWindow({ ...d.bounds, frame: false, transparent: true, focusable: false, skipTaskbar: true, resizable: false, movable: false, hasShadow: false, show: false, alwaysOnTop: true, webPreferences: this.webPrefs() });
-    w.setAlwaysOnTop(true, 'screen-saver');
-    w.setIgnoreMouseEvents(true);
-    w.loadURL('sn://app/index.html#sub=sniplive');
-    w.once('ready-to-show', () => { if (this.live === live) w.showInactive(); });
-    live.win = w;
+    this.live = { d, a: pt, b: pt };
+    const w = this.veil(d);
+    w.webContents.send('snip:rect', null);
+    w.showInactive();
   }
 
   liveMove(pt) {
@@ -194,40 +298,46 @@ class Study {
     live.b = pt;
     const b = live.d.bounds;
     const r = { x: Math.min(live.a.x, pt.x) - b.x, y: Math.min(live.a.y, pt.y) - b.y, width: Math.abs(pt.x - live.a.x), height: Math.abs(pt.y - live.a.y) };
-    if (live.win && !live.win.isDestroyed()) live.win.webContents.send('snip:rect', r);
+    if (this.veilWin && !this.veilWin.isDestroyed()) this.veilWin.webContents.send('snip:rect', r);
+  }
+
+  endLive() {
+    this.live = null;
+    if (this.veilWin && !this.veilWin.isDestroyed()) this.veilWin.hide();
   }
 
   async liveEnd(pt) {
     const live = this.live;
     if (!live) return;
-    this.live = null;
-    this.liveMove(pt);
-    if (live.win && !live.win.isDestroyed()) live.win.close();
+    this.endLive();
     const b = live.d.bounds;
     const rect = { x: Math.min(live.a.x, pt.x) - b.x, y: Math.min(live.a.y, pt.y) - b.y, width: Math.abs(pt.x - live.a.x), height: Math.abs(pt.y - live.a.y) };
     if (rect.width < 6 || rect.height < 6) return;
-    const shot = await live.shot;
-    if (!shot) return;
-    await this.addRegion(shot.img, shot.d, rect);
+    try {
+      // taken after the drag: the veil and the bar are left out of the picture
+      const shot = await this.screenShot({ x: live.a.x, y: live.a.y });
+      await this.addRegion(shot.img, shot.d, rect);
+    } catch (err) { this.error(err); }
   }
 
-  async addRegion(img, d, rect) {
+  // Alt + click: the window's rectangle on screen (physical pixels)
+  async takeRect(px) {
+    let r = px;
+    try { if (screen.screenToDipRect) r = screen.screenToDipRect(null, px); } catch { /* not Windows */ }
+    const shot = await this.screenShot({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+    const b = shot.d.bounds;
+    const x = Math.max(b.x, r.x), y = Math.max(b.y, r.y);
+    const rect = { x: x - b.x, y: y - b.y, width: Math.min(b.x + b.width, r.x + r.width) - x, height: Math.min(b.y + b.height, r.y + r.height) - y };
+    if (rect.width < 6 || rect.height < 6) return;
+    await this.addRegion(shot.img, shot.d, rect, 'window');
+  }
+
+  error(err) { if (this.bar && !this.bar.isDestroyed()) this.bar.webContents.send('study:error', String((err && err.message) || err)); }
+
+  async addRegion(img, d, rect, kind = 'region') {
     const k = img.getSize().width / d.bounds.width;
     const crop = img.crop({ x: Math.round(rect.x * k), y: Math.round(rect.y * k), width: Math.max(1, Math.round(rect.width * k)), height: Math.max(1, Math.round(rect.height * k)) });
-    await this.add({ kind: 'region', image: await this.keepImage(crop) });
-  }
-
-  async windows() {
-    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 320, height: 200 } });
-    this.winSources = sources.filter((x) => !/^StudyNotes/.test(x.name));
-    return this.winSources.map((x) => ({ id: x.id, name: x.name, thumb: x.thumbnail.toDataURL() }));
-  }
-
-  async takeWindow(id) {
-    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 2560, height: 1600 } });
-    const src = sources.find((x) => x.id === id);
-    if (!src) throw new Error('That window is gone.');
-    await this.add({ kind: 'window', title: src.name, image: await this.keepImage(src.thumbnail) });
+    await this.add({ kind, image: await this.keepImage(crop) });
   }
 
   async note(text) { if (String(text || '').trim()) await this.add({ kind: 'note', text: String(text).trim() }); }
@@ -235,18 +345,19 @@ class Study {
   remove(id) { if (this.s) { this.s = { ...removeItem(this.s, id), rel: this.s.rel }; this.push(); } }
 
   image(hash) {
-    if (!/^[0-9a-f]{20}$/.test(String(hash)) || !this.lastFolder) throw new Error('No such picture');
-    return fsp.readFile(path.join(this.lastFolder, hash + '.png'));
+    const dir = (this.s && this.folder) || this.lastFolder;
+    if (!/^[0-9a-f]{20}$/.test(String(hash)) || !dir) throw new Error('No such picture');
+    return fsp.readFile(path.join(dir, hash + '.png'));
   }
 
   /** Ends the session: the bar goes, the main window comes back with the material. */
   finish(cancel = false) {
     if (!this.s) return null;
-    clearInterval(this.watch);
+    this.quiet();
     if (this.hook) { try { this.hook.kill(); } catch { /* gone */ } this.hook = null; }
-    if (this.live && this.live.win && !this.live.win.isDestroyed()) this.live.win.close();
-    this.live = null;
-    if (!this.o.test) for (const key of Object.values(KEYS)) { try { globalShortcut.unregister(key); } catch { /* not ours */ } }
+    if (this.veilWin && !this.veilWin.isDestroyed()) this.veilWin.close();
+    this.veilWin = null;
+    this.paused = false;
     const st = this.state();
     st.rel = this.s.rel;
     this.lastFolder = this.folder;

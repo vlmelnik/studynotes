@@ -13,7 +13,7 @@ import { notesStyleEditor } from './notes-style.js';
 import { speechSettings, withProgress } from './speech.js';
 import { bootSub } from './subwindow.js';
 import { ReaderDock } from './reader-dock.js';
-import { reviewStudy } from './study.js';
+import { reviewStudy, studyPaused, startStudy } from './study.js';
 
 class App {
   async init() {
@@ -39,6 +39,8 @@ class App {
     this.mcp = new McpTools(this);
     this.reader = new ReaderDock(this);
     window.api.onStudyDone((st) => reviewStudy(this, st));
+    window.api.onStudyPaused((st) => studyPaused(this, st).catch((err) => console.error('study paused', err)));
+    window.api.onStudyHotkey(() => startStudy(this.active && !this.active.isBoard ? this.active : null));
     if (this.settings.mcp) this.mcp.setEnabled(true).catch((err) => { this.settings.mcp = false; toast(String(err.message || err), { error: true }); });
     this.opening = new Set(); // rels being loaded right now
     this.active = null; // null = library

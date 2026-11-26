@@ -2,6 +2,7 @@
 // reader. They share the bundle with the main window but none of its state.
 import { h } from './ui.js';
 import { icon } from './icons.js';
+import { dictation } from './dictation.js';
 import { setLang } from './i18n.js';
 import { ReaderView } from './reader-view.js';
 
@@ -36,58 +37,49 @@ function readerWindow() {
 }
 
 // ---------- study session bar ----------
+// small and half see-through: time, how much was collected, a mic for spoken notes, Finish
 const KIND_LABEL = { region: 'Region', window: 'Window', page: 'Screen', text: 'Text', note: 'Note' };
 
 function studyBar() {
   const root = document.getElementById('app');
   let st = null;
-  const t0 = Date.now();
   const clock = h('span', { class: 'sb-clock no-i18n' }, '0:00');
   const count = h('span', { class: 'sb-count', title: 'Collected' }, '0');
-  const topic = h('span', { class: 'sb-topic no-i18n' }, '');
-  const msg = h('div', { class: 'sb-msg hint' }, '');
-  const extra = h('div', { class: 'sb-extra' });
-  const size = () => window.api.studyBarHeight(56 + (extra.childElementCount ? extra.offsetHeight + 8 : 0) + (msg.textContent ? 22 : 0));
-  const btn = (ic, label, key, fn) => h('button', { class: 'icon-btn sb-btn', title: `${label}${key ? ' (' + key + ')' : ''}`, 'aria-label': label, html: icon(ic, 18), onclick: fn });
-  const pickWindow = async () => {
-    extra.replaceChildren(h('div', { class: 'hint' }, 'Loading…'));
-    size();
-    const list = await window.api.studyWindows().catch(() => []);
-    extra.replaceChildren(h('div', { class: 'sb-wins' }, ...list.map((w) => h('button', { class: 'sb-win', title: w.name, onclick: async () => { extra.replaceChildren(); size(); await window.api.studyTakeWindow(w.id).catch((e) => say(e.message)); } },
-      h('img', { src: w.thumb, alt: '' }), h('span', { class: 'no-i18n' }, w.name)))), h('button', { class: 'btn ghost small', onclick: () => { extra.replaceChildren(); size(); } }, 'Cancel'));
-    requestAnimationFrame(size);
-  };
-  const note = () => {
-    const ta = h('textarea', { class: 'ai-prompt', rows: 2, 'aria-label': 'Your note', placeholder: 'A note for this session…' });
-    const save = async () => { await window.api.studyNote(ta.value); extra.replaceChildren(); size(); };
-    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } if (e.key === 'Escape') { extra.replaceChildren(); size(); } });
-    extra.replaceChildren(ta, h('div', { class: 'row' }, h('button', { class: 'btn btn-primary small', onclick: save }, 'Add note')));
-    requestAnimationFrame(() => { size(); ta.focus(); });
-  };
+  const msg = h('div', { class: 'sb-msg' }, '');
+  const size = () => window.api.studyBarHeight(44 + (msg.textContent ? 24 : 0));
   const say = (m) => { msg.textContent = m || ''; size(); if (m) setTimeout(() => { if (msg.textContent === m) { msg.textContent = ''; size(); } }, 4000); };
+  // spoken note: everything said until the second click becomes one note
+  let spoken = [];
+  const mic = h('button', { class: 'icon-btn sb-btn sb-mic', title: 'Spoken note', 'aria-label': 'Spoken note', 'aria-pressed': 'false', html: icon('mic', 17) });
+  mic.addEventListener('click', async () => {
+    if (dictation.on) { await dictation.stop(); return; }
+    const sp = (st && st.speech) || {};
+    if (!sp.enabled) { say('Set up dictation once with the mic in StudyNotes'); return; }
+    spoken = [];
+    try {
+      await dictation.start({ settings: { speech: sp }, onText: (t) => { spoken.push(t); say(spoken.join(' ').slice(-80)); },
+        onState: (x) => {
+          if ('on' in x) { mic.classList.toggle('on', x.on); mic.setAttribute('aria-pressed', String(x.on)); if (!x.on && spoken.length) { window.api.studyNote(spoken.join(' ')); spoken = []; } }
+          if ('level' in x) mic.style.setProperty('--level', String(Math.min(1, x.level * 12)));
+        } });
+    } catch (err) { say(String(err.message || err)); }
+  });
   const bar = h('div', { class: 'sb-bar' },
-    h('span', { class: 'sb-dot' }), clock, topic, count,
-    h('span', { class: 'sb-sep' }),
-    btn('select', 'Region', 'Ctrl+Shift+1', () => window.api.studyCapture('region')),
-    btn('pageLandscape', 'Window', 'Ctrl+Shift+2', pickWindow),
-    btn('fit', 'Screen', 'Ctrl+Shift+3', () => window.api.studyCapture('page')),
-    btn('text', 'Note', '', note),
-    h('span', { class: 'sb-sep' }),
+    h('span', { class: 'sb-dot' }), clock, count,
+    h('span', { class: 'sb-sep' }), mic,
     h('button', { class: 'btn btn-primary small sb-finish', onclick: () => window.api.studyFinish(false) }, 'Finish'),
-    h('button', { class: 'icon-btn', title: 'Stop without filing', 'aria-label': 'Stop without filing', html: icon('close', 16), onclick: () => window.api.studyFinish(true) }));
-  root.replaceChildren(bar, msg, extra);
+    h('button', { class: 'icon-btn sb-btn', title: 'Stop without filing', 'aria-label': 'Stop without filing', html: icon('close', 15), onclick: () => window.api.studyFinish(true) }));
+  bar.title = 'Select text or copy a picture · Ctrl + drag: a region · Alt + click: a window · Alt+S: the screen · Ctrl+E: pause';
+  root.replaceChildren(bar, msg);
   const draw = () => {
     if (!st) return;
-    topic.textContent = st.topic || '';
     count.textContent = String(st.items.length);
-    count.title = Object.entries(st.summary.counts).filter(([, n]) => n).map(([k, n]) => `${n} ${KIND_LABEL[k]}`).join(', ') || 'Nothing yet – copy text or pictures with Ctrl+C, or capture with the buttons';
+    count.title = Object.entries(st.summary.counts).filter(([, n]) => n).map(([k, n]) => `${n} ${KIND_LABEL[k]}`).join(', ') || 'Nothing yet';
   };
-  setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); clock.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 1000);
+  setInterval(() => { if (!st) return; const s = Math.floor((Date.now() - st.startedAt) / 1000); clock.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 1000);
   window.api.onStudyState((x) => { const before = st ? st.items.length : 0; st = x; draw(); if (x.items.length > before) { count.classList.remove('bump'); void count.offsetWidth; count.classList.add('bump'); } });
-  window.api.onStudyPickWindow(pickWindow);
   window.api.onStudyError(say);
   window.api.studyState().then((x) => { st = x; draw(); });
-  say('Select text or copy a picture to collect it · Ctrl + drag: a region');
 }
 
 // ---------- region snip (full screen over the screenshot) ----------
@@ -118,6 +110,7 @@ function snipLive() {
   const box = h('div', { class: 'snip-box live', hidden: true });
   document.getElementById('app').replaceChildren(h('div', { class: 'snip-veil' }), box);
   window.api.onSnipRect((r) => {
+    if (!r) { box.hidden = true; document.body.classList.remove('drawing'); return; }
     box.hidden = false;
     Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.width + 'px', height: r.height + 'px' });
     document.body.classList.add('drawing');
