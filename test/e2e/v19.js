@@ -67,6 +67,13 @@ const { launch, root } = require('./harness/app');
   const cut = await ed((id) => ({ gone: !window.__app.active.pageData(window.__app.active.pages[0].id).texts.some((t) => t.id === id), bar: !!document.querySelector('.text-bar.show'), edit: !!window.__app.active.textEdit }), tid);
   check('Ctrl+X: the box is gone and so is its text bar', cut.gone && !cut.bar && !cut.edit, JSON.stringify(cut));
 
+  // ---- a long pasted text: the selection frame covers all its lines ----
+  await ed(() => window.__app.active.pasteData({ text: 'Ferranti-Effekt bedeutet: Bei einer langen Hochspannungsleitung kann die Spannung am Ende höher sein als am Anfang, obwohl kein Verbraucher angeschlossen ist. '.repeat(4), html: '', files: [] }));
+  await win.waitForTimeout(600);
+  const fr = await win.evaluate(() => { const b = document.querySelector('.sel-box').getBoundingClientRect(); const id = [...window.__app.active.tools.sel.textIds][0]; const t = document.querySelector(`.textbox[data-id="${id}"]`).getBoundingClientRect(); return { box: [b.top, b.bottom], text: [t.top, t.bottom] }; });
+  check('a long pasted text: the frame covers every line, not only the first', fr.box[1] >= fr.text[1] - 2 && fr.text[1] - fr.text[0] > 60, JSON.stringify(fr));
+  await ed(() => { const e = window.__app.active; const id = [...e.tools.sel.textIds][0]; e.tools.deleteSelection(); return id; });
+
   // ---- SVG code (as ChatGPT copies it) pastes as a picture ----
   const svg = '<svg viewBox="0 0 100 60" width="100" height="60"><rect x="5" y="5" width="90" height="50" fill="#3b6fb6"/><circle cx="50" cy="30" r="12" fill="#fff"/></svg>';
   await ed((s) => window.__app.active.pasteData({ text: '```svg\n' + s + '\n```', html: '', files: [] }), svg);
