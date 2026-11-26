@@ -910,20 +910,23 @@ export const objectsMixin = {
       const pageId = view.page.id;
       const d = this.pageData(pageId);
       if (!d.texts.length || (this.textEdit && this.textEdit.pageId === pageId)) return;
-      let changed = false;
+      const changed = new Set();
       const texts = d.texts.map((t) => {
         const el = view.el.querySelector(`.textbox[data-id="${t.id}"]`);
         if (!el || !el.offsetHeight || t.h > 0) return t;
         const lines = Math.max(1, Math.round(el.offsetHeight / (t.fs * (t.lh || LINE_H))));
         if (lines === (t.lines || 1)) return t;
-        changed = true;
+        changed.add(t.id);
         return { ...t, lines };
       });
-      if (changed) {
+      if (changed.size) {
         // only a measurement: stored with the next real change, the page
         // isn't marked as changed just by looking at it
         this.doc.pages[pageId] = { ...d, texts };
-        if (this.tools.sel && this.tools.sel.pageId === pageId) this.tools.refreshSelectionEls();
+        const sel = this.tools.sel;
+        // a selected box turned out taller (a long pasted text wraps): the frame takes its real size
+        if (sel && sel.pageId === pageId && [...changed].some((id) => sel.textIds.has(id)) && !this.tools.cur) this.tools.select(sel.index, pageId, sel.strokeIds, sel.textIds, sel.itemIds);
+        else if (sel && sel.pageId === pageId) this.tools.refreshSelectionEls();
       }
     });
   },
