@@ -1,7 +1,7 @@
 // Notebook editor: toolbar, options bar, page sidebar, viewer, tools,
 // undo/redo, autosave. Text boxes, pictures, tables, paste and insert live in
 // editor-objects.js; thumbnails and search in editor-panels.js.
-import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, errorText, debounce, parseRange, shortcutKey, sameKey } from './ui.js';
+import { h, iconButton, showMenu, closeMenu, promptDialog, confirmDialog, toast, errorText, debounce, parseRange, shortcutKey, sameKey, fitBar } from './ui.js';
 import { icon } from './icons.js';
 import { Viewer, MIN_ZOOM, MAX_ZOOM } from './viewer.js';
 import { Tools, uid, textBBox, itemBBox } from './tools.js';
@@ -71,6 +71,9 @@ export function defaultToolState() {
   };
 }
 
+const yRange = (st) => { let a = Infinity, b = -Infinity; for (let i = 1; i < st.p.length; i += 3) { a = Math.min(a, st.p[i]); b = Math.max(b, st.p[i]); } return [a, b]; };
+const yMid = (st) => { const r = yRange(st); return (r[0] + r[1]) / 2; };
+
 export class Editor {
   constructor(app, doc) {
     this.app = app;
@@ -102,6 +105,9 @@ export class Editor {
     this.zoomPill = this.buildZoomPill();
     this.textBar = new TextBar(this);
     this.viewerHost.append(this.pageBadge, this.optionsBar, this.zoomPill);
+    // the notes area gets narrower (docked reader, AI panel, half a screen): the strip refits
+    this.hostRO = new ResizeObserver(() => { this.fitOptions(); if (this.tools && this.tools.sel) this.tools.fitSelBar(); });
+    this.hostRO.observe(this.viewerHost);
     // Endless board: always a way back to your notes.
     if (this.isBoard) {
       this.viewerHost.append(h('button', { class: 'board-center', title: 'Back to the centre of your notes', html: icon('center', 20), onclick: () => this.backToCenter() }));
@@ -528,6 +534,7 @@ export class Editor {
     window.removeEventListener('pointerdown', this._onPaintDown, true);
     if (this._textRO) this._textRO.disconnect();
     if (this.toolbarRO) this.toolbarRO.disconnect();
+    if (this.hostRO) this.hostRO.disconnect();
     this.tools.unwatchAltKey();
     this.viewer.destroy();
     this.sidebar.destroy();
@@ -590,7 +597,7 @@ export class Editor {
       opt(iconButton('export', 'Export PDF', (e) => this.exportMenu(e.currentTarget), 'bar-btn'), 6, 'Export…', 'export', () => this.exportMenu(this.moreBtn)),
       this.moreBtn);
     tb.append(left, center, right);
-    this.toolbarRO = new ResizeObserver(() => this.fitToolbarButtons());
+    this.toolbarRO = new ResizeObserver(() => { this.fitToolbarButtons(); this.fitOptions(); if (this.tools && this.tools.sel) this.tools.fitSelBar(); });
     this.toolbarRO.observe(tb);
 
     this.optionsBar = h('div', { class: 'tool-options' });
@@ -633,6 +640,13 @@ export class Editor {
   }
 
   // ---------- tool options (dark strip under the toolbar) ----------
+  // narrow window (split screen): what does not fit in the strip goes behind "⋯"
+  fitOptions() {
+    const host = this.viewerHost;
+    if (!host || !this.optionsBar.isConnected) return;
+    fitBar(this.optionsBar, host.clientWidth - 24);
+  }
+
   renderOptions() {
     const ts = this.toolState;
     const bar = this.optionsBar;
@@ -743,6 +757,7 @@ export class Editor {
       default: break; // select, hand: no options → strip hidden
     }
     bar.classList.toggle('empty', !bar.childElementCount);
+    this.fitOptions();
   }
 
   // Any pen size: slider and a number field.
@@ -845,7 +860,7 @@ export class Editor {
     const busy = toast('Reading the handwriting…', { timeout: 60000 });
     let res;
     try {
-      res = this.settings.inkEngine === 'google' ? await this.readInkWithGoogle(strokes)
+      res = this.settings.inkEngine !== 'windows' ? await this.readInkWithGoogle(strokes)
         : await window.api.inkRecognize(strokes.map((st) => st.p.filter((_, i) => i % 3 !== 2)), this.settings.inkRecognizer || '');
     } catch (err) {
       busy.remove();
@@ -858,7 +873,7 @@ export class Editor {
       // say why, so it can be fixed: no recognizer, strokes not read, or nothing recognised
       const i = res.info;
       const why = !i ? '' : !i.installed ? ' – Windows has no handwriting recognizer: Settings → Time & language → Language → (language) → Options → Handwriting.'
-        : ` (Windows: ${i.strokes || 0} strokes read, ${i.results || 0} words, recognizer ${i.recognizer}). Try "Read with Google" in Settings → Add-ons → Handwriting to text.`;
+        : ` (Windows: ${i.strokes || 0} strokes read, ${i.results || 0} words, recognizer ${i.recognizer}). Try "Google" in Settings → Built in → Handwriting to text.`;
       toast('No handwriting recognised' + why, { timeout: why ? 9000 : 3000 });
       return;
     }
@@ -887,6 +902,19 @@ export class Editor {
   // Handwriting read by Google (Settings → Add-ons → Handwriting to text →
   // Google): the strokes drawn as a picture, read like a photo. Online.
   async readInkWithGoogle(strokes) {
+    // first from the strokes themselves, line by line (fast, no account); a picture through Google Drive if that fails
+    try {
+      const lines = [];
+      for (const st of [...strokes].sort((a, c) => yMid(a) - yMid(c))) {
+        const r = yRange(st);
+        const line = lines.find((l) => (r[0] + r[1]) / 2 >= l.y0 && (r[0] + r[1]) / 2 <= l.y1);
+        if (line) { line.st.push(st); line.y0 = Math.min(line.y0, r[0]); line.y1 = Math.max(line.y1, r[1]); } else lines.push({ y0: r[0], y1: r[1], st: [st] });
+      }
+      const out = [];
+      for (const l of lines) out.push((await window.api.inkGoogle(l.st.map((st) => st.p.filter((_, i) => i % 3 !== 2)), { lang: this.settings.inkLang || 'de', pre: out.join(' ') })).text);
+      const text = out.filter(Boolean).join('\n').trim();
+      if (text) return { text };
+    } catch (err) { console.warn('Google strokes', err); }
     let b = null;
     for (const st of strokes) for (let i = 0; i + 1 < st.p.length; i += 3) {
       const x = st.p[i], y = st.p[i + 1];
@@ -1469,7 +1497,7 @@ export class Editor {
       });
       return true;
     }
-    if (ctrl && k === 'c') { this.tools.copyAndDeselect(); return true; }
+    if (ctrl && k === 'c') { if (!this.tools.textSel.copy()) this.tools.copyAndDeselect(); return true; }
     if (ctrl && k === 'x') { this.tools.cut(); return true; }
     if (ctrl && e.shiftKey && k === 'd') return this.tools.duplicate(), true;
     if (ctrl && k === 'd' && !this.isBoard) return openPdfWindow(this), true;

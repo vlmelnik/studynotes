@@ -13,7 +13,7 @@ const { launch } = require('./harness/app');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-live-'));
   const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_FAKE_INK: '1' } });
   await win.waitForFunction(() => window.__app && document.querySelector('.library'));
-  await ed(async () => { window.__app.settings.mouseDraws = true; const r = await window.api.createNotebook('', { title: 'Live', paper: 'lined', pageCount: 1 }); await window.__app.openNotebook(r); });
+  await ed(async () => { window.__app.settings.mouseDraws = true; window.__app.settings.inkEngine = 'windows'; const r = await window.api.createNotebook('', { title: 'Live', paper: 'lined', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForFunction(() => window.__app.active?.viewer?.views.size > 0);
   await ed(() => window.__app.active.setTool('pen'));
   check('off by default', await ed(() => !window.__app.settings.liveInk));
@@ -49,6 +49,18 @@ const { launch } = require('./harness/app');
   await win.waitForTimeout(1600);
   const off = await data();
   check('⋯ menu switches it off; then ink stays ink', await ed(() => !window.__app.settings.liveInk) && off.strokes === 2, JSON.stringify(off));
+
+  // Google (reads the strokes; fake: "gwordN"), the words come out of a blur
+  await ed(() => { window.__app.settings.liveInk = true; window.__app.settings.inkEngine = 'google'; });
+  const t0 = Date.now();
+  await stroke(520, 420, 80, 40);
+  await win.evaluate(() => { window.__typed = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList && n.classList.contains('live-type')) window.__typed++; }).observe(document.body, { childList: true }); });
+  await win.waitForFunction(() => { const e = window.__app.active; return e.pageData(e.pages[0].id).texts.some((t) => /gword1/.test(t.text)); }, null, { timeout: 8000 }).catch(() => {});
+  const ms = Date.now() - t0;
+  await win.waitForTimeout(300);
+  const typed = await win.evaluate(() => window.__typed);
+  const g = await data();
+  check('Google engine: the words appear as if typed (blur), quickly after the pause', g.texts.some((t) => /gword1/.test(t.text)) && typed > 0 && ms < 2500, JSON.stringify({ ms, typed, g }));
 
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });

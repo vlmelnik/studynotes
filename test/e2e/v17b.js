@@ -218,16 +218,19 @@ async function makePdf(file) {
     await win.locator('.settings-tab', { hasText: 'Add-ons' }).click();
     await win.waitForTimeout(400);
     const names = await win.locator('.addon .addon-title b').allTextContents();
-    // built-in parts have no switch; Dark pages lives in the ⋯ menu only
-    const always = await win.locator('.addon', { hasText: 'Searchable scans' }).locator('.addon-always').count() + await win.locator('.addon', { hasText: 'Formulas and formatting on paste' }).locator('.addon-always').count();
     const sw2 = win.locator('.addon', { hasText: 'Editable scans' }).locator('.switch');
     await sw2.click(); await win.waitForTimeout(150);
     const es = await ed(() => window.__app.settings.editableScans);
-    const expectedAddons = ['Searchable scans', 'Editable scans', 'Handwriting to text', 'Formulas and formatting on paste', 'Speech to text'];
-    check('Q: Add-ons tab lists the bundled add-ons, built-in ones always on, switches work',
-      expectedAddons.every((name) => names.includes(name)) && !names.includes('Dark pages') && always === 2 && es === true, JSON.stringify({ names, always, es }));
+    // built-in parts (no switch, nothing to download) have their own tab; Dark pages lives in the ⋯ menu only
+    await win.locator('.settings-tab', { hasText: 'Built in' }).click();
+    await win.waitForTimeout(300);
+    const builtin = await win.locator('.addon .addon-title b').allTextContents();
+    const always = await win.locator('.addon .addon-always').count();
+    check('Q: Add-ons: only what can be switched on or downloaded; Built in: the rest, always on',
+      ['Editable scans', 'Speech to text'].every((n) => names.includes(n)) && !names.includes('Searchable scans') && ['Searchable scans', 'Handwriting to text', 'Formulas and formatting on paste'].every((n) => builtin.includes(n))
+      && !builtin.includes('Dark pages') && always === builtin.length && es === true, JSON.stringify({ names, builtin, always, es }));
     await win.locator('.addon', { hasText: 'Handwriting to text' }).locator('button', { hasText: 'Settings' }).click();
-    await win.locator('.chip', { hasText: 'Google (online)' }).click();
+    await win.locator('.chip', { hasText: 'Google (online' }).click();
     const eng = await ed(() => window.__app.settings.inkEngine);
     check('Q: handwriting engine: Windows or Google', eng === 'google', eng);
     const over = async () => ed(() => {

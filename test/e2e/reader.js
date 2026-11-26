@@ -76,7 +76,9 @@ const { launch, root } = require('./harness/app');
   await send('reader:docked', { rel: await ed(() => window.__app.active.rel), file: 'source.pdf', title: 'x', page: 2, side: 'right' });
   await win.locator('.rd-pane .rd-page canvas').first().waitFor({ timeout: 20000 });
   check('dropped on the right edge: docked on the right, with the pour-in', await ed(() => window.__app.settings.readerSplit.notesSide === 'left') && await win.evaluate(() => document.querySelector('.rd-pane').getBoundingClientRect().right >= document.querySelector('.editor-body').getBoundingClientRect().right - 2));
-  // pulled out by the header like a Chrome tab
+  // pulled out by the header like a Chrome tab (after the pour-in has finished)
+  await win.waitForFunction(() => !document.querySelector('.rd-pane.rd-in'));
+  check('the pen options strip stays over the notes, not over the docked reader', await win.evaluate(() => document.querySelector('.tool-options').getBoundingClientRect().right <= document.querySelector('.viewer-host').getBoundingClientRect().right + 1));
   const bar = await win.locator('.rd-pane .rd-title').boundingBox();
   const [rw3] = await Promise.all([app.waitForEvent('window'), (async () => { await win.mouse.move(bar.x + 10, bar.y + 5); await win.mouse.down(); await win.mouse.move(bar.x - 60, bar.y + 40, { steps: 6 }); await win.mouse.up(); })()]);
   await rw3.waitForFunction(() => document.querySelectorAll('.rd-page canvas').length >= 1, null, { timeout: 20000 });

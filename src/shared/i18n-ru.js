@@ -430,6 +430,20 @@ const words = {
   'Study session – file into the notebook': 'Учебная сессия – записать в тетрадь', 'Nothing was collected.': 'Ничего не собрано.', 'Leave out': 'Убрать',
   'Lay out without AI': 'Разложить без ИИ', 'Claude writes the notes': 'Claude пишет конспект', 'Finish': 'Завершить', 'Stop without filing': 'Остановить без записи',
   'Region': 'Область', 'Window': 'Окно', 'Screen': 'Экран',
+  // 1.9: built in, Codex, handwriting, study bar, bars
+  'Built in': 'Встроенное', 'Part of StudyNotes, always on, nothing to download.': 'Часть StudyNotes: всегда включено, ничего не нужно скачивать.',
+  'Google (online, fast)': 'Google (онлайн, быстро)', 'Handwriting language': 'Язык рукописи',
+  'Google reads the pen strokes themselves – fast, also untidy writing; the words before go along so a sentence is read as one. Online, no account needed.': 'Google читает сами штрихи пера – быстро, и неаккуратный почерк тоже; предыдущие слова передаются вместе, так что предложение читается целиком. Онлайн, аккаунт не нужен.',
+  'Chat in StudyNotes': 'Чат в StudyNotes', 'Claude Code or ChatGPT (Codex), with your subscription': 'Claude Code или ChatGPT (Codex), с вашей подпиской', 'Chat with': 'Чат с', 'Find': 'Найти',
+  'Install Codex: in a terminal run "npm install -g @openai/codex", then "codex" and sign in with your ChatGPT account (Free, Plus or Pro).': 'Установите Codex: в терминале выполните «npm install -g @openai/codex», затем «codex» и войдите в аккаунт ChatGPT (Free, Plus или Pro).',
+  'Press Ctrl+J in a notebook: the chat opens on the right.': 'Нажмите Ctrl+J в тетради: справа откроется чат.', 'Model (optional)': 'Модель (необязательно)', 'Codex default': 'По умолчанию Codex', 'Codex path': 'Путь к Codex', 'Codex model': 'Модель Codex',
+  'StudyNotes starts your Codex, which uses your ChatGPT plan and its limits. Codex runs read-only in a folder of its own and is told to use only the StudyNotes tools; unlike Claude Code it cannot be fully cut off from reading files on this computer.': 'StudyNotes запускает ваш Codex, он использует ваш тариф ChatGPT и его лимиты. Codex работает только на чтение в отдельной папке, и ему сказано пользоваться только инструментами StudyNotes; в отличие от Claude Code его нельзя полностью отрезать от чтения файлов на этом компьютере.',
+  'Message ChatGPT…': 'Сообщение ChatGPT…', 'ChatGPT is working…': 'ChatGPT работает…',
+  'Spoken note': 'Голосовая заметка', 'Set up dictation once with the mic in StudyNotes': 'Сначала один раз настройте диктовку микрофоном в StudyNotes',
+  'Select text or copy a picture · Ctrl + drag: a region · Alt + click: a window · Alt+S: the screen · Ctrl+E: pause': 'Выделите текст или скопируйте картинку · Ctrl + перетаскивание: область · Alt + клик: окно · Alt+S: экран · Ctrl+E: пауза',
+  'items collected – Finish on the bar files them': 'собрано – «Завершить» на панели запишет в тетрадь', 'items are in the chat – Ctrl+E goes on': 'в чате – Ctrl+E продолжает', 'my note': 'моя заметка',
+  'Study session: start, pause, go on (also in other apps)': 'Учебная сессия: начать, пауза, продолжить (и в других программах)', 'In a study session: a region / a window / the screen': 'В учебной сессии: область / окно / экран',
+  'Rotate': 'Повернуть', 'More tools': 'Ещё инструменты', 'Rotate (snaps to 0°, 90°, 180°, 270°; Shift = 15° steps)': 'Повернуть (привязка к 0°, 90°, 180°, 270°; Shift – шаг 15°)', 'Duplicate (Ctrl+Shift+D)': 'Дублировать (Ctrl+Shift+D)',
 };
 
 // Texts with numbers / names. [regex, replacement or function]
@@ -499,7 +513,7 @@ const patterns = [
   [/^Downloading… (\d+)%$/, 'Скачивание… $1%'],
   [/^Remove the sticker pack "(.+)"\?$/, 'Удалить набор стикеров «$1»?'],
   [/^No handwriting recognised – Windows has no handwriting recognizer: (.+)$/, 'Рукописный текст не распознан – в Windows нет распознавателя рукописного ввода: Параметры → Время и язык → Язык → (язык) → Параметры → Рукописный ввод.'],
-  [/^No handwriting recognised \(Windows: (\d+) strokes read, (\d+) words, recognizer (.+)\)\. Try "Read with Google" (.+)$/, 'Рукописный текст не распознан (Windows: прочитано штрихов $1, слов $2, распознаватель $3). Попробуйте «Google» в Настройки → Дополнения → Рукопись в текст.'],
+  [/^No handwriting recognised \(Windows: (\d+) strokes read, (\d+) words, recognizer (.+)\)\. Try "Google" (.+)$/, 'Рукописный текст не распознан (Windows: прочитано штрихов $1, слов $2, распознаватель $3). Попробуйте «Google» в Настройки → Встроенное → Рукопись в текст.'],
   [/^(\d+) MB in the StudyNotes data folder\.$/, '$1 МБ в папке данных StudyNotes.'],
   [/^Claude wrote notes in "(.+)" – Ctrl\+Z undoes them$/, 'Claude записал конспект в «$1» – Ctrl+Z отменяет'],
   [/^Remove all ink, text, pictures and shapes from page (.+) of "(.+)"\? You can undo this with Ctrl\+Z\.$/, 'Удалить все записи, текст, картинки и фигуры со страницы $1 тетради «$2»? Можно отменить через Ctrl+Z.'],

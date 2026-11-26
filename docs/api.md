@@ -103,6 +103,7 @@ Two handlers exist only when the app runs with `STUDYNOTES_TEST` set
 | `ocrSpell` | `lines` | corrected lines | Checks and corrects recognized lines in a separate process that ends after 2 idle minutes. | later |
 | `inkRecognize` | `strokes`, `recognizer` | `{ words, text }` | Recognizes handwriting with the Windows recognizer through PowerShell. | desktop-only |
 | `inkRecognizeLive` | `strokes`, `recognizer` | `{ words, text }` | Like `inkRecognize` through one PowerShell that stays open (live handwriting to text). | desktop-only |
+| `inkGoogle` | strokes `[[x, y, …]]`, `{ lang, pre }` | `{ text }` | Live handwriting read by Google from the strokes (online, fast). | desktop-only |
 | `inkRecognizers` | none | list of recognizer names | Lists the installed Windows handwriting recognizers. | desktop-only |
 
 ## Backup
@@ -193,9 +194,8 @@ Each method registers a listener and returns nothing. They are plain
 | `onReaderUndocked` | `()` | – | The docked reader left the main window. | desktop-only |
 | `studyStart` | `{ topic, prompt, rel }` | state | Starts a study session: bar on top, clipboard collected, Ctrl+Shift+1/2/3. | desktop-only |
 | `studyState` | – | state or `null` | The running session. | desktop-only |
-| `studyCapture` | kind: region, page or window | – | Captures from the screen. | desktop-only |
-| `studyWindows` | – | `[{ id, name, thumb }]` | Open windows to capture. | desktop-only |
-| `studyTakeWindow` | id | – | Captures one window. | desktop-only |
+| `studyCapture` | kind: region or page | – | Captures from the screen. | desktop-only |
+| `studyToggle` | `{ topic, prompt, rel }` | state | Ctrl+E: starts, pauses or goes on with the session. | desktop-only |
 | `studyNote` | text | – | Adds an own note. | desktop-only |
 | `studyRemove` | id | – | Removes an item. | desktop-only |
 | `studyFinish` | `cancel` | state | Ends the session; the main window gets `study:done`. | desktop-only |
@@ -203,7 +203,8 @@ Each method registers a listener and returns nothing. They are plain
 | `studyBarHeight` | px | – | Resizes the session bar. | desktop-only |
 | `snipDone` | rect or `null` | – | The region drawn on the screenshot. | desktop-only |
 | `onStudyState` | `(state)` | – | The bar gets the session. | desktop-only |
-| `onStudyPickWindow` | `()` | – | The window shortcut was pressed. | desktop-only |
+| `onStudyPaused` | `(state with fresh items)` | – | The session was paused; the new items go into the chat. | desktop-only |
+| `onStudyHotkey` | `()` | – | Ctrl+E was pressed anywhere and no session runs. | desktop-only |
 | `onStudyError` | `(message)` | – | A capture failed. | desktop-only |
 | `onStudyDone` | `(state)` | – | The session came back to the main window. | desktop-only |
 | `onSnipRect` | `(rect)` | – | The rectangle of a Ctrl + drag region while drawing. | desktop-only |

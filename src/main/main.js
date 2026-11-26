@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, ClipboardItem, nativeTheme, safeStorage, net, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, Menu, clipboard, ClipboardItem, nativeTheme, safeStorage, net, utilityProcess, globalShortcut } = require('electron');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
@@ -624,6 +624,9 @@ handle('screen:pixel', async (x, y) => {
 handle('ink:recognize', (strokes, recognizer) => handwriting.recognize(strokes, recognizer));
 handle('ink:recognizers', () => handwriting.recognizers());
 handle('ink:recognizeLive', (strokes, recognizer) => handwriting.recognizeLive(strokes, recognizer));
+// live handwriting read by Google from the strokes (src/main/ink-google.js); tests: one "gword" per stroke
+const { recognizeGoogle } = require('./ink-google');
+handle('ink:google', (strokes, opts) => (process.env.STUDYNOTES_FAKE_INK ? { text: strokes.map((_, i) => `gword${i + 1}`).join(' ') } : recognizeGoogle(strokes, opts || {}, net.fetch)));
 app.on('will-quit', () => handwriting.stopLive());
 
 // ---------- text recognition add-on ----------
@@ -796,15 +799,22 @@ handle('mcp:test', async () => {
 // notebooks only through the MCP bridge above.
 const { ClaudeCodeChat, ChatHistory } = require('./claude-code');
 let chat = null;
-const chatInst = () => (chat ||= new ClaudeCodeChat({ dir: path.join(app.getPath('userData'), 'claude-chat'), bridge: mcpEntry }));
-handle('chat:info', (bin) => chatInst().info(bin));
+const { CodexChat } = require('./codex-chat');
+let codex = null;
+// engine 'codex': the same chat with ChatGPT through the user's Codex CLI (src/main/codex-chat.js)
+const chatInst = (engine) => (engine === 'codex'
+  ? (codex ||= new CodexChat({ dir: path.join(app.getPath('userData'), 'codex-chat'), bridge: mcpEntry }))
+  : (chat ||= new ClaudeCodeChat({ dir: path.join(app.getPath('userData'), 'claude-chat'), bridge: mcpEntry })));
+const chatEngine = new Map(); // run id → engine (for Stop)
+handle('chat:info', (bin, engine) => chatInst(engine).info(bin));
 handle('chat:send', (id, req) => {
-  chatInst().send(id, req, (ev) => { if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, ev); }).catch((err) => {
+  chatEngine.set(id, req && req.engine);
+  chatInst(req && req.engine).send(id, req, (ev) => { if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, ev); }).catch((err) => {
     if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, { kind: 'done', error: String(err.message || err) });
   });
   return true;
 });
-handle('chat:stop', (id) => chatInst().stop(id));
+handle('chat:stop', (id) => { chatInst(chatEngine.get(id)).stop(id); chatEngine.delete(id); });
 // Speech to text on this computer (src/main/speech.js), for audio in the chat
 const { Speech, MODELS: SPEECH_MODELS, LANGUAGES: SPEECH_LANGS } = require('./speech');
 let speech = null;
@@ -841,19 +851,21 @@ handle('reader:pick', async () => {
 });
 // Study session (src/main/study.js): a bar over every app, captures, the material back at the end
 const { Study } = require('./study');
-const study = new Study({ main: () => win, dir: path.join(app.getPath('userData'), 'study'), test: TEST_MODE });
+const study = new Study({ main: () => win, dir: path.join(app.getPath('userData'), 'study'), settings: () => config.settings || {}, test: TEST_MODE });
 handle('study:start', (opts) => study.start(opts));
+handle('study:toggle', (opts) => study.toggle(opts));
+// Ctrl+E everywhere, also in other apps: start / pause / go on (the open notebook comes from the main window)
+const studyKey = () => { if (study.s) study.toggle(); else if (win && !win.isDestroyed()) win.webContents.send('study:hotkey'); };
+app.whenReady().then(() => { if (!TEST_MODE) { try { globalShortcut.register('CommandOrControl+E', studyKey); } catch { /* taken */ } } });
 handle('study:state', () => study.state());
 handle('study:capture', (kind) => study.capture(kind));
-handle('study:windows', () => study.windows());
-handle('study:takeWindow', (id) => study.takeWindow(id));
 handle('study:note', (text) => study.note(text));
 handle('study:remove', (id) => study.remove(id));
 handle('study:finish', (cancel) => study.finish(!!cancel));
 handle('study:image', (hash) => study.image(hash));
-ipcMain.handle('study:barHeight', (e, h) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) { const b = w.getBounds(); w.setBounds({ ...b, height: Math.max(56, Math.min(420, Math.round(h))) }); } });
+ipcMain.handle('study:barHeight', (e, h) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) { const b = w.getBounds(); w.setBounds({ ...b, height: Math.max(40, Math.min(420, Math.round(h))) }); } });
 handle('snip:done', (rect) => { if (study.snipDone) study.snipDone(rect); });
-app.on('will-quit', () => { if (study.active) study.finish(true); });
+app.on('will-quit', () => { if (study.s) study.finish(true); try { globalShortcut.unregisterAll(); } catch { /* not ready */ } });
 const chatHistory = new ChatHistory(path.join(app.getPath('userData'), 'chats.json'));
 handle('chat:list', () => chatHistory.list());
 handle('chat:get', (id) => chatHistory.get(id));

@@ -41,15 +41,13 @@ function png(w, hh) {
   await ed(async () => { const r = await window.api.createNotebook('', { title: 'Semiconductors', paper: 'lined', pageCount: 1 }); await window.__app.openNotebook(r); });
   await win.waitForFunction(() => window.__app.active?.viewer?.views.size > 0);
 
-  const start = async (wish, viaKey) => {
+  const start = async (viaKey) => {
+    const wait = app.waitForEvent('window');
     if (viaKey) { await ed(() => window.__app.active.tools.clearSelection(true)); await win.locator('.editor-body').click({ position: { x: 5, y: 5 } }).catch(() => {}); await win.keyboard.press('Control+E'); }
     else { await win.locator('.editor').getByRole('button', { name: 'More', exact: true }).click(); await win.getByRole('menuitem', { name: 'Study session…' }).click(); }
-    await win.locator('.modal .study-start').waitFor();
-    check(`the start dialog asks about the open notebook, no topic field${viaKey ? ' (Ctrl+E)' : ''}`, /Start a study session in this notebook\?\s*Semiconductors/.test(await win.locator('.modal .study-start').textContent())
-      && await win.locator('.modal').getByLabel('Topic').count() === 0 && await win.locator('.modal .study-mic').count() === 1);
-    if (wish) await win.locator('.modal').getByLabel(/Wishes for the notes/).fill(wish);
-    const [bar] = await Promise.all([app.waitForEvent('window'), win.locator('.modal').getByRole('button', { name: 'Start' }).click()]);
+    const bar = await wait;
     await bar.waitForSelector('.sb-bar');
+    check(`starts at once, no dialog${viaKey ? ' (Ctrl+E)' : ''}`, await win.locator('.modal').count() === 0);
     return bar;
   };
   const count = (bar) => bar.evaluate(() => Number(document.querySelector('.sb-count').textContent));
@@ -57,23 +55,21 @@ function png(w, hh) {
 
   // ---- session 1: everything, then laid out without AI ----
   const bar = await start();
-  check('the bar: on top, with the notebook as topic, nothing collected yet (old clipboard ignored)', (await bar.locator('.sb-topic').textContent()) === 'Semiconductors' && await count(bar) === 0
+  check('the bar: small, on top, nothing collected yet (old clipboard ignored)', await count(bar) === 0 && await bar.getByRole('button', { name: 'Spoken note' }).count() === 1 && await bar.getByRole('button', { name: 'Region' }).count() === 0
     && await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => /#sub=study/.test(w.webContents.getURL())).isAlwaysOnTop()));
   await setClip({ text: 'Donors add free electrons to the crystal.' });
   await waitCount(bar, 1);
   await setClip({ text: 'Donors add free electrons to the crystal.', image: clipPng });
   await waitCount(bar, 2);
   check('copied text and a copied picture are collected', true);
-  await bar.getByRole('button', { name: 'Screen' }).click();
+  await bar.evaluate(() => window.api.studyCapture('page')); // Alt+S
   await waitCount(bar, 3);
-  const [snip] = await Promise.all([app.waitForEvent('window'), bar.getByRole('button', { name: 'Region' }).click()]);
+  const [snip] = await Promise.all([app.waitForEvent('window'), bar.evaluate(() => { window.api.studyCapture('region'); })]);
   await snip.waitForSelector('.snip-img[src^="data:"]');
   await snip.mouse.move(100, 100); await snip.mouse.down(); await snip.mouse.move(400, 300, { steps: 4 }); await snip.mouse.up().catch(() => {}); // the snip window closes on release
   await waitCount(bar, 4);
   check('Screen and Region (drawn on the screenshot) are collected', true);
-  await bar.getByRole('button', { name: 'Note' }).click();
-  await bar.getByLabel('Your note').fill('ask about the p-n junction');
-  await bar.getByLabel('Your note').press('Enter');
+  await bar.evaluate(() => window.api.studyNote('ask about the p-n junction')); // a spoken note
   await waitCount(bar, 5);
   await setClip({ text: '  Donors add free electrons to the  crystal. ' });
   await bar.waitForTimeout(1200);
@@ -96,15 +92,25 @@ function png(w, hh) {
   await ed(() => { window.__app.active.tools.clearSelection(true); window.__app.active.undo(); });
   check('one Ctrl+Z undoes it', await ed(() => window.__app.active.pages.length === 1));
 
-  // ---- session 2: Claude files it ----
+  // ---- session 2: Ctrl+E starts, pauses into the chat, goes on; Claude files it ----
   await ed(() => { window.__app.settings.ai = { enabled: true, via: 'claudecode' }; });
-  const bar2 = await start('focus on formulas', true);
+  const bar2 = await start(true);
   await setClip({ text: 'n-type: more electrons than holes.' });
   await waitCount(bar2, 1);
-  await bar2.getByRole('button', { name: 'Screen' }).click();
+  await bar2.evaluate(() => window.api.studyCapture('page'));
   await waitCount(bar2, 2);
+  await win.keyboard.press('Control+E');
+  await win.waitForFunction(() => /n-type: more electrons/.test(document.querySelector('.chat-input')?.value || '') && document.querySelectorAll('.chat-file').length === 1, null, { timeout: 10000 });
+  const barShown = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => /#sub=study/.test(w.webContents.getURL())).isVisible());
+  check('Ctrl+E pauses: the bar goes, the text and the picture wait in the chat, no review yet', !(await barShown()) && await win.locator('.study-review').count() === 0);
+  await win.locator('.editor-body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+  await win.keyboard.press('Control+E');
+  await bar2.waitForFunction(() => true);
+  await win.waitForTimeout(400);
+  check('Ctrl+E again goes on with the same session', await barShown() && await count(bar2) === 2);
   await bar2.getByRole('button', { name: 'Finish' }).click();
   await win.locator('.study-review').waitFor({ timeout: 10000 });
+  await win.locator('.modal').getByLabel(/Wishes for the notes/).fill('focus on formulas');
   await win.locator('.modal').getByRole('button', { name: 'Claude writes the notes' }).click();
   await win.waitForFunction(() => /study: images=/.test(document.querySelector('.chat-msg.assistant')?.textContent || '') && !document.querySelector('.chat-msg.assistant .ai-wait'), null, { timeout: 30000 });
   const reply = await win.locator('.chat-msg.assistant').last().textContent();

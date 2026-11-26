@@ -1,6 +1,6 @@
 // The real text of PDF pages: select it (copy, highlight, underline) with the
 // select tool, and let the highlighter snap to text lines (like GoodNotes).
-import { h, showMenu, toast } from './ui.js';
+import { h, showMenu, closeMenu, toast } from './ui.js';
 import { Util } from './pdfdoc.js';
 import { layoutFromOcr } from './ocr.js';
 import { linesOf, charAt, spanBetween, highlightStrokes } from '../shared/pdf-text-layout.js';
@@ -131,7 +131,7 @@ export class TextSelection {
       this.clear();
     };
     const m = showMenu([
-      { label: 'Copy', icon: 'copy', onClick: () => { navigator.clipboard.writeText(span.text).catch(() => {}); toast('Copied', { timeout: 900 }); this.clear(); } },
+      { label: 'Copy', icon: 'copy', shortcut: 'Ctrl+C', onClick: () => this.copy() },
       { label: 'Highlight', icon: 'highlighter', onClick: () => add(highlightStrokes(span.rects, ts.hl.color, this.uid)) },
       { label: 'Underline', icon: 'line', onClick: () => add(underlineStrokes(span.rects, ts.pen.color, this.uid)) },
     ], e.clientX + 6, e.clientY + 6);
@@ -142,5 +142,17 @@ export class TextSelection {
     if (this.layer) this.layer.remove();
     this.layer = null;
     this.cur = null;
+    this.span = null;
+  }
+
+  /** Ctrl+C while PDF text is selected: copies it (true when there was some). */
+  copy() {
+    const text = this.span && this.layer && this.layer.isConnected && this.span.text;
+    if (!text) return false;
+    window.api.copyText(text).catch(() => navigator.clipboard.writeText(text).catch(() => {}));
+    toast('Copied', { timeout: 900 });
+    closeMenu();
+    this.clear();
+    return true;
   }
 }

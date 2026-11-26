@@ -19,26 +19,26 @@ function wishesField(app, value, label) {
   return { ta, el: h('label', { class: 'field' }, h('span', {}, label), h('div', { class: 'study-wish' }, ta, mic)) };
 }
 
-/** Ctrl+E: a study session that files into the notebook that is open now. */
+/** Ctrl+E: starts a study session in the open notebook – or pauses it, or goes on with it. */
 export function startStudy(editor) {
-  const wish = wishesField(editor.app, '', 'Wishes for the notes (optional, also later)');
-  modal({
-    title: 'Study session', width: 520,
-    body: h('div', { class: 'study-start' },
-      h('p', { class: 'wrap' }, tr('Start a study session in this notebook?'), ' ', h('b', { class: 'no-i18n' }, editor.doc.nb.title)),
-      h('p', { class: 'hint wrap' }, 'StudyNotes steps aside and a small bar stays on top of every app – also over ChatGPT or Claude in the browser:'),
-      h('ul', { class: 'study-how' },
-        h('li', {}, h('b', {}, 'Select text'), ' – it is collected at once'),
-        h('li', {}, h('b', {}, 'Ctrl + drag'), ' – a region of the screen'),
-        h('li', {}, h('b', {}, 'Right-click → Copy image'), ' – the picture is collected'),
-        h('li', {}, h('b', {}, 'Ctrl+Shift+2 / 3'), ' – a window / the whole screen')),
-      h('p', { class: 'hint wrap' }, 'Finish on the bar: Claude turns everything into notes – text in screenshots becomes text, figures get a caption.'),
-      wish.el),
-    actions: [{ label: 'Cancel', result: null }, { label: 'Start', primary: true, value: () => {
-      window.api.studyStart({ topic: editor.doc.nb.title, prompt: wish.ta.value.trim(), rel: editor.rel }).catch((err) => toast(String(err.message || err), { error: true }));
-      return true;
-    } }],
-  });
+  if (!editor) { toast(tr('Open a notebook first.'), { error: true }); return; }
+  window.api.studyToggle({ topic: editor.doc.nb.title, prompt: '', rel: editor.rel }).catch((err) => toast(String(err.message || err), { error: true }));
+}
+
+/** Paused with Ctrl+E: what is new waits in the notebook's chat (pictures attached, text quoted) – nothing is sent yet. */
+export async function studyPaused(app, st) {
+  if (!st.fresh || !st.fresh.length) return;
+  const ed = await openFor(app, st.rel);
+  if (!ed) return;
+  const panel = ed.aiPanel;
+  if (!panel.ready() || !panel.isChat) { toast(`${st.fresh.length} ${tr('items collected – Finish on the bar files them')}`); return; }
+  if (!panel.el) panel.open();
+  if (panel.chatView !== 'chat') panel.showChatView('chat');
+  const pics = st.fresh.filter((it) => it.image);
+  await panel.addFiles(await Promise.all(pics.map(async (it) => new File([new Uint8Array(await window.api.studyImage(it.image.hash))], fileName(it), { type: 'image/png' }))));
+  const text = st.fresh.filter((it) => !it.image).map((it) => (it.kind === 'note' ? `(${tr('my note')}) ` : '') + String(it.text || '').trim()).filter(Boolean).join('\n\n');
+  if (text) panel.input.value = (panel.input.value ? panel.input.value.replace(/\s*$/, '\n\n') : '') + text.split('\n').map((l) => '> ' + l).join('\n') + '\n\n';
+  toast(`${st.fresh.length} ${tr('items are in the chat – Ctrl+E goes on')}`);
 }
 
 const fileName = (it) => `${it.kind}-${it.id}.png`;
@@ -109,7 +109,10 @@ async function withClaude(ed, session, topic, prompt, pic) {
   if (!panel.el) panel.open();
   if (panel.chatView !== 'chat') panel.showChatView('chat');
   const pics = session.items.filter((it) => it.image);
-  const before = (panel.files || []).length;
+  // pictures a pause put into the chat come again with the whole session
+  panel.files = (panel.files || []).filter((f) => !/^(region|page|window)-c\d+\.png$/.test(f.name));
+  panel.drawFiles();
+  const before = panel.files.length;
   await panel.addFiles(await Promise.all(pics.map(async (it) => new File([await pic(it.image.hash)], fileName(it), { type: 'image/png' }))));
   const added = panel.files.slice(before);
   const ids = new Map(pics.map((it, i) => [it.id, added[i] && added[i].id]));

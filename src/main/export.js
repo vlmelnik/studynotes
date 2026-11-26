@@ -8,7 +8,7 @@ const fontkit = require('@pdf-lib/fontkit');
 // Ligatures would be drawn as one glyph that PDF readers can't copy/search ("ti" in "Wichtig" vanished).
 const NO_LIGATURES = { liga: false, clig: false, calt: false, rlig: false, dlig: false };
 const { getOutline, getSizedOutline, outlineToSvgPath, strokeLook, lighten, isClosedShape } = require('../shared/ink');
-const { paperGeometry, pageBackground } = require('../shared/paper');
+const { paperGeometry, pageBackground, isDark } = require('../shared/paper');
 const { boxWarp, applyH, colourAt, validStops } = require('../shared/warp');
 const { boxStyle, roundedRect, softOf, BOX_PAD_X, BOX_PAD_Y, BOX_BORDER } = require('../shared/textbox');
 const { stacked } = require('../shared/stacking');
@@ -384,11 +384,13 @@ async function drawImage(page, it, map, rot, k, images) {
   page.drawImage(img, opts);
 }
 
-async function drawTable(page, it, map, rot, k, fonts, inline = null) {
+async function drawTable(page, it, map, rot, k, fonts, inline = null, dark = false) {
   const cw = it.cw || [];
   const rows = it.cells || [];
   const fs = it.fs || 12;
-  const border = it.border || '#9aa7b8';
+  const border = it.border || (dark ? '#5d6472' : '#9aa7b8');
+  // dark paper: like on screen, black text turns light
+  const ink = (c) => (dark && (!c || isDark(c)) ? '#e6e7ea' : c || '#1c1c1e');
   // Row heights: measured on screen; recompute if missing.
   let y = it.y;
   for (let r = 0; r < rows.length; r++) {
@@ -396,12 +398,12 @@ async function drawTable(page, it, map, rot, k, fonts, inline = null) {
     const rh = (it.rh && it.rh[r]) || fs * LINE_H + CELL_PAD * 2;
     for (let c = 0; c < cw.length; c++) {
       const cell = (rows[r] && rows[r][c]) || {};
-      const bg = cell.bg || (it.hdr && r === 0 ? '#eef2f7' : null);
+      const bg = cell.bg || (it.hdr && r === 0 ? (dark ? '#343842' : '#eef2f7') : null);
       if (bg) fillRect(page, x, y, x + cw[c], y + rh, map, bg);
       if (cell.h || cell.t) {
         await drawRich(page, fonts, {
           html: cell.h, text: cell.t, ff: it.ff, b: cell.b || (it.hdr && r === 0), i: cell.i, u: cell.u,
-          fs, color: cell.c || it.c || '#1c1c1e', x: x + CELL_PAD, y: y + CELL_PAD, w: cw[c] - CELL_PAD * 2, inline,
+          fs, color: cell.c && !(dark && isDark(cell.c)) ? cell.c : ink(it.c), x: x + CELL_PAD, y: y + CELL_PAD, w: cw[c] - CELL_PAD * 2, inline,
         }, map, rot, k);
       }
       x += cw[c];
@@ -425,7 +427,7 @@ async function drawTable(page, it, map, rot, k, fonts, inline = null) {
 async function drawObject(page, kind, o, map, rot, ctx, k) {
   if (kind === 'item') {
     if (o.type === 'img') await drawImage(page, o, map, rot, k, ctx.images);
-    else if (o.type === 'table') await drawTable(page, o, map, rot, k, ctx.fonts, ctx.inline);
+    else if (o.type === 'table') await drawTable(page, o, map, rot, k, ctx.fonts, ctx.inline, !!ctx.dark);
     // unknown item types (from newer versions) are skipped
     return;
   }
@@ -639,7 +641,7 @@ async function exportNotebook(args) {
       const page = out.addPage([pg.w, pg.h]);
       const map = (x, y) => [x, pg.h - y];
       drawPaper(page, pg, map, 1);
-      await drawContent(page, data, map, 0, ctx);
+      await drawContent(page, data, map, 0, { ...ctx, dark: isDark(pageBackground({ kind: 'paper', ...pg }, true)) });
       await inkText(page, pg, map);
     }
   }
