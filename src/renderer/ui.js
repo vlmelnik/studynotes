@@ -96,15 +96,20 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu();
 window.addEventListener('blur', closeMenu);
 
 // ---------- modal dialogs ----------
+let openModals = 0;
 export function modal({ title, body, actions, onClose, width }) {
   const backdrop = h('div', { class: 'modal-backdrop' });
   const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', style: width ? { width: width + 'px' } : null });
   const footer = h('div', { class: 'modal-actions' });
+  // the floating reader steps behind StudyNotes while a dialog is open (main window only)
+  const yieldReader = (on) => { if (!document.body.classList.contains('sub') && window.api && window.api.readerYield) { openModals += on ? 1 : -1; window.api.readerYield(openModals > 0).catch(() => {}); } };
   const close = (value) => {
     backdrop.remove();
     document.removeEventListener('keydown', onKey, true);
+    yieldReader(false);
     onClose && onClose(value);
   };
+  yieldReader(true);
   for (const a of actions || []) {
     footer.append(h('button', { class: `btn ${a.primary ? 'btn-primary' : ''} ${a.danger ? 'btn-danger' : ''}`, onclick: () => {
       if (a.value) {

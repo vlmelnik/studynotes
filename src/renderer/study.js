@@ -8,24 +8,34 @@ import { uid } from './tools.js';
 import { groups, forPrompt, removeItem } from '../shared/capture-session.js';
 import { layoutNotes, notesStyle } from '../shared/notes-layout.js';
 import { FONTS, DEFAULT_FONT } from '../shared/fonts.js';
+import { micButton } from './dictation.js';
 
+// a text box with a mic button: speak the wishes instead of typing them
+function wishesField(app, value, label) {
+  const ta = h('textarea', { class: 'ai-prompt', rows: 2, 'aria-label': label, placeholder: tr('For example: focus on the formulas and add exam questions at the end.') });
+  ta.value = value || '';
+  const insert = (text) => { const a = ta.selectionStart, b = ta.selectionEnd; const pre = ta.value.slice(0, a); const sep = pre && !/\s$/.test(pre) ? ' ' : ''; ta.value = pre + sep + text + ta.value.slice(b); ta.selectionStart = ta.selectionEnd = a + sep.length + text.length; };
+  const mic = micButton(app, { className: 'icon-btn study-mic', target: () => ({ insert }) });
+  return { ta, el: h('label', { class: 'field' }, h('span', {}, label), h('div', { class: 'study-wish' }, ta, mic)) };
+}
+
+/** Ctrl+E: a study session that files into the notebook that is open now. */
 export function startStudy(editor) {
-  const topic = h('input', { class: 'input', type: 'text', value: editor.doc.nb.title, 'aria-label': 'Topic' });
-  const prompt = h('textarea', { class: 'ai-prompt', rows: 3, 'aria-label': 'What the notes should be like (optional)', placeholder: tr('For example: focus on the formulas and add exam questions at the end.') });
+  const wish = wishesField(editor.app, '', 'Wishes for the notes (optional, also later)');
   modal({
     title: 'Study session', width: 520,
     body: h('div', { class: 'study-start' },
-      h('p', { class: 'hint wrap' }, 'StudyNotes steps aside and a small bar stays on top of every app. Read, scroll and open other documents as usual:'),
+      h('p', { class: 'wrap' }, tr('Start a study session in this notebook?'), ' ', h('b', { class: 'no-i18n' }, editor.doc.nb.title)),
+      h('p', { class: 'hint wrap' }, 'StudyNotes steps aside and a small bar stays on top of every app – also over ChatGPT or Claude in the browser:'),
       h('ul', { class: 'study-how' },
-        h('li', {}, h('b', {}, 'Ctrl+C'), ' – copied text and pictures are collected'),
-        h('li', {}, h('b', {}, 'Ctrl+Shift+1'), ' – a region of the screen'),
-        h('li', {}, h('b', {}, 'Ctrl+Shift+2'), ' – a window'),
-        h('li', {}, h('b', {}, 'Ctrl+Shift+3'), ' – the whole screen')),
-      h('p', { class: 'hint wrap' }, 'Finish on the bar: Claude turns everything into notes in this notebook.'),
-      h('label', { class: 'field' }, h('span', {}, 'Topic'), topic),
-      h('label', { class: 'field' }, h('span', {}, 'What the notes should be like (optional)'), prompt)),
+        h('li', {}, h('b', {}, 'Select text'), ' – it is collected at once'),
+        h('li', {}, h('b', {}, 'Ctrl + drag'), ' – a region of the screen'),
+        h('li', {}, h('b', {}, 'Right-click → Copy image'), ' – the picture is collected'),
+        h('li', {}, h('b', {}, 'Ctrl+Shift+2 / 3'), ' – a window / the whole screen')),
+      h('p', { class: 'hint wrap' }, 'Finish on the bar: Claude turns everything into notes – text in screenshots becomes text, figures get a caption.'),
+      wish.el),
     actions: [{ label: 'Cancel', result: null }, { label: 'Start', primary: true, value: () => {
-      window.api.studyStart({ topic: topic.value.trim(), prompt: prompt.value.trim(), rel: editor.rel }).catch((err) => toast(String(err.message || err), { error: true }));
+      window.api.studyStart({ topic: editor.doc.nb.title, prompt: wish.ta.value.trim(), rel: editor.rel }).catch((err) => toast(String(err.message || err), { error: true }));
       return true;
     } }],
   });
@@ -39,9 +49,9 @@ export async function reviewStudy(app, st) {
   const urls = [];
   const bytes = new Map(); // hash -> Uint8Array
   const pic = async (hash) => { if (!bytes.has(hash)) bytes.set(hash, new Uint8Array(await window.api.studyImage(hash))); return bytes.get(hash); };
-  const topic = h('input', { class: 'input', type: 'text', value: st.topic, 'aria-label': 'Topic' });
-  const prompt = h('textarea', { class: 'ai-prompt', rows: 2, 'aria-label': 'What the notes should be like', placeholder: tr('For example: focus on the formulas and add exam questions at the end.') });
-  prompt.value = st.prompt || '';
+  const topic = { value: st.topic };
+  const wish = wishesField(app, st.prompt, 'Wishes for the notes');
+  const prompt = wish.ta;
   const list = h('div', { class: 'study-items' });
   const draw = () => {
     list.replaceChildren(...groups(session).map((g) => h('div', { class: 'study-group' },
@@ -64,8 +74,7 @@ export async function reviewStudy(app, st) {
     title: 'Study session – file into the notebook', width: 760,
     body: h('div', { class: 'study-review' },
       h('div', { class: 'hint' }, `${session.items.length} ${tr('items')} · ${st.summary.minutes} min`),
-      h('label', { class: 'field' }, h('span', {}, 'Topic'), topic),
-      h('label', { class: 'field' }, h('span', {}, 'What the notes should be like'), prompt),
+      wish.el,
       list,
       canAI ? null : h('small', { class: 'hint wrap' }, 'For notes written by Claude, set up the AI assistant with Claude Code (Settings → AI assistant). Without it StudyNotes lays the material out as it is.')),
     actions: [
@@ -108,7 +117,9 @@ async function withClaude(ed, session, topic, prompt, pic) {
   for (const [cid, aid] of ids) if (aid) material = material.replace(new RegExp(`^\\[${cid}\\]`, 'm'), `[${aid}]`);
   panel.input.value = `Study session "${topic || ed.doc.nb.title}" – turn the material below into well-structured, nicely laid-out study notes in this notebook with write_notes, `
     + 'starting on the next empty page (place "next_page"). Order it by theme, not by where it came from: a level-1 heading with the topic, sections, key terms in bold, definitions, '
-    + 'formulas as formula blocks, the pictures where they belong (image blocks with their ids, with a short caption), and a box with the main points at the end. '
+    + 'formulas as formula blocks, and a box with the main points at the end. '
+    + 'Look at every picture: a screenshot that is mostly text becomes text in the notes (transcribe it, no image); a graph, diagram, figure or photo goes in as an image block with its id '
+    + 'and a short, relevant caption (remove_background: true when it sits on a plain page background). '
     + 'Leave out repeats and things that do not belong to the topic.'
     + (prompt ? `\nThe user's wishes: ${prompt}` : '')
     + `\n\nMaterial (${session.items.length} items; [id] (kind, source) content):\n${material}`;

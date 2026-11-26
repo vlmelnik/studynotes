@@ -34,3 +34,13 @@ test('stacking: several selected objects keep their relative order', () => {
   assert.deepStrictEqual(ids(d, 'f'), ['a', 'b']);
   assert.deepStrictEqual(ids(d, 'b'), ['c']);
 });
+
+test('sinkUnder: ink drawn over a picture goes above it – the picture moves to the back layer', () => {
+  const { sinkUnder } = require('../../../src/shared/stacking.js');
+  const data = { items: [{ id: 'a', type: 'img', lay: 'f', x: 0, y: 0, w: 100, h: 100, z: 3 }, { id: 'b', type: 'img', lay: 'f', x: 500, y: 500, w: 10, h: 10, z: 4 }, { id: 't', type: 'table', lay: 'f', x: 0, y: 0, w: 100, h: 100 }], texts: [], strokes: [] };
+  const out = sinkUnder(data, { x0: 10, y0: 10, x1: 20, y1: 20 });
+  assert.equal(out.find((i) => i.id === 'a').lay, 'b');
+  assert.equal(out.find((i) => i.id === 'b').lay, 'f');
+  assert.equal(out.find((i) => i.id === 't').lay, 'f');
+  assert.equal(sinkUnder(data, { x0: 300, y0: 300, x1: 310, y1: 310 }), null);
+});

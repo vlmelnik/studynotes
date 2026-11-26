@@ -33,6 +33,19 @@ export class ReaderView {
       e.preventDefault();
       this.setZoom(this.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e);
     }, { passive: false });
+    // selecting text copies it at once (also Ctrl+C); a short "Copied" shows it
+    this.copied = h('span', { class: 'rd-copied', hidden: true }, 'Copied');
+    this.el.querySelector('.rd-bar').insertBefore(this.copied, this.pageNo);
+    const copy = () => {
+      const sel = window.getSelection();
+      const text = sel && !sel.isCollapsed && this.scroller.contains(sel.anchorNode) ? sel.toString().replace(/[ \t]+\n/g, '\n').trim() : '';
+      if (!text || text === this.lastCopy) return;
+      this.lastCopy = text;
+      window.api.copyText(text).then(() => { this.copied.hidden = false; clearTimeout(this.copyT); this.copyT = setTimeout(() => { this.copied.hidden = true; }, 1200); }, () => {});
+    };
+    this.scroller.addEventListener('pointerup', () => setTimeout(copy, 10));
+    this.el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { this.lastCopy = null; copy(); } });
+    document.addEventListener('selectionchange', () => { const s = window.getSelection(); if (!s || s.isCollapsed) this.lastCopy = null; });
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(this.scroller);
   }

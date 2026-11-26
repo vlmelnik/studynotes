@@ -172,7 +172,7 @@ function checkBlocks(input) {
     if (b.type === 'image') {
       const ref = String(b.ref || '').trim();
       if (!ref) return bad('a picture needs "ref" (the id of an attached picture)');
-      return blocks.push({ type: 'image', ref, caption: String(b.caption || '').trim(), size: ['small', 'medium', 'full'].includes(b.size) ? b.size : 'medium' });
+      return blocks.push({ type: 'image', ref, caption: String(b.caption || '').trim(), size: ['small', 'medium', 'full'].includes(b.size) ? b.size : 'medium', ...(b.remove_background === true ? { remove_background: true } : {}) });
     }
     if (b.type === 'formula') {
       const tex = String(b.latex || b.text || '').trim().replace(/^\$\$?|\$\$?$/g, '').trim();

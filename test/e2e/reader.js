@@ -34,6 +34,10 @@ const { launch, root } = require('./harness/app');
   check('the text can be selected (text layer)', /Lecture page 2/.test(text), text.slice(0, 120));
   const sel = await rw.evaluate(() => { const span = [...document.querySelectorAll('.rd-text span')].find((s) => /Lecture page/.test(s.textContent)); const r = document.createRange(); r.selectNodeContents(span); getSelection().removeAllRanges(); getSelection().addRange(r); return getSelection().toString(); });
   check('selecting gives the words', /Lecture page/.test(sel), sel);
+  await rw.evaluate(() => document.querySelector('.rd-pages').dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  await rw.waitForFunction(() => !document.querySelector('.rd-copied').hidden, null, { timeout: 3000 }).catch(() => {});
+  const clip = await app.evaluate(async ({ clipboard }) => clipboard.readText());
+  check('selecting copies it at once, "Copied" shows', /Lecture page/.test(clip) && await rw.evaluate(() => !document.querySelector('.rd-copied').hidden), clip);
   if (process.env.SHOT) { fs.mkdirSync(process.env.SHOT, { recursive: true }); await rw.screenshot({ path: path.join(process.env.SHOT, 'reader-float.png') }); }
   const w0 = await rw.evaluate(() => document.querySelector('.rd-page').offsetWidth);
   await rw.getByRole('button', { name: 'Zoom in' }).click();
@@ -63,6 +67,22 @@ const { launch, root } = require('./harness/app');
   await win.waitForFunction(() => !document.querySelector('.rd-pane'));
   check('Undock: its own window again, the pane is gone, same page', /^2 \/ 4$/.test(await rw2.locator('.rd-pageno').textContent()));
   await rw2.getByRole('button', { name: 'Close the reader' }).click();
+  // dragging the window to an edge of the main window: a blue strip, then it pours in on that side
+  const send = (ch, arg) => app.evaluate(({ BrowserWindow }, [c, a]) => BrowserWindow.getAllWindows().find((w) => !/#sub=/.test(w.webContents.getURL())).webContents.send(c, a), [ch, arg]);
+  await send('reader:zone', 'right');
+  const strip = await win.evaluate(() => { const s = document.querySelector('.rd-zone'); const r = s.getBoundingClientRect(); return { shown: !s.hidden, right: r.right, w: window.innerWidth }; });
+  await send('reader:zone', null);
+  check('a blue strip shows at the edge while the reader is dragged there', strip.shown && Math.abs(strip.right - strip.w) < 3 && await win.evaluate(() => document.querySelector('.rd-zone').hidden), JSON.stringify(strip));
+  await send('reader:docked', { rel: await ed(() => window.__app.active.rel), file: 'source.pdf', title: 'x', page: 2, side: 'right' });
+  await win.locator('.rd-pane .rd-page canvas').first().waitFor({ timeout: 20000 });
+  check('dropped on the right edge: docked on the right, with the pour-in', await ed(() => window.__app.settings.readerSplit.notesSide === 'left') && await win.evaluate(() => document.querySelector('.rd-pane').getBoundingClientRect().right >= document.querySelector('.editor-body').getBoundingClientRect().right - 2));
+  // pulled out by the header like a Chrome tab
+  const bar = await win.locator('.rd-pane .rd-title').boundingBox();
+  const [rw3] = await Promise.all([app.waitForEvent('window'), (async () => { await win.mouse.move(bar.x + 10, bar.y + 5); await win.mouse.down(); await win.mouse.move(bar.x - 60, bar.y + 40, { steps: 6 }); await win.mouse.up(); })()]);
+  await rw3.waitForFunction(() => document.querySelectorAll('.rd-page canvas').length >= 1, null, { timeout: 20000 });
+  await win.waitForFunction(() => !document.querySelector('.rd-pane'));
+  check('dragging the docked header out makes it a window again', true);
+  await rw3.getByRole('button', { name: 'Close the reader' }).click();
   await win.waitForTimeout(500);
   check('Close closes the reader window', await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length) === 1);
 

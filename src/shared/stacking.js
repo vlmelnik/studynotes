@@ -43,4 +43,20 @@ function restack(data, ids, dir) {
   return { ...data, items: fix(patch(data.items)), texts: fix(patch(data.texts)) };
 }
 
-module.exports = { layerOf, stacked, restack };
+/**
+ * Writing over a picture or shape that lies on top of the ink: the newest
+ * thing is on top, so the picture goes under the ink (top of the back layer).
+ * box: { x0, y0, x1, y1 } of the new stroke. Returns new items, or null when nothing moves.
+ */
+function sinkUnder(data, box) {
+  const items = (data && data.items) || [];
+  const hit = (it) => it.type !== 'table' && layerOf('item', it) === 'f'
+    && (it.x || 0) < box.x1 && (it.x || 0) + (it.w || 0) > box.x0 && (it.y || 0) < box.y1 && (it.y || 0) + (it.h || 0) > box.y0;
+  const sink = items.filter(hit).sort((a, b) => (a.z || 0) - (b.z || 0));
+  if (!sink.length) return null;
+  let z = stacked(data, 'b').reduce((m, e) => Math.max(m, e.key), 0);
+  const moved = new Map(sink.map((it) => [it, { ...it, lay: 'b', z: Math.ceil(z) + 1 + sink.indexOf(it) }]));
+  return items.map((it) => moved.get(it) || it);
+}
+
+module.exports = { layerOf, stacked, restack, sinkUnder };

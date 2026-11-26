@@ -16,6 +16,7 @@ export async function bootSub(kind) {
   if (kind === 'reader') return readerWindow();
   if (kind === 'study') return studyBar();
   if (kind === 'snip') return snipWindow();
+  if (kind === 'sniplive') return snipLive();
 }
 
 function readerWindow() {
@@ -26,7 +27,7 @@ function readerWindow() {
     const dock = h('button', { class: 'icon-btn rd-dock', title: 'Put the reader into the main window', 'aria-label': 'Dock', html: icon('sidebar', 16),
       onclick: () => window.api.readerDock(view.state) });
     const close = h('button', { class: 'icon-btn', title: 'Close the reader', 'aria-label': 'Close the reader', html: icon('close', 16), onclick: () => window.close() });
-    view = new ReaderView({ ...state, buttons: [dock, close] });
+    view = new ReaderView({ ...state, buttons: [dock, close], onState: (st) => window.api.readerReport(st).catch(() => {}) });
     window.__reader = view;
     root.replaceChildren(view.el);
     await view.open();
@@ -86,7 +87,7 @@ function studyBar() {
   window.api.onStudyPickWindow(pickWindow);
   window.api.onStudyError(say);
   window.api.studyState().then((x) => { st = x; draw(); });
-  say('Ctrl+C collects text and pictures · Ctrl+Shift+1/2/3: region, window, screen');
+  say('Select text or copy a picture to collect it · Ctrl + drag: a region');
 }
 
 // ---------- region snip (full screen over the screenshot) ----------
@@ -110,4 +111,15 @@ function snipWindow() {
     window.api.snipDone(r.width > 4 && r.height > 4 ? r : null);
   });
   addEventListener('keydown', (e) => { if (e.key === 'Escape') window.api.snipDone(null); });
+}
+
+// Ctrl + drag anywhere: a dark veil over the screen with the rectangle being drawn (the mouse goes through)
+function snipLive() {
+  const box = h('div', { class: 'snip-box live', hidden: true });
+  document.getElementById('app').replaceChildren(h('div', { class: 'snip-veil' }), box);
+  window.api.onSnipRect((r) => {
+    box.hidden = false;
+    Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.width + 'px', height: r.height + 'px' });
+    document.body.classList.add('drawing');
+  });
 }

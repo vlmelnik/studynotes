@@ -53,7 +53,8 @@ export class PdfDoc {
   // `file` is relative to the notebook folder (source.pdf, sources/<id>.pdf).
   static async open(rel, file = 'source.pdf', onProgress) {
     const task = pdfjs.getDocument({
-      url: `sn://lib/${encodeRel(rel)}/${file.split('/').map(encodeURIComponent).join('/')}`,
+      // a full sn:// address: a PDF opened only to read (reference reader)
+      url: /^sn:\/\//.test(rel) ? rel : `sn://lib/${encodeRel(rel)}/${file.split('/').map(encodeURIComponent).join('/')}`,
       rangeChunkSize: 1 << 20,
       disableAutoFetch: true,
       cMapUrl: 'sn://app/cmaps/',

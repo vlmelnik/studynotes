@@ -414,6 +414,22 @@ const words = {
   'Render formulas and formatting': 'Показать формулы и форматирование', 'Edit formula': 'Изменить формулу',
   'Edit formula ({break} marks a line break)': 'Изменить формулу ({break} – перенос строки)', 'Invalid LaTeX formula': 'Ошибка в формуле LaTeX',
   'Disable conversion on paste': 'Не преобразовывать при вставке', 'Enable conversion on paste': 'Преобразовывать при вставке',
+  // reader and study session
+  'PDF window…': 'Окно PDF…', 'PDF window': 'Окно PDF', 'Open a PDF to read': 'Открыть PDF для чтения',
+  'Reader: another PDF…': 'Читалка: другой PDF…', 'Reader: this PDF in its own window': 'Читалка: этот PDF в отдельном окне', 'Reader: this PDF next to the notes': 'Читалка: этот PDF рядом с записями',
+  'Take the reader out into its own window': 'Вынести читалку в отдельное окно', 'Drag out to take the reader into its own window': 'Потяните, чтобы вынести читалку в отдельное окно',
+  'Swap sides': 'Поменять стороны', 'Close the reader': 'Закрыть читалку', 'Undock': 'Открепить', 'Dock': 'Закрепить', 'Resize the reader': 'Изменить ширину читалки',
+  'Study session': 'Учебная сессия', 'Start a study session in this notebook?': 'Начать учебную сессию в этой тетради?', 'Start': 'Начать',
+  'StudyNotes steps aside and a small bar stays on top of every app – also over ChatGPT or Claude in the browser:': 'StudyNotes отходит в сторону, поверх всех программ остаётся маленькая панель – и над ChatGPT или Claude в браузере:',
+  'Select text': 'Выделите текст', ' – it is collected at once': ' – он сразу собирается', 'Ctrl + drag': 'Ctrl + перетаскивание', ' – a region of the screen': ' – область экрана',
+  'Right-click → Copy image': 'Правый клик → Копировать картинку', ' – the picture is collected': ' – картинка собирается', 'Ctrl+Shift+2 / 3': 'Ctrl+Shift+2 / 3', ' – a window / the whole screen': ' – окно / весь экран',
+  'Finish on the bar: Claude turns everything into notes – text in screenshots becomes text, figures get a caption.': 'Завершите на панели: Claude превратит всё в конспект – текст со скриншотов станет текстом, рисунки получат подпись.',
+  'Wishes for the notes (optional, also later)': 'Пожелания к конспекту (необязательно, можно и позже)', 'Wishes for the notes': 'Пожелания к конспекту',
+  'For example: focus on the formulas and add exam questions at the end.': 'Например: сделай упор на формулы и добавь в конце вопросы к экзамену.',
+  'Select text or copy a picture to collect it · Ctrl + drag: a region': 'Выделите текст или скопируйте картинку · Ctrl + перетаскивание: область',
+  'Study session – file into the notebook': 'Учебная сессия – записать в тетрадь', 'Nothing was collected.': 'Ничего не собрано.', 'Leave out': 'Убрать',
+  'Lay out without AI': 'Разложить без ИИ', 'Claude writes the notes': 'Claude пишет конспект', 'Finish': 'Завершить', 'Stop without filing': 'Остановить без записи',
+  'Region': 'Область', 'Window': 'Окно', 'Screen': 'Экран',
 };
 
 // Texts with numbers / names. [regex, replacement or function]
