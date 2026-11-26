@@ -17,7 +17,7 @@ const { launch, root } = require('./harness/app');
   const fake = path.join(root, 'test', 'e2e', 'fixtures', 'fake-claude.js');
   const pdf = path.join(tmp, 'Power electronics.pdf');
   execFileSync(process.execPath, [path.join(root, 'scripts', 'make-test-pdf.js'), pdf, '2'], { stdio: 'ignore' });
-  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_MCP_PIPE: pipe, STUDYNOTES_CLAUDE_BIN: fake, STUDYNOTES_SPEECH_FAKE: '1' } });
+  const { app, win, ed } = await launch({ tmp, env: { STUDYNOTES_MCP_PIPE: pipe, STUDYNOTES_CLAUDE_BIN: fake, STUDYNOTES_CODEX_BIN: path.join(path.dirname(fake), 'fake-codex.js'), STUDYNOTES_SPEECH_FAKE: '1' } });
   await win.waitForFunction(() => window.__app && document.querySelector('.library'));
   const rel = await ed(async (f) => (await window.api.importFiles('', [f]))[0], pdf);
   await ed((r) => window.__app.openNotebook(r), rel);
@@ -32,7 +32,7 @@ const { launch, root } = require('./harness/app');
   await win.locator('.mcp-line').first().waitFor();
   const found = await win.locator('.mcp-line').first().textContent();
   check('Settings: Claude Code is found', found.startsWith('Claude Code found') && found.includes('fake-claude.js'), found);
-  check('Settings: the note about the terms is shown', /not settled/.test(await ai.locator('.ai-note').textContent()));
+  check('Settings: the note about the terms is shown', await ai.locator('.ai-note:visible', { hasText: 'not settled' }).count() === 1);
   await ai.getByLabel('Claude Code model').selectOption('sonnet');
   await win.getByRole('button', { name: 'Done', exact: true }).click();
   const cfg = await ed(() => window.__app.settings.ai);
@@ -160,6 +160,18 @@ const { launch, root } = require('./harness/app');
   await win.waitForFunction(() => document.querySelectorAll('.chat-msg.assistant').length === 1 && !document.querySelector('.chat-msg.assistant .ai-wait'), null, { timeout: 20000 });
   const tx = await win.locator('.chat-msg.assistant').last().textContent();
   check('the recording is decoded (16 kHz) and transcribed in German, Claude gets the transcript', /fake transcript: 2\.5 s, german, base/.test(tx), tx);
+
+  // ---- the same chat with ChatGPT (Codex) ----
+  await ed(() => { window.__app.settings.ai.engine = 'codex'; });
+  await win.locator('.chat-input').fill('codex test');
+  await win.locator('.chat-input').press('Enter');
+  await win.waitForFunction(() => /codex:/.test([...document.querySelectorAll('.chat-msg.assistant')].pop()?.textContent || '') && !document.querySelector('.chat-msg.assistant .ai-wait'), null, { timeout: 20000 });
+  const cx = await win.locator('.chat-msg.assistant').last().textContent();
+  check('ChatGPT (Codex): read-only, a new session (not Claude\'s), StudyNotes tools work', /list notebooks/.test(cx) && /sandbox=read-only/.test(cx) && /resumed=false/.test(cx) && /Power electronics/.test(cx), cx.slice(0, 300));
+  await win.locator('.chat-input').fill('codex again');
+  await win.locator('.chat-input').press('Enter');
+  await win.waitForFunction(() => /resumed=true/.test([...document.querySelectorAll('.chat-msg.assistant')].pop()?.textContent || ''), null, { timeout: 20000 });
+  check('the next message goes on with the Codex session', true);
 
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });

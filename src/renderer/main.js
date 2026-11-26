@@ -599,27 +599,49 @@ class App {
 
     // --- Claude Code: a chat in StudyNotes with the user's own Claude Code (subscription) ---
     const ccOut = h('div', { class: 'mcp-test' });
+    const cx = () => ai.engine === 'codex';
     const ccFind = async () => {
-      const r = await window.api.chatInfo(ai.ccPath || '').catch((err) => ({ found: false, error: errorText(err) }));
+      const r = await window.api.chatInfo((cx() ? ai.cxPath : ai.ccPath) || '', cx() ? 'codex' : 'claude').catch((err) => ({ found: false, error: errorText(err) }));
       const ok = r.found;
+      const name = cx() ? 'Codex' : 'Claude Code';
       ccOut.replaceChildren(h('div', { class: `mcp-line ${ok ? 'ok' : 'bad'}` }, h('span', { html: icon(ok ? 'check' : 'close', 14) }),
-        h('span', { class: 'no-i18n' }, ok ? `Claude Code found: ${r.path}${r.version ? ' (' + r.version + ')' : ''}` : 'Claude Code was not found. Install it, run "claude" once in a terminal and sign in – or enter its path below.')));
+        h('span', { class: 'no-i18n' }, ok ? `${name} found: ${r.path}${r.version ? ' (' + r.version + ')' : ''}` : cx()
+          ? 'Codex was not found. Install it (npm install -g @openai/codex), run "codex" once in a terminal and sign in with your ChatGPT account – or enter its path below.'
+          : 'Claude Code was not found. Install it, run "claude" once in a terminal and sign in – or enter its path below.')));
     };
+    // Chat with: Claude Code (Claude plan) or ChatGPT through Codex (ChatGPT plan, also Free/Plus)
+    const engineSel = h('select', { class: 'rec-select', 'aria-label': 'Chat with', onchange: () => { ai.engine = engineSel.value; save(); drawEngine(); ccFind(); } },
+      h('option', { value: 'claude', selected: !cx() }, 'Claude Code'), h('option', { value: 'codex', selected: cx() }, 'ChatGPT (Codex)'));
+    const claudeOnly = h('div', {});
+    const codexOnly = h('div', {},
+      h('ol', { class: 'steps' },
+        h('li', {}, 'Install Codex: in a terminal run "npm install -g @openai/codex", then "codex" and sign in with your ChatGPT account (Free, Plus or Pro).'),
+        h('li', {}, 'Press Ctrl+J in a notebook: the chat opens on the right.')),
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Path (optional)'),
+        h('input', { type: 'text', class: 'ai-base', value: ai.cxPath || '', placeholder: 'found automatically', 'aria-label': 'Codex path', onchange: (e) => { ai.cxPath = e.target.value.trim(); save(); } })),
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model (optional)'),
+        h('input', { type: 'text', class: 'ai-base', value: ai.cxModel || '', placeholder: 'Codex default', 'aria-label': 'Codex model', onchange: (e) => { ai.cxModel = e.target.value.trim(); save(); } })),
+      h('small', { class: 'hint wrap ai-note' }, 'StudyNotes starts your Codex, which uses your ChatGPT plan and its limits. Codex runs read-only in a folder of its own and is told to use only the StudyNotes tools; unlike Claude Code it cannot be fully cut off from reading files on this computer.'));
+    const drawEngine = () => { claudeOnly.hidden = cx(); codexOnly.hidden = !cx(); };
     const ccBox = h('div', { class: 'ai-way-body' },
+      h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Chat with'), engineSel, h('button', { class: 'btn small', onclick: ccFind }, 'Find')),
+      ccOut,
+      codexOnly,
+      claudeOnly);
+    claudeOnly.append(
       h('ol', { class: 'steps' },
         h('li', {}, 'Install Claude Code and sign in once: in a terminal run "claude", then log in with your Claude account.'),
         h('li', {}, 'Switch on "AI button in notebooks" above and press Ctrl+J in a notebook: the chat opens on the right.')),
-      h('div', { class: 'row wrap' }, h('button', { class: 'btn', onclick: ccFind }, 'Find Claude Code')),
-      ccOut,
       h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Path (optional)'),
         h('input', { type: 'text', class: 'ai-base', value: ai.ccPath || '', placeholder: 'found automatically', 'aria-label': 'Claude Code path', onchange: (e) => { ai.ccPath = e.target.value.trim(); save(); } })),
       h('div', { class: 'row' }, h('span', { class: 'tk-label' }, 'Model'),
         h('select', { class: 'rec-select', 'aria-label': 'Claude Code model', onchange: (e) => { ai.ccModel = e.target.value; save(); } },
           ...[['', 'Default'], ['sonnet', 'Sonnet'], ['opus', 'Opus'], ['haiku', 'Haiku']].map(([v, l]) => h('option', { value: v, selected: (ai.ccModel || '') === v }, l)))),
       h('small', { class: 'hint wrap ai-note' }, 'Like the Claude plugins for Obsidian: StudyNotes starts your Claude Code, which uses your Claude plan. Anthropic allows a subscription only in its own apps; whether starting Claude Code from another app is covered is not settled – you decide. Claude can only use the StudyNotes tools here, not your files or commands.'));
+    drawEngine();
 
     const ways = [
-      ['claudecode', 'Claude Code', 'Chat here with your subscription', ccBox],
+      ['claudecode', 'Chat in StudyNotes', 'Claude Code or ChatGPT (Codex), with your subscription', ccBox],
       ['claude', 'Claude app', 'With your Claude subscription', claudeBox],
       ['api', 'API key', 'Anthropic, OpenAI or Gemini', apiBox],
       ['local', 'Local model', 'Ollama, LM Studio – offline', localBox],

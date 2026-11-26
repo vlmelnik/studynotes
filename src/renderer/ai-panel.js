@@ -18,7 +18,7 @@ const newChat = () => ({ id: 'ch' + Date.now().toString(36) + Math.random().toSt
 // saved without the screen elements and the "working" state
 function saveChat(chat) {
   const messages = chat.messages.map(({ el, pending, ...m }) => m);
-  window.api.chatSave({ id: chat.id, title: chat.title, notebook: chat.notebook, sessionId: chat.sessionId, messages }).catch((err) => console.warn('chat not saved', err));
+  window.api.chatSave({ id: chat.id, title: chat.title, notebook: chat.notebook, sessionId: chat.sessionId, engine: chat.engine, messages }).catch((err) => console.warn('chat not saved', err));
 }
 
 function toBase64(bytes) {
@@ -92,6 +92,11 @@ export class AiPanel {
 
   get isChat() { return this.cfg.via === 'claudecode'; }
 
+  /** Which program the chat runs: Claude Code (default) or ChatGPT's Codex. */
+  get engine() { return this.cfg.engine === 'codex' ? 'codex' : 'claude'; }
+
+  get engineLabel() { return this.engine === 'codex' ? `ChatGPT (Codex)${this.cfg.cxModel ? ' · ' + this.cfg.cxModel : ''}` : `Claude Code${this.cfg.ccModel ? ' · ' + this.cfg.ccModel : ''}`; }
+
   open() {
     const ed = this.editor;
     this.close();
@@ -102,7 +107,7 @@ export class AiPanel {
     // a panel on the right like search: the page gets narrower, nothing is covered
     this.el = h('aside', { class: 'ai-panel', role: 'complementary', 'aria-label': tr('AI assistant') },
       h('div', { class: 'ai-head' }, h('span', { class: 'ai-head-ic', html: icon('ai', 18) }), h('b', { class: 'ai-title' }, 'AI assistant'),
-        h('small', { class: 'ai-model no-i18n' }, !this.ready() ? '' : this.isChat ? `Claude Code${this.cfg.ccModel ? ' · ' + this.cfg.ccModel : ''}` : `${this.cfg.provider} · ${this.cfg.model}`),
+        h('small', { class: 'ai-model no-i18n' }, !this.ready() ? '' : this.isChat ? this.engineLabel : `${this.cfg.provider} · ${this.cfg.model}`),
         ...(this.isChat && this.ready() ? this.chatHeadButtons() : []),
         h('button', { class: 'icon-btn', title: 'Close (Ctrl+J)', html: icon('close', 16), onclick: () => this.close() })),
       body);
@@ -202,7 +207,7 @@ export class AiPanel {
       h('p', {}, 'Ask Claude about this notebook or tell it what to do: "Summarise page 3 on a new page", "Make a glossary of the terms", "Underline the key terms on this page".'),
       h('small', { class: 'hint wrap' }, 'Runs your Claude Code with your Claude plan. Claude reads and changes notes only through StudyNotes; Ctrl+Z undoes every change.'),
       h('small', { class: 'hint wrap' }, 'Attach pictures, PDFs, text files or recordings with the paper clip, by dragging them here or with Ctrl+V.')));
-    this.input = h('textarea', { class: 'ai-prompt chat-input', rows: 2, placeholder: tr('Message Claude…'), 'aria-label': tr('Message Claude'),
+    this.input = h('textarea', { class: 'ai-prompt chat-input', rows: 2, placeholder: tr(this.engine === 'codex' ? 'Message ChatGPT…' : 'Message Claude…'), 'aria-label': tr('Message Claude'),
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.sendChat(); } },
       onpaste: (e) => { const f = e.clipboardData && e.clipboardData.files; if (f && f.length) { e.preventDefault(); this.addFiles(f); } } });
     const picker = h('input', { type: 'file', multiple: true, hidden: true, accept: 'image/*,audio/*,.pdf,.txt,.md,.csv,.json,.tex,.m4a,.mp3,.wav,.ogg,.webm,.opus', onchange: (e) => { this.addFiles(e.target.files); e.target.value = ''; } });
@@ -290,7 +295,7 @@ export class AiPanel {
         else el.append(h('div', { class: 'chat-text md no-i18n', html: mdHtml(part.text) }));
       }
       if (m.error) el.append(h('div', { class: 'ai-error' }, m.error));
-      if (m.pending) el.append(h('div', { class: 'ai-wait' }, h('div', { class: 'spinner small' }), h('span', {}, 'Claude is working…')));
+      if (m.pending) el.append(h('div', { class: 'ai-wait' }, h('div', { class: 'spinner small' }), h('span', {}, this.engine === 'codex' ? 'ChatGPT is working…' : 'Claude is working…')));
     }
     m.el = el;
     return el;
@@ -353,7 +358,12 @@ export class AiPanel {
     let prompt = `${this.chatContext(files)}\n\n${text}`;
     for (const f of files.filter((x) => x.kind === 'text')) prompt += `\n\n--- ${f.name} ---\n${new TextDecoder().decode(f.bytes).slice(0, 200000)}`;
     const attachments = files.filter((x) => x.kind !== 'text').map((f) => ({ name: f.name, mime: f.mime, data: toBase64(f.bytes) }));
-    window.api.chatSend(id, { prompt, attachments, sessionId: chat.sessionId, model: this.cfg.ccModel || '', bin: this.cfg.ccPath || '' });
+    // a chat started with the other engine cannot be resumed by this one: it goes on as a new session
+    const engine = this.engine;
+    if (chat.engine && chat.engine !== engine) chat.sessionId = null;
+    chat.engine = engine;
+    const codex = engine === 'codex';
+    window.api.chatSend(id, { engine, prompt, attachments, sessionId: chat.sessionId, model: (codex ? this.cfg.cxModel : this.cfg.ccModel) || '', bin: (codex ? this.cfg.cxPath : this.cfg.ccPath) || '' });
   }
 
   stopChat() {

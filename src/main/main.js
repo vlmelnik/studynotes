@@ -796,15 +796,22 @@ handle('mcp:test', async () => {
 // notebooks only through the MCP bridge above.
 const { ClaudeCodeChat, ChatHistory } = require('./claude-code');
 let chat = null;
-const chatInst = () => (chat ||= new ClaudeCodeChat({ dir: path.join(app.getPath('userData'), 'claude-chat'), bridge: mcpEntry }));
-handle('chat:info', (bin) => chatInst().info(bin));
+const { CodexChat } = require('./codex-chat');
+let codex = null;
+// engine 'codex': the same chat with ChatGPT through the user's Codex CLI (src/main/codex-chat.js)
+const chatInst = (engine) => (engine === 'codex'
+  ? (codex ||= new CodexChat({ dir: path.join(app.getPath('userData'), 'codex-chat'), bridge: mcpEntry }))
+  : (chat ||= new ClaudeCodeChat({ dir: path.join(app.getPath('userData'), 'claude-chat'), bridge: mcpEntry })));
+const chatEngine = new Map(); // run id → engine (for Stop)
+handle('chat:info', (bin, engine) => chatInst(engine).info(bin));
 handle('chat:send', (id, req) => {
-  chatInst().send(id, req, (ev) => { if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, ev); }).catch((err) => {
+  chatEngine.set(id, req && req.engine);
+  chatInst(req && req.engine).send(id, req, (ev) => { if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, ev); }).catch((err) => {
     if (win && !win.isDestroyed()) win.webContents.send('chat:event', id, { kind: 'done', error: String(err.message || err) });
   });
   return true;
 });
-handle('chat:stop', (id) => chatInst().stop(id));
+handle('chat:stop', (id) => { chatInst(chatEngine.get(id)).stop(id); chatEngine.delete(id); });
 // Speech to text on this computer (src/main/speech.js), for audio in the chat
 const { Speech, MODELS: SPEECH_MODELS, LANGUAGES: SPEECH_LANGS } = require('./speech');
 let speech = null;
